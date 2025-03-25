@@ -26,6 +26,7 @@ class WordRepository
     {
         return Word::find($id);
     }
+   
 
     /**
      * Cria um novo registro na tabela 'word'.
@@ -55,6 +56,7 @@ class WordRepository
 
         return $word;
     }
+    
 
     /**
      * Exclui um registro específico com base no ID.

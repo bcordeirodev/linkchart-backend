@@ -58,15 +58,15 @@ class WordController
     public function store(Request $request)
     {
         // Validação dos dados recebidos
-        $validated = $request->validate([
+        $request->validate([
             'word'     => 'required|string|max:255',
             'response' => 'required|string',
             'rating'   => 'required|integer',
         ]);
-
+        
         $wordDTO = WordDTO::fromRequest($request);
         $word = $this->wordService->createWord($wordDTO);
-
+        
         return new WordResource($word);
     }
 
