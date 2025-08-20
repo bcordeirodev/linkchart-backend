@@ -20,6 +20,14 @@ RUN apk add --no-cache \
     libpng-dev \
     libzip-dev
 
+# Instalar dependências de build temporárias para Redis
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf \
+    gcc \
+    g++ \
+    make \
+    pkgconfig
+
 # Instalar extensões PHP
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
@@ -34,6 +42,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 
 # Instalar Redis extension
 RUN pecl install redis && docker-php-ext-enable redis
+
+# Remover dependências de build temporárias
+RUN apk del .build-deps
 
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
