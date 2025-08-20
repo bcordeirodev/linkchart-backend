@@ -50,10 +50,11 @@ Route::middleware(['api.auth:api'])->group(function () {
 
     // ❌ REMOVIDO: Use /metrics/dashboard ou /metrics/category/performance
 
-    // Validação de consistência de dados (manter)
+    // Validação de consistência de dados (seguro - filtrado por usuário)
     Route::get('/data-validation', function() {
+        $userId = auth()->id();
         $service = app(\App\Services\RedirectAnalyticsService::class);
-        return response()->json($service->validateDataConsistency());
+        return response()->json($service->validateDataConsistencyForUser($userId));
     });
 
     // Rate Limiting Management (apenas endpoints essenciais)
