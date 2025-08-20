@@ -35,8 +35,7 @@ return new class extends Migration
             // Índice composto para queries do usuário
             $table->index(['user_id', 'is_active', 'created_at'], 'idx_links_user_active');
 
-            // Índice para slug lookup (já existe, mas garantindo)
-            $table->unique('slug', 'links_slug_unique');
+            // Nota: slug unique index já deve existir, pulando
 
             // Índice para queries de expiração
             $table->index(['expires_at', 'is_active'], 'idx_links_expiration');
@@ -44,8 +43,7 @@ return new class extends Migration
 
         // Índices para tabela users
         Schema::table('users', function (Blueprint $table) {
-            // Índice para email lookup (já existe, mas garantindo)
-            $table->unique('email', 'users_email_unique');
+            // Nota: email unique index já deve existir, pulando
 
             // Índice para queries de criação
             $table->index('created_at', 'idx_users_created_at');
