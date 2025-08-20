@@ -18,7 +18,7 @@ jobs:
     - name: Setup SSH
       uses: webfactory/ssh-agent@v0.8.0
       with:
-        ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        ssh-private-key: ${{ secrets.LINK_CHART_ACTION_KEY }}
         
     - name: Add server to known hosts
       run: |

@@ -35,7 +35,7 @@ jobs:
       with:
         host: 138.197.121.81
         username: root
-        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        key: ${{ secrets.LINK_CHART_ACTION_KEY }}
         script: |
           cd /var/www/linkchartapi
           
