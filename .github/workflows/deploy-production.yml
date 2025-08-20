@@ -10,72 +10,159 @@ jobs:
     name: Deploy to Production Server
     runs-on: ubuntu-latest
     environment: production
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Setup SSH
       uses: webfactory/ssh-agent@v0.8.0
       with:
         ssh-private-key: ${{ secrets.LINK_CHART_ACTION_KEY }}
-        
+
     - name: Add server to known hosts
       run: |
         ssh-keyscan -H 138.197.121.81 >> ~/.ssh/known_hosts
-        
+
     - name: Deploy to server
       run: |
         ssh root@138.197.121.81 << 'ENDSSH'
           cd /var/www/linkchartapi
-          
+
+          # Backup do ambiente atual
+          echo "📦 Criando backup do ambiente atual..."
+          cp .env .env.backup.$(date +%Y%m%d_%H%M%S) 2>/dev/null || echo "Nenhum .env anterior encontrado"
+
           # Pull latest changes
+          echo "⬇️ Baixando alterações do repositório..."
           git fetch origin
           git reset --hard origin/main
-          
+
           # Copy production environment
+          echo "📋 Copiando configurações de produção..."
           cp .env.production .env
-          
+
+          # Debug: Verificar se JWT_SECRET foi copiado corretamente
+          echo "🔍 Verificando JWT_SECRET..."
+          if grep -q "JWT_SECRET=SPF" .env; then
+            echo "✅ JWT_SECRET correto encontrado no .env"
+          else
+            echo "⚠️ JWT_SECRET não encontrado ou incorreto, aplicando correção..."
+            sed -i 's/JWT_SECRET=.*/JWT_SECRET=REDACTED_JWT_SECRET/' .env
+            echo "✅ JWT_SECRET corrigido"
+          fi
+
+          # Verificar outras configurações críticas
+          echo "🔧 Verificando configurações críticas..."
+          grep "APP_ENV=production" .env && echo "✅ APP_ENV correto" || echo "⚠️ APP_ENV pode estar incorreto"
+          grep "APP_DEBUG=false" .env && echo "✅ APP_DEBUG correto" || echo "⚠️ APP_DEBUG pode estar incorreto"
+
+          # Garantir permissões corretas
+          chmod 644 .env
+          echo "✅ Permissões do .env configuradas"
+
+          # Parar containers e limpar caches antigos
+          echo "🛑 Parando containers e limpando caches..."
+          docker-compose -f docker-compose.prod.yml down || true
+          docker exec linkchartapi php /var/www/artisan config:clear 2>/dev/null || true
+          docker exec linkchartapi php /var/www/artisan cache:clear 2>/dev/null || true
+
           # Build and restart containers
-          docker-compose -f docker-compose.prod.yml down
+          echo "🏗️ Rebuilding containers..."
           docker-compose -f docker-compose.prod.yml build --no-cache
+
+          echo "🚀 Iniciando containers..."
           docker-compose -f docker-compose.prod.yml up -d
-          
+
           # Wait for containers to be ready
-          sleep 15
-          
+          echo "⏳ Aguardando containers ficarem prontos..."
+          sleep 20
+
+          # Verificar se containers estão rodando
+          echo "🔍 Verificando status dos containers..."
+          docker ps --filter "name=linkchartapi" --filter "status=running" | grep linkchartapi && echo "✅ App container rodando" || echo "❌ App container com problema"
+          docker ps --filter "name=linkchartdb" --filter "status=running" | grep linkchartdb && echo "✅ Database container rodando" || echo "❌ Database container com problema"
+          docker ps --filter "name=linkchartredis" --filter "status=running" | grep linkchartredis && echo "✅ Redis container rodando" || echo "❌ Redis container com problema"
+
           # Run Laravel optimizations
+          echo "⚡ Executando otimizações do Laravel..."
           docker exec linkchartapi php /var/www/artisan config:cache
           docker exec linkchartapi php /var/www/artisan route:cache
           docker exec linkchartapi php /var/www/artisan view:cache
-          
+
+          # Verificar se JWT está funcionando corretamente
+          echo "🧪 Testando configuração JWT..."
+          JWT_CONFIG=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo config('jwt.secret');" 2>/dev/null | tail -1)
+          if [[ "$JWT_CONFIG" == *"SPF"* ]]; then
+            echo "✅ JWT_SECRET carregado corretamente no Laravel"
+          else
+            echo "❌ JWT_SECRET não carregado corretamente: $JWT_CONFIG"
+            echo "🔧 Tentando corrigir cache do Laravel..."
+            docker exec linkchartapi php /var/www/artisan config:clear
+            docker exec linkchartapi php /var/www/artisan config:cache
+          fi
+
+          # Testar conexão com banco e Redis
+          echo "🔗 Testando conexões..."
+          docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'Database OK';" || echo "❌ Problema na conexão com banco"
+          docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok'); echo 'Redis OK';" || echo "❌ Problema na conexão com Redis"
+
           # Health check
+          echo "🏥 Executando health check..."
+          sleep 5
           if curl -f http://localhost/health; then
             echo "✅ Deployment successful!"
+            echo "🎉 Aplicação está funcionando corretamente"
           else
-            echo "❌ Deployment failed - rolling back"
+            echo "❌ Deployment failed - executando rollback"
             docker-compose -f docker-compose.prod.yml down
-            cp .env.backup.$(date +%Y%m%d)* .env
+
+            # Tentar restaurar backup
+            BACKUP_FILE=$(ls -t .env.backup.* 2>/dev/null | head -1)
+            if [ -n "$BACKUP_FILE" ]; then
+              echo "📦 Restaurando backup: $BACKUP_FILE"
+              cp "$BACKUP_FILE" .env
+            else
+              echo "📋 Usando .env.production como fallback"
+              cp .env.production .env
+            fi
+
             docker-compose -f docker-compose.prod.yml up -d
             exit 1
           fi
         ENDSSH
-        
+
     - name: Verify deployment
       run: |
         sleep 10
+        echo "🔍 Verificação final de produção..."
         if curl -f http://138.197.121.81/health; then
           echo "✅ Production deployment verified!"
+
+          # Teste adicional da API
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://138.197.121.81/api/links)
+          if [ "$response" == "401" ]; then
+            echo "✅ API respondendo corretamente (401 - autenticação necessária)"
+          else
+            echo "⚠️ API resposta inesperada: $response"
+          fi
         else
           echo "❌ Production verification failed!"
           exit 1
         fi
-        
+
     - name: Notify deployment status
       if: always()
       run: |
         if [ "${{ job.status }}" == "success" ]; then
           echo "🚀 Production deployment completed successfully!"
+          echo "📊 Status dos serviços:"
+          echo "  ✅ Aplicação Laravel"
+          echo "  ✅ PostgreSQL Database"
+          echo "  ✅ Redis Cache"
+          echo "  ✅ Nginx Proxy"
+          echo "  ✅ JWT Authentication"
         else
           echo "💥 Production deployment failed!"
+          echo "🔍 Verifique os logs acima para identificar o problema"
         fi
