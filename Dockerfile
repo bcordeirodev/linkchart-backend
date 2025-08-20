@@ -20,6 +20,14 @@ RUN apk add --no-cache \
     libpng-dev \
     libzip-dev
 
+# Instalar dependências de build temporárias para Redis
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf \
+    gcc \
+    g++ \
+    make \
+    pkgconfig
+
 # Instalar extensões PHP
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
@@ -35,6 +43,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 # Instalar Redis extension
 RUN pecl install redis && docker-php-ext-enable redis
 
+# Remover dependências de build temporárias
+RUN apk del .build-deps
+
 # Instalar Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
@@ -49,9 +60,11 @@ COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 # Configurar Supervisor
 COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Criar usuário para aplicação
+# Criar usuário para aplicação e diretórios necessários
 RUN addgroup -g 1000 www && \
-    adduser -D -s /bin/sh -u 1000 -G www www
+    adduser -D -s /bin/sh -u 1000 -G www www && \
+    mkdir -p /var/log/supervisor /var/log/nginx && \
+    chown -R www:www /var/log/supervisor
 
 # Definir diretório de trabalho
 WORKDIR /var/www
