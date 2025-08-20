@@ -36,9 +36,7 @@ return new class extends Migration
             $table->index(['user_id', 'is_active', 'created_at'], 'idx_links_user_active');
 
             // Índice para slug lookup (já existe, mas garantindo)
-            if (!$this->indexExists('links', 'links_slug_unique')) {
-                $table->unique('slug', 'links_slug_unique');
-            }
+            $table->unique('slug', 'links_slug_unique');
 
             // Índice para queries de expiração
             $table->index(['expires_at', 'is_active'], 'idx_links_expiration');
@@ -47,9 +45,7 @@ return new class extends Migration
         // Índices para tabela users
         Schema::table('users', function (Blueprint $table) {
             // Índice para email lookup (já existe, mas garantindo)
-            if (!$this->indexExists('users', 'users_email_unique')) {
-                $table->unique('email', 'users_email_unique');
-            }
+            $table->unique('email', 'users_email_unique');
 
             // Índice para queries de criação
             $table->index('created_at', 'idx_users_created_at');
@@ -103,14 +99,5 @@ return new class extends Migration
         }
     }
 
-    /**
-     * Verificar se um índice existe
-     */
-    private function indexExists(string $table, string $index): bool
-    {
-        $indexes = Schema::getConnection()->getDoctrineSchemaManager()
-            ->listTableIndexes($table);
 
-        return array_key_exists($index, $indexes);
-    }
 };
