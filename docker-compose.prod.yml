@@ -13,6 +13,7 @@ services:
     volumes:
       - ./storage/logs:/var/www/storage/logs
       - ./storage/app:/var/www/storage/app
+      - ./.env:/var/www/.env
     depends_on:
       - database
       - redis
