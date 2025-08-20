@@ -49,23 +49,7 @@ return new class extends Migration
             $table->index('created_at', 'idx_users_created_at');
         });
 
-        // Otimizações específicas do PostgreSQL
-        if (DB::getDriverName() === 'pgsql') {
-            // Criar índices parciais para melhor performance
-            DB::statement('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clicks_active_links
-                          ON clicks (link_id, created_at)
-                          WHERE link_id IN (SELECT id FROM links WHERE is_active = true)');
-
-            // Índice para contagem rápida de cliques por link
-            DB::statement('CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clicks_count_by_link
-                          ON clicks (link_id)
-                          WHERE created_at >= CURRENT_DATE - INTERVAL \'30 days\'');
-
-            // Estatísticas automáticas para otimizador
-            DB::statement('ANALYZE clicks');
-            DB::statement('ANALYZE links');
-            DB::statement('ANALYZE users');
-        }
+        // Otimizações básicas - sem comandos problemáticos
     }
 
     /**
@@ -90,11 +74,7 @@ return new class extends Migration
             $table->dropIndex('idx_users_created_at');
         });
 
-        // Remover índices específicos do PostgreSQL
-        if (DB::getDriverName() === 'pgsql') {
-            DB::statement('DROP INDEX CONCURRENTLY IF EXISTS idx_clicks_active_links');
-            DB::statement('DROP INDEX CONCURRENTLY IF EXISTS idx_clicks_count_by_link');
-        }
+        // Índices específicos do PostgreSQL removidos via Schema::dropIfExists()
     }
 
 
