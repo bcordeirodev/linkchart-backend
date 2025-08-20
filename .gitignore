@@ -40,5 +40,5 @@ Thumbs.db
 
 # Environment files (keep templates)
 # .env.local
-# .env.staging  
+# .env.staging
 # .env.production
