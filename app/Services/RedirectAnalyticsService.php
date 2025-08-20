@@ -355,6 +355,10 @@ class RedirectAnalyticsService
 
     /**
      * Compara dados do cache com dados do banco para validação
+     * ⚠️ DEPRECATED: Use validateDataConsistencyForUser() para segurança
+     * ❌ MÉTODO INSEGURO: Vaza dados de todos os usuários
+     *
+     * @deprecated Use validateDataConsistencyForUser($userId) instead
      */
     public function validateDataConsistency(): array
     {
@@ -436,6 +440,89 @@ class RedirectAnalyticsService
                 'message' => 'Taxa de sucesso baixa nos redirecionamentos',
                 'action' => 'Investigar erros 404/500 nos logs'
             ];
+        }
+
+        return $recommendations;
+    }
+
+    /**
+     * Valida consistência de dados para um usuário específico
+     * Versão segura que filtra dados apenas do usuário autenticado
+     */
+    public function validateDataConsistencyForUser(int $userId): array
+    {
+        // Dados do banco (fonte da verdade) - FILTRADOS POR USUÁRIO
+        $dbClicks = Click::whereHas('link', function($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->count();
+
+        $dbUniqueIps = Click::whereHas('link', function($query) use ($userId) {
+            $query->where('user_id', $userId);
+        })->distinct('ip')->count();
+
+        $dbLinksWithClicks = Link::where('user_id', $userId)
+                                ->where('clicks', '>', 0)
+                                ->count();
+
+        // Dados do cache (últimos 30 dias) - filtrar por usuário seria complexo
+        // Para simplicidade, usamos apenas dados do banco para validação
+        $totalUserLinks = Link::where('user_id', $userId)->count();
+
+        return [
+            'user_id' => $userId,
+            'database' => [
+                'total_clicks' => $dbClicks,
+                'unique_ips' => $dbUniqueIps,
+                'links_with_clicks' => $dbLinksWithClicks,
+                'total_links' => $totalUserLinks,
+            ],
+            'cache_metrics' => [
+                'note' => 'Cache metrics são compartilhados globalmente',
+                'recommendation' => 'Use /api/metrics/dashboard para métricas específicas do usuário'
+            ],
+            'consistency' => [
+                'data_integrity' => $dbLinksWithClicks <= $totalUserLinks,
+                'has_traffic' => $dbClicks > 0,
+            ],
+            'recommendations' => $this->getUserDataRecommendations($dbClicks, $dbLinksWithClicks, $totalUserLinks),
+        ];
+    }
+
+    /**
+     * Gera recomendações específicas para dados do usuário
+     */
+    private function getUserDataRecommendations(int $clicks, int $linksWithClicks, int $totalLinks): array
+    {
+        $recommendations = [];
+
+        if ($totalLinks === 0) {
+            $recommendations[] = [
+                'type' => 'info',
+                'message' => 'Nenhum link criado ainda',
+                'action' => 'Crie seu primeiro link para começar a coletar dados'
+            ];
+        } elseif ($linksWithClicks === 0 && $totalLinks > 0) {
+            $recommendations[] = [
+                'type' => 'warning',
+                'message' => 'Links criados mas sem tráfego',
+                'action' => 'Compartilhe seus links para começar a receber cliques'
+            ];
+        } elseif ($clicks > 0) {
+            $trafficRate = ($linksWithClicks / $totalLinks) * 100;
+
+            if ($trafficRate < 50) {
+                $recommendations[] = [
+                    'type' => 'info',
+                    'message' => "Apenas {$trafficRate}% dos seus links têm tráfego",
+                    'action' => 'Considere promover links com menos cliques'
+                ];
+            } else {
+                $recommendations[] = [
+                    'type' => 'success',
+                    'message' => "Boa performance! {$trafficRate}% dos seus links têm tráfego",
+                    'action' => 'Continue monitorando suas métricas'
+                ];
+            }
         }
 
         return $recommendations;
