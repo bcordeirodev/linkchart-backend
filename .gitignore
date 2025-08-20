@@ -1,5 +1,4 @@
 # Laravel
-/vendor
 /node_modules
 /public/hot
 /public/storage
@@ -10,60 +9,36 @@
 /storage/framework/testing/*
 /storage/framework/views/*
 /bootstrap/cache/*
+/vendor
+.env.backup.*
+.env.testing
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
 
 # Environment files
 # .env
 # .env.production
 
-
 # IDE
-.vscode/
-.idea/
+.idea
+.vscode
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+
+# Docker
+.docker/
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Docker
-.dockerignore
-
-# Backup files
-*.backup
-*.bak
-*.tmp
-
-# Compiled files
-*.com
-*.class
-*.dll
-*.exe
-*.o
-*.so
-
-# Packages
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-
-# Database
-*.sqlite
-*.db
+# Environment files (keep templates)
+# .env.local
+# .env.staging  
+# .env.production

@@ -1,0 +1,84 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.LINK_CHART_ACTION_KEY }}
+        
+    - name: Add server to known hosts
+      run: |
+        ssh-keyscan -H 138.197.121.81 >> ~/.ssh/known_hosts
+        
+    - name: Deploy to server
+      run: |
+        ssh root@138.197.121.81 << 'ENDSSH'
+          cd /var/www/linkchartapi
+          
+          # Backup current deployment
+          cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+          
+          # Pull latest changes
+          git fetch origin
+          git reset --hard origin/main
+          
+          # Copy production environment
+          cp .env.production .env
+          
+          # Build and restart containers
+          docker-compose -f docker-compose.prod.yml down
+          docker-compose -f docker-compose.prod.yml build --no-cache
+          docker-compose -f docker-compose.prod.yml up -d
+          
+          # Wait for containers to be ready
+          sleep 15
+          
+          # Run Laravel optimizations
+          docker exec linkchartapi php /var/www/artisan config:cache
+          docker exec linkchartapi php /var/www/artisan route:cache
+          docker exec linkchartapi php /var/www/artisan view:cache
+          
+          # Health check
+          if curl -f http://localhost/health; then
+            echo "✅ Deployment successful!"
+          else
+            echo "❌ Deployment failed - rolling back"
+            docker-compose -f docker-compose.prod.yml down
+            cp .env.backup.$(date +%Y%m%d)* .env
+            docker-compose -f docker-compose.prod.yml up -d
+            exit 1
+          fi
+        ENDSSH
+        
+    - name: Verify deployment
+      run: |
+        sleep 10
+        if curl -f http://138.197.121.81/health; then
+          echo "✅ Production deployment verified!"
+        else
+          echo "❌ Production verification failed!"
+          exit 1
+        fi
+        
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "🚀 Production deployment completed successfully!"
+        else
+          echo "💥 Production deployment failed!"
+        fi
