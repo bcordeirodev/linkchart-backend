@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Charts API - Documentação</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui.css" />
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+
+        .header p {
+            margin: 0.5rem 0 0 0;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .info-section {
+            background: #f8f9fa;
+            padding: 2rem 0;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .info-card h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            padding: 0.25rem 0;
+        }
+
+        .feature-list li:before {
+            content: "✅ ";
+            margin-right: 0.5rem;
+        }
+
+        .swagger-container {
+            margin-top: 2rem;
+        }
+
+        .quick-start {
+            background: #e3f2fd;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+
+        .quick-start code {
+            background: #fff;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+
+        .endpoints-summary {
+            background: white;
+            padding: 2rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .endpoint-group {
+            margin-bottom: 2rem;
+        }
+
+        .endpoint-group h4 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .endpoint {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .endpoint:last-child {
+            border-bottom: none;
+        }
+
+        .method {
+            padding: 0.2rem 0.8rem;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.8rem;
+            min-width: 60px;
+            text-align: center;
+            margin-right: 1rem;
+        }
+
+        .method.get { background: #4caf50; }
+        .method.post { background: #2196f3; }
+        .method.put { background: #ff9800; }
+        .method.delete { background: #f44336; }
+
+        .endpoint-path {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .endpoint-desc {
+            color: #666;
+            font-size: 0.9rem;
+            margin-left: 1rem;
+        }
+
+        .auth-info {
+            background: #fff3e0;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            border-left: 4px solid #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🔗 Link Charts API</h1>
+            <p>Documentação Completa da API de Encurtamento de Links</p>
+        </div>
+    </div>
+
+    <div class="info-section">
+        <div class="container">
+            <h2>Sobre a API</h2>
+            <p>A Link Charts API é uma solução completa para encurtamento e gerenciamento de links com recursos avançados de analytics, autenticação segura e monitoramento em tempo real.</p>
+
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3>🚀 Recursos Principais</h3>
+                    <ul class="feature-list">
+                        <li>Autenticação JWT segura</li>
+                        <li>Rate limiting inteligente</li>
+                        <li>Analytics detalhados</li>
+                        <li>Parâmetros UTM</li>
+                        <li>Links com expiração</li>
+                        <li>Auditoria completa</li>
+                    </ul>
+                </div>
+
+                <div class="info-card">
+                    <h3>📊 Analytics Avançados</h3>
+                    <ul class="feature-list">
+                        <li>Cliques em tempo real</li>
+                        <li>Análise geográfica</li>
+                        <li>Dispositivos e navegadores</li>
+                        <li>Fontes de tráfego</li>
+                        <li>Métricas de conversão</li>
+                        <li>Relatórios customizados</li>
+                    </ul>
+                </div>
+
+                <div class="info-card">
+                    <h3>🔧 Configurações</h3>
+                    <div class="quick-start">
+                        <strong>Base URL:</strong><br>
+                        <code>http://localhost:8000/api</code><br><br>
+                        <strong>Autenticação:</strong><br>
+                        <code>Authorization: Bearer {token}</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="endpoints-summary">
+            <h2>📋 Resumo dos Endpoints</h2>
+
+            <div class="endpoint-group">
+                <h4>🔐 Autenticação</h4>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/auth/register</span>
+                    <span class="endpoint-desc">Registrar novo usuário</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/auth/login</span>
+                    <span class="endpoint-desc">Login com email/senha</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/auth/google</span>
+                    <span class="endpoint-desc">Login com Google OAuth</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/me</span>
+                    <span class="endpoint-desc">Dados do usuário atual</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/logout</span>
+                    <span class="endpoint-desc">Logout do usuário</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <h4>🔗 Gerenciamento de Links</h4>
+                <div class="endpoint">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/gerar-url</span>
+                    <span class="endpoint-desc">Criar novo link encurtado</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/link</span>
+                    <span class="endpoint-desc">Listar todos os links</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/link/{id}</span>
+                    <span class="endpoint-desc">Obter link específico</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method put">PUT</span>
+                    <span class="endpoint-path">/link/{id}</span>
+                    <span class="endpoint-desc">Atualizar link</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method delete">DELETE</span>
+                    <span class="endpoint-path">/link/{id}</span>
+                    <span class="endpoint-desc">Excluir link</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/link/{id}/audit</span>
+                    <span class="endpoint-desc">Histórico de auditoria</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <h4>📊 Analytics</h4>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/analytics</span>
+                    <span class="endpoint-desc">Analytics gerais do usuário</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/link/{slug}/analytics</span>
+                    <span class="endpoint-desc">Analytics específicos do link</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <h4>🌐 Públicos (sem autenticação)</h4>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/r/{slug}</span>
+                    <span class="endpoint-desc">Redirecionar link encurtado</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/link/by-slug/{slug}</span>
+                    <span class="endpoint-desc">Obter info do link por slug</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="auth-info">
+            <h3>🔑 Como Começar</h3>
+            <p><strong>1.</strong> Registre-se usando <code>POST /auth/register</code></p>
+            <p><strong>2.</strong> Faça login com <code>POST /auth/login</code> para obter seu token JWT</p>
+            <p><strong>3.</strong> Use o token no header: <code>Authorization: Bearer {seu-token}</code></p>
+            <p><strong>4.</strong> Comece criando links com <code>POST /gerar-url</code></p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="swagger-container">
+            <h2>📖 Documentação Interativa</h2>
+            <div id="swagger-ui"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@4.15.5/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: '/api-documentation.yaml',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                tryItOutEnabled: true,
+                requestInterceptor: function(request) {
+                    // Adicionar token automaticamente se disponível
+                    const token = localStorage.getItem('api_token');
+                    if (token) {
+                        request.headers['Authorization'] = 'Bearer ' + token;
+                    }
+                    return request;
+                },
+                onComplete: function() {
+                    // Adicionar funcionalidade para salvar token
+                    const authSection = document.querySelector('.auth-wrapper');
+                    if (authSection) {
+                        const tokenInput = document.createElement('input');
+                        tokenInput.type = 'text';
+                        tokenInput.placeholder = 'Cole seu JWT token aqui';
+                        tokenInput.style.width = '100%';
+                        tokenInput.style.margin = '10px 0';
+                        tokenInput.style.padding = '8px';
+                        tokenInput.style.border = '1px solid #ccc';
+                        tokenInput.style.borderRadius = '4px';
+
+                        const saveButton = document.createElement('button');
+                        saveButton.textContent = 'Salvar Token';
+                        saveButton.style.padding = '8px 16px';
+                        saveButton.style.backgroundColor = '#667eea';
+                        saveButton.style.color = 'white';
+                        saveButton.style.border = 'none';
+                        saveButton.style.borderRadius = '4px';
+                        saveButton.style.cursor = 'pointer';
+
+                        saveButton.onclick = function() {
+                            const token = tokenInput.value.trim();
+                            if (token) {
+                                localStorage.setItem('api_token', token);
+                                alert('Token salvo! Agora você pode testar os endpoints autenticados.');
+                                location.reload();
+                            }
+                        };
+
+                        authSection.appendChild(tokenInput);
+                        authSection.appendChild(saveButton);
+                    }
+                }
+            });
+        };
+    </script>
+</body>
+</html>
