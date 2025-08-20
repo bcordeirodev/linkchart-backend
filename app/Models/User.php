@@ -42,7 +42,7 @@ class User extends Authenticatable implements JWTSubject
     public function getJWTCustomClaims()
     {
         return [];
-    }    
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -65,5 +65,10 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function links()
+    {
+        return $this->hasMany(Link::class);
     }
 }

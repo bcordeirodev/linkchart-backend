@@ -40,6 +40,10 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        'api' => [
+            'driver'   => 'jwt',
+            'provider' => 'users',
+        ],
     ],
 
     /*
@@ -111,12 +115,5 @@ return [
     */
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
-
-    'guards' => [
-        'api' => [
-            'driver'   => 'jwt',
-            'provider' => 'users',
-        ],
-    ],
 
 ];

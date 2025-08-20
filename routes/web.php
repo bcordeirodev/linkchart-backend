@@ -4,7 +4,11 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\WordController;
 
 Route::get('/', function () {
-    return view('welcome');
+    return response()->json([
+        'message' => 'Link Charts API is running!',
+        'version' => '1.0.0',
+        'status' => 'active'
+    ]);
 });
 
 // Rota que utiliza o método index() do WordController para retornar todas as palavras.
