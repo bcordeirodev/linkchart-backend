@@ -1,0 +1,60 @@
+name: Production Health Check
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # A cada 15 minutos
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: Check Production Health
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Health Check - Main App
+      run: |
+        if curl -f http://138.197.121.81/health; then
+          echo "✅ Main application is healthy"
+        else
+          echo "❌ Main application is down!"
+          exit 1
+        fi
+        
+    - name: Health Check - API
+      run: |
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://138.197.121.81/api/analytics)
+        if [ "$response" == "401" ] || [ "$response" == "200" ]; then
+          echo "✅ API is responding (got $response)"
+        else
+          echo "❌ API is not responding properly (got $response)"
+          exit 1
+        fi
+        
+    - name: Check Docker Containers
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: 138.197.121.81
+        username: root
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          cd /var/www/linkchartapi
+          
+          # Check if all containers are running
+          containers=("linkchartapi" "linkchartdb" "linkchartredis" "linkchartnginx")
+          
+          for container in "${containers[@]}"; do
+            if docker ps --filter "name=$container" --filter "status=running" | grep -q $container; then
+              echo "✅ $container is running"
+            else
+              echo "❌ $container is not running!"
+              exit 1
+            fi
+          done
+          
+          # Check container health
+          docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'Laravel OK';"
+          
+    - name: Notify if unhealthy
+      if: failure()
+      run: |
+        echo "🚨 Production system is unhealthy! Manual intervention required."
