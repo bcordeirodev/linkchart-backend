@@ -26,8 +26,8 @@ return new class extends Migration
             // Índice para user agent analytics
             $table->index(['link_id', 'user_agent'], 'idx_clicks_user_agent');
 
-            // Índice para referrer analytics
-            $table->index(['link_id', 'referrer'], 'idx_clicks_referrer');
+            // Índice para referer analytics
+            $table->index(['link_id', 'referer'], 'idx_clicks_referer');
         });
 
         // Índices para tabela links
@@ -84,7 +84,7 @@ return new class extends Migration
             $table->dropIndex('idx_clicks_geo');
             $table->dropIndex('idx_clicks_temporal');
             $table->dropIndex('idx_clicks_user_agent');
-            $table->dropIndex('idx_clicks_referrer');
+            $table->dropIndex('idx_clicks_referer');
         });
 
         Schema::table('links', function (Blueprint $table) {
