@@ -60,9 +60,11 @@ COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 # Configurar Supervisor
 COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Criar usuário para aplicação
+# Criar usuário para aplicação e diretórios necessários
 RUN addgroup -g 1000 www && \
-    adduser -D -s /bin/sh -u 1000 -G www www
+    adduser -D -s /bin/sh -u 1000 -G www www && \
+    mkdir -p /var/log/supervisor /var/log/nginx && \
+    chown -R www:www /var/log/supervisor
 
 # Definir diretório de trabalho
 WORKDIR /var/www
