@@ -29,9 +29,6 @@ jobs:
         ssh root@138.197.121.81 << 'ENDSSH'
           cd /var/www/linkchartapi
           
-          # Backup current deployment
-          cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
-          
           # Pull latest changes
           git fetch origin
           git reset --hard origin/main
