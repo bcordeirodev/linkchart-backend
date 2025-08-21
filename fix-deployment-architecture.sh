@@ -3,7 +3,7 @@
 # ===========================================
 # CORREÇÃO DEFINITIVA DA ARQUITETURA DE DEPLOY
 # ===========================================
-# Este script aplica as correções necessárias para resolver 
+# Este script aplica as correções necessárias para resolver
 # o conflito entre Dockerfile e docker-compose em produção
 
 set -e
@@ -143,7 +143,7 @@ else
     if [ -f /tmp/health_response.txt ]; then
         log_info "Resposta: $(cat /tmp/health_response.txt)"
     fi
-    
+
     echo ""
     echo -e "${RED}❌ DEPLOY FALHOU - COLETANDO LOGS PARA DEBUG${NC}"
     echo ""
@@ -155,7 +155,7 @@ else
     echo ""
     echo "=== STATUS DOS CONTAINERS ==="
     docker ps
-    
+
     exit 1
 fi
 
