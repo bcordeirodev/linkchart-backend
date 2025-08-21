@@ -26,7 +26,7 @@ services:
     environment:
       POSTGRES_DB: linkchartprod
       POSTGRES_USER: linkchartuser
-      POSTGRES_PASSWORD: linkchartpassword123
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -39,8 +39,7 @@ services:
     image: redis:7-alpine
     container_name: linkchartredis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass linkchartredis123
-    # command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     ports:
