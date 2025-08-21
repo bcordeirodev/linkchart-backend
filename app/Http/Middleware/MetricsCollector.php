@@ -130,6 +130,12 @@ class MetricsCollector
     private function collectMetrics(array $metrics): void
     {
         try {
+            // Verificar se Cache está disponível antes de usar
+            if (!$this->isCacheAvailable()) {
+                Log::info('Cache not available, skipping metrics collection');
+                return;
+            }
+
             $hour = now()->format('Y-m-d-H');
             $minute = now()->format('Y-m-d-H-i');
 
@@ -216,10 +222,28 @@ class MetricsCollector
     }
 
     /**
+     * Verifica se o Cache está disponível
+     */
+    private function isCacheAvailable(): bool
+    {
+        try {
+            Cache::put('cache_test', 'test', 1);
+            Cache::forget('cache_test');
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
      * Coleta métricas específicas do usuário
      */
     private function collectUserMetrics(int $userId, array $metrics): void
     {
+        if (!$this->isCacheAvailable()) {
+            return;
+        }
+
         $hour = now()->format('Y-m-d-H');
         $key = "user_metrics:{$userId}:{$hour}";
 
@@ -256,6 +280,11 @@ class MetricsCollector
     private function collectError(array $errorData): void
     {
         try {
+            if (!$this->isCacheAvailable()) {
+                Log::warning('Cache not available, logging error directly', $errorData);
+                return;
+            }
+
             $date = now()->format('Y-m-d');
             $hour = now()->format('Y-m-d-H');
 
