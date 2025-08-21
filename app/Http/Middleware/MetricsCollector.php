@@ -18,44 +18,54 @@ class MetricsCollector
         $startTime = microtime(true);
         $startMemory = memory_get_usage(true);
 
-        // Identificar endpoint
-        $endpoint = $this->identifyEndpoint($request);
-        $userId = $this->getUserId($request);
-        $ipAddress = $request->ip();
-
-        // Processar request
+        // Processar request primeiro
         $response = $next($request);
 
-        // Calcular métricas
-        $responseTime = microtime(true) - $startTime;
-        $memoryUsage = memory_get_usage(true) - $startMemory;
-        $statusCode = $response->getStatusCode();
+        // Tentar coletar métricas de forma segura
+        try {
+            // Identificar endpoint
+            $endpoint = $this->identifyEndpoint($request);
+            $userId = $this->getUserId($request);
+            $ipAddress = $request->ip();
 
-        // Coletar métricas
-        $this->collectMetrics([
-            'endpoint' => $endpoint,
-            'method' => $request->method(),
-            'path' => $request->path(),
-            'user_id' => $userId,
-            'ip_address' => $ipAddress,
-            'status_code' => $statusCode,
-            'response_time' => $responseTime,
-            'memory_usage' => $memoryUsage,
-            'timestamp' => now(),
-            'user_agent' => $request->userAgent(),
-            'referer' => $request->headers->get('referer'),
-        ]);
+            // Calcular métricas
+            $responseTime = microtime(true) - $startTime;
+            $memoryUsage = memory_get_usage(true) - $startMemory;
+            $statusCode = $response->getStatusCode();
 
-        // Se for erro, registrar separadamente
-        if ($statusCode >= 400) {
-            $this->collectError([
+            // Coletar métricas
+            $this->collectMetrics([
                 'endpoint' => $endpoint,
-                'status_code' => $statusCode,
+                'method' => $request->method(),
+                'path' => $request->path(),
                 'user_id' => $userId,
                 'ip_address' => $ipAddress,
-                'error_message' => $this->getErrorMessage($response),
-                'request_data' => $this->sanitizeRequestData($request),
+                'status_code' => $statusCode,
+                'response_time' => $responseTime,
+                'memory_usage' => $memoryUsage,
                 'timestamp' => now(),
+                'user_agent' => $request->userAgent(),
+                'referer' => $request->headers->get('referer'),
+            ]);
+
+            // Se for erro, registrar separadamente
+            if ($statusCode >= 400) {
+                $this->collectError([
+                    'endpoint' => $endpoint,
+                    'status_code' => $statusCode,
+                    'user_id' => $userId,
+                    'ip_address' => $ipAddress,
+                    'error_message' => $this->getErrorMessage($response),
+                    'request_data' => $this->sanitizeRequestData($request),
+                    'timestamp' => now(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Falha na coleta de métricas não deve quebrar a aplicação
+            Log::warning('MetricsCollector failed but request continued', [
+                'error' => $e->getMessage(),
+                'path' => $request->path(),
+                'method' => $request->method()
             ]);
         }
 
@@ -227,10 +237,28 @@ class MetricsCollector
     private function isCacheAvailable(): bool
     {
         try {
-            Cache::put('cache_test', 'test', 1);
-            Cache::forget('cache_test');
+            // Verificar se é driver file e se diretório existe
+            $cacheDriver = config('cache.default');
+            if ($cacheDriver === 'file') {
+                $cachePath = config('cache.stores.file.path', storage_path('framework/cache/data'));
+                if (!is_dir($cachePath)) {
+                    // Tentar criar o diretório
+                    if (!mkdir($cachePath, 0755, true) && !is_dir($cachePath)) {
+                        Log::info('Cache directory does not exist and could not be created: ' . $cachePath);
+                        return false;
+                    }
+                }
+                if (!is_writable($cachePath)) {
+                    Log::info('Cache directory is not writable: ' . $cachePath);
+                    return false;
+                }
+            }
+
+            // Testar operação de cache
+            Cache::put('cache_test_' . uniqid(), 'test', 1);
             return true;
         } catch (\Exception $e) {
+            Log::info('Cache not available: ' . $e->getMessage());
             return false;
         }
     }
