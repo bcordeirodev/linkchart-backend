@@ -66,14 +66,14 @@ jobs:
 
           # Parar containers
           echo "🛑 Parando containers..."
-          docker-compose -f docker-compose.prod.yml down || true
+          docker compose -f docker-compose.prod.yml down || true
 
           # Build and restart containers
           echo "🏗️ Rebuilding containers..."
-          docker-compose -f docker-compose.prod.yml build --no-cache
+          docker compose -f docker-compose.prod.yml build --no-cache
 
           echo "🚀 Iniciando containers..."
-          docker-compose -f docker-compose.prod.yml up -d
+          docker compose -f docker-compose.prod.yml up -d
 
           # Wait for containers to be ready
           echo "⏳ Aguardando containers ficarem prontos..."
@@ -85,13 +85,9 @@ jobs:
           docker ps --filter "name=linkchartdb" --filter "status=running" | grep linkchartdb && echo "✅ Database container rodando" || echo "❌ Database container com problema"
           docker ps --filter "name=linkchartredis" --filter "status=running" | grep linkchartredis && echo "✅ Redis container rodando" || echo "❌ Redis container com problema"
 
-          # Run Laravel optimizations
-          echo "⚡ Executando otimizações do Laravel..."
-          docker exec linkchartapi php /var/www/artisan config:clear
-          docker exec linkchartapi php /var/www/artisan cache:clear
-          docker exec linkchartapi php /var/www/artisan config:cache
-          docker exec linkchartapi php /var/www/artisan route:cache
-          docker exec linkchartapi php /var/www/artisan view:cache
+          # Run Laravel API optimizations
+          echo "⚡ Executando otimizações da API Laravel..."
+          docker exec linkchartapi php /var/www/artisan api:optimize
 
           # Verificar se JWT está funcionando corretamente
           echo "🧪 Testando configuração JWT..."
@@ -118,7 +114,7 @@ jobs:
             echo "🎉 Aplicação está funcionando corretamente"
           else
             echo "❌ Deployment failed - executando rollback"
-            docker-compose -f docker-compose.prod.yml down
+            docker compose -f docker-compose.prod.yml down
 
             # Tentar restaurar backup
             BACKUP_FILE=$(ls -t .env.backup.* 2>/dev/null | head -1)
@@ -130,7 +126,7 @@ jobs:
               cp .env.production .env
             fi
 
-            docker-compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d
             exit 1
           fi
         ENDSSH
