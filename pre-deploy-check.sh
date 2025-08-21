@@ -22,10 +22,10 @@ fi
 
 # 2. Verificar JWT_SECRET no .env.production
 echo -n "🔍 Verificando JWT_SECRET: "
-if grep -q "JWT_SECRET=SPF" .env.production; then
-    echo "✅ CORRETO"
+if grep -q "JWT_SECRET=placeholder" .env.production; then
+    echo "✅ PLACEHOLDER CORRETO (será substituído pelo GitHub Secrets)"
 else
-    echo "❌ INCORRETO"
+    echo "❌ PLACEHOLDER INCORRETO"
     ERRORS=$((ERRORS + 1))
 fi
 
@@ -93,9 +93,10 @@ else
     echo "🔧 SUGESTÕES DE CORREÇÃO:"
     echo "========================"
 
-    if ! grep -q "JWT_SECRET=SPF" .env.production; then
+    if ! grep -q "JWT_SECRET=placeholder" .env.production; then
         echo "• Corrigir JWT_SECRET:"
-        echo "  sed -i 's/JWT_SECRET=.*/JWT_SECRET=SPFbPErKrHyA5rc0Lwswwbs2EXVlwkC1DckzF6wb8CwpUxf4yLYjMtiJOVhRtWnW1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7Q8R9S0T/' .env.production"
+        echo "  sed -i 's/JWT_SECRET=.*/JWT_SECRET=placeholder/' .env.production"
+        echo "• Configurar GitHub Secret 'JWT_SECRET' com valor válido"
     fi
 
     if [ "$LOG_CHANNEL" != "production" ] && [ "$LOG_CHANNEL" != "daily" ]; then

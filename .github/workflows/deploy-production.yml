@@ -29,9 +29,9 @@ jobs:
         ssh root@138.197.121.81 << 'ENDSSH'
           cd /var/www/linkchartapi
 
-          # Backup do ambiente atual
-          echo "📦 Criando backup do ambiente atual..."
-          cp .env .env.backup.$(date +%Y%m%d_%H%M%S) 2>/dev/null || echo "Nenhum .env anterior encontrado"
+          # Limpar backups antigos (manter apenas os 3 mais recentes)
+          echo "🧹 Limpando backups antigos..."
+          ls -t .env.backup.* 2>/dev/null | tail -n +4 | xargs rm -f 2>/dev/null || true
 
           # Pull latest changes
           echo "⬇️ Baixando alterações do repositório..."
@@ -42,14 +42,17 @@ jobs:
           echo "📋 Copiando configurações de produção..."
           cp .env.production .env
 
-          # Debug: Verificar se JWT_SECRET foi copiado corretamente
+          # Configurar JWT_SECRET usando GitHub Secrets
+          echo "🔐 Configurando JWT_SECRET do GitHub Secrets..."
+          sed -i "s/JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
+
+          # Debug: Verificar se JWT_SECRET foi configurado corretamente
           echo "🔍 Verificando JWT_SECRET..."
-          if grep -q "JWT_SECRET=SPF" .env; then
-            echo "✅ JWT_SECRET correto encontrado no .env"
+          if grep -q "JWT_SECRET=" .env && [ "$(grep 'JWT_SECRET=' .env | cut -d'=' -f2 | wc -c)" -gt 10 ]; then
+            echo "✅ JWT_SECRET configurado corretamente"
           else
-            echo "⚠️ JWT_SECRET não encontrado ou incorreto, aplicando correção..."
-            sed -i 's/JWT_SECRET=.*/JWT_SECRET=SPFbPErKrHyA5rc0Lwswwbs2EXVlwkC1DckzF6wb8CwpUxf4yLYjMtiJOVhRtWnW1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7Q8R9S0T/' .env
-            echo "✅ JWT_SECRET corrigido"
+            echo "❌ JWT_SECRET não configurado ou muito curto"
+            exit 1
           fi
 
           # Verificar outras configurações críticas
@@ -92,11 +95,11 @@ jobs:
 
           # Verificar se JWT está funcionando corretamente
           echo "🧪 Testando configuração JWT..."
-          JWT_CONFIG=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo config('jwt.secret');" 2>/dev/null | tail -1)
-          if [[ "$JWT_CONFIG" == *"SPF"* ]]; then
-            echo "✅ JWT_SECRET carregado corretamente no Laravel"
+          JWT_CONFIG=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo strlen(config('jwt.secret'));" 2>/dev/null | tail -1)
+          if [ "$JWT_CONFIG" -gt 10 ]; then
+            echo "✅ JWT_SECRET carregado corretamente no Laravel (length: $JWT_CONFIG)"
           else
-            echo "❌ JWT_SECRET não carregado corretamente: $JWT_CONFIG"
+            echo "❌ JWT_SECRET não carregado corretamente ou muito curto: $JWT_CONFIG"
             echo "🔧 Tentando corrigir cache do Laravel..."
             docker exec linkchartapi php /var/www/artisan config:clear
             docker exec linkchartapi php /var/www/artisan config:cache
