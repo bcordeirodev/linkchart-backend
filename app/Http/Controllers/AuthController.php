@@ -3,159 +3,171 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\User;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
-use Illuminate\Support\Str;
+use App\Models\User;
 
-class AuthController
+class AuthController extends Controller
 {
     /**
-     * Realiza o login e retorna o token JWT.
-     */
-    public function login(Request $request)
-    {
-        $credentials = $request->validate([
-            'email'    => 'required|email',
-            'password' => 'required',
-        ]);
-
-        $guard = auth()->guard('api');
-
-        if (!$token = $guard->attempt($credentials)) {
-            return response()->json(['error' => 'Credenciais inválidas'], 401);
-        }
-
-        return response()->json([
-            'token' => $token,
-            'user'  => $guard->user()
-        ]);
-    }
-
-
-
-    /**
-     * Realiza o logout e invalida o token.
-     */
-    public function logout()
-    {
-        auth()->guard('api')->logout();
-
-        return response()->json(['message' => 'Logout realizado com sucesso']);
-    }
-
-    /**
-     * Registra um novo usuário e retorna o token JWT.
+     * Registrar um novo usuário
      */
     public function register(Request $request)
     {
-
-        $validated = $request->validate([
-            'name'                  => 'required|string|max:255',
-            'email'                 => 'required|email|unique:users,email',
-            'password'              => 'required|string|min:6|confirmed',
-        ]);
-
-
-        $user = User::create([
-            'name'     => $validated['name'],
-            'email'    => $validated['email'],
-            'password' => Hash::make($validated['password']),
-        ]);
-
-
-        $token = JWTAuth::fromUser($user);
-
-        return response()->json([
-            'user'  => $user,
-            'token' => $token,
-        ], 201);
-    }
-
-    /**
-     * Login ou registro via Google.
-     *
-     * Recebe no body JSON:
-     *   - email: string  (obrigatório)
-     *   - name:  string  (obrigatório)
-     */
-    public function googleLogin(Request $request)
-    {
-        $validated = $request->validate([
-            'email' => 'required|email',
-            'name'  => 'required|string|max:255',
-        ]);
-
-        // 1) Tenta encontrar pelo email
-        $user = User::where('email', $validated['email'])->first();
-
-        // 2) Se não existir, cria um novo com senha aleatória
-        if (! $user) {
-            $user = User::create([
-                'name'     => $validated['name'],
-                'email'    => $validated['email'],
-                'password' => Hash::make(Str::random(16)),
-            ]);
-        }
-
-        // 3) Gera um novo JWT para o usuário
-        $token = JWTAuth::fromUser($user);
-
-        return response()->json([
-            'user'  => $user,
-            'token' => $token,
-        ]);
-    }
-
-    /**
-     * Retorna informações do usuário autenticado.
-     */
-    public function me(Request $request)
-    {
-        $user = auth()->guard('api')->user();
-
-        if (!$user) {
-            return response()->json([
-                'error' => 'Usuário não autenticado',
-                'message' => 'Token JWT inválido ou expirado'
-            ], 401);
-        }
-
-        return response()->json([
-            'user' => $user
-        ]);
-    }
-
-    /**
-     * Atualiza informações do perfil do usuário.
-     */
-    public function updateProfile(Request $request)
-    {
-        $user = auth()->guard('api')->user();
-
-        if (!$user) {
-            return response()->json([
-                'error' => 'Usuário não autenticado',
-                'message' => 'Token JWT inválido ou expirado'
-            ], 401);
-        }
-
-        $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'email' => 'sometimes|email|unique:users,email,' . $user->id,
-        ]);
-
         try {
-            $user->update($validated);
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:6|confirmed',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Validation Error',
+                    'message' => 'Dados inválidos fornecidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+            ]);
+
+            $token = JWTAuth::fromUser($user);
 
             return response()->json([
-                'message' => 'Perfil atualizado com sucesso',
-                'user' => $user->fresh()
+                'success' => true,
+                'message' => 'Usuário registrado com sucesso',
+                'user' => $user,
+                'token' => $token
+            ], 201);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Registration Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Server Error',
+                'message' => 'Erro ao registrar usuário. Verifique os logs.',
+                'error_id' => uniqid('reg_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Login do usuário
+     */
+    public function login(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+                'password' => 'required|string|min:6',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Validation Error',
+                    'message' => 'Dados inválidos fornecidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $credentials = $request->only('email', 'password');
+
+            if (!$token = JWTAuth::attempt($credentials)) {
+                return response()->json([
+                    'error' => 'Unauthorized',
+                    'message' => 'Credenciais inválidas'
+                ], 401);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Login realizado com sucesso',
+                'token' => $token,
+                'user' => auth()->user()
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Login Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Server Error',
+                'message' => 'Erro ao fazer login. Verifique os logs.',
+                'error_id' => uniqid('login_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Logout do usuário
+     */
+    public function logout()
+    {
+        try {
+            JWTAuth::invalidate(JWTAuth::getToken());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Logout realizado com sucesso'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Server Error',
+                'message' => 'Erro ao fazer logout'
+            ], 500);
+        }
+    }
+
+    /**
+     * Obter informações do usuário autenticado
+     */
+    public function me()
+    {
+        try {
+            return response()->json([
+                'success' => true,
+                'user' => auth()->user()
             ]);
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'Erro ao atualizar perfil',
-                'message' => $e->getMessage()
+                'error' => 'Server Error',
+                'message' => 'Erro ao obter informações do usuário'
+            ], 500);
+        }
+    }
+
+    /**
+     * Refresh do token
+     */
+    public function refresh()
+    {
+        try {
+            $token = JWTAuth::refresh(JWTAuth::getToken());
+
+            return response()->json([
+                'success' => true,
+                'token' => $token
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Server Error',
+                'message' => 'Erro ao renovar token'
             ], 500);
         }
     }
