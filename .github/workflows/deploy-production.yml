@@ -22,11 +22,12 @@ jobs:
 
     - name: Add server to known hosts
       run: |
-        ssh-keyscan -H 138.197.121.81 >> ~/.ssh/known_hosts
+        mkdir -p ~/.ssh
+        echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
     - name: Deploy to server
       run: |
-        ssh root@138.197.121.81 << 'ENDSSH'
+        ssh -o StrictHostKeyChecking=no root@138.197.121.81 << 'ENDSSH'
           cd /var/www/linkchartapi
 
           # Limpar backups antigos (manter apenas os 3 mais recentes)
