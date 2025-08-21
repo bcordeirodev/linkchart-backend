@@ -52,7 +52,7 @@ jobs:
           # Configurar JWT_SECRET do GitHub Secrets
           echo "🔐 Configurando JWT_SECRET do GitHub Secrets..."
           sed -i "s/JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
-          
+
           # DB e Redis já estão configurados corretamente no .env.production
           echo "✅ DB_PASSWORD e REDIS_PASSWORD já configurados no .env.production"
 
@@ -120,11 +120,11 @@ jobs:
           echo "🔗 Testando conexões..."
           docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'Database OK';" || echo "❌ Problema na conexão com banco"
           docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok'); echo 'Redis OK';" || echo "❌ Problema na conexão com Redis"
-          
+
           # Configurar diretórios essenciais primeiro
           echo "🔧 Configurando diretórios essenciais..."
           docker exec linkchartapi /var/www/setup-production-dirs.sh
-          
+
           # Limpar todos os caches após mudanças
           echo "🧹 Limpando todos os caches..."
           docker exec linkchartapi php /var/www/artisan optimize:clear
