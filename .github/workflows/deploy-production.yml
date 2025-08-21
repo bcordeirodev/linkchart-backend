@@ -39,13 +39,22 @@ jobs:
           git fetch origin
           git reset --hard origin/main
 
+          # Backup current .env if exists
+          if [ -f .env ]; then
+            echo "💾 Criando backup do .env atual..."
+            cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+
           # Copy production environment
           echo "📋 Copiando configurações de produção..."
           cp .env.production .env
 
-          # Configurar JWT_SECRET usando GitHub Secrets
+          # Configurar JWT_SECRET do GitHub Secrets
           echo "🔐 Configurando JWT_SECRET do GitHub Secrets..."
           sed -i "s/JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
+          
+          # DB e Redis já estão configurados corretamente no .env.production
+          echo "✅ DB_PASSWORD e REDIS_PASSWORD já configurados no .env.production"
 
           # Debug: Verificar se JWT_SECRET foi configurado corretamente
           echo "🔍 Verificando JWT_SECRET..."
@@ -60,6 +69,8 @@ jobs:
           echo "🔧 Verificando configurações críticas..."
           grep "APP_ENV=production" .env && echo "✅ APP_ENV correto" || echo "⚠️ APP_ENV pode estar incorreto"
           grep "APP_DEBUG=false" .env && echo "✅ APP_DEBUG correto" || echo "⚠️ APP_DEBUG pode estar incorreto"
+          grep "DB_PASSWORD=" .env && echo "✅ DB_PASSWORD configurado" || echo "❌ DB_PASSWORD não encontrado"
+          grep "REDIS_PASSWORD=" .env && echo "✅ REDIS_PASSWORD configurado" || echo "❌ REDIS_PASSWORD não encontrado"
 
           # Garantir permissões corretas
           chmod 644 .env
@@ -109,6 +120,11 @@ jobs:
           echo "🔗 Testando conexões..."
           docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'Database OK';" || echo "❌ Problema na conexão com banco"
           docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok'); echo 'Redis OK';" || echo "❌ Problema na conexão com Redis"
+          
+          # Limpar todos os caches após mudanças
+          echo "🧹 Limpando todos os caches..."
+          docker exec linkchartapi php /var/www/artisan optimize:clear
+          docker exec linkchartapi php /var/www/artisan config:cache
 
           # Health check
           echo "🏥 Executando health check..."
