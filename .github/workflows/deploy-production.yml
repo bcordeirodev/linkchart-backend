@@ -61,11 +61,9 @@ jobs:
           chmod 644 .env
           echo "✅ Permissões do .env configuradas"
 
-          # Parar containers e limpar caches antigos
-          echo "🛑 Parando containers e limpando caches..."
+          # Parar containers
+          echo "🛑 Parando containers..."
           docker-compose -f docker-compose.prod.yml down || true
-          docker exec linkchartapi php /var/www/artisan config:clear 2>/dev/null || true
-          docker exec linkchartapi php /var/www/artisan cache:clear 2>/dev/null || true
 
           # Build and restart containers
           echo "🏗️ Rebuilding containers..."
@@ -86,6 +84,8 @@ jobs:
 
           # Run Laravel optimizations
           echo "⚡ Executando otimizações do Laravel..."
+          docker exec linkchartapi php /var/www/artisan config:clear
+          docker exec linkchartapi php /var/www/artisan cache:clear
           docker exec linkchartapi php /var/www/artisan config:cache
           docker exec linkchartapi php /var/www/artisan route:cache
           docker exec linkchartapi php /var/www/artisan view:cache
@@ -110,7 +110,7 @@ jobs:
           # Health check
           echo "🏥 Executando health check..."
           sleep 5
-          if curl -f http://localhost/health; then
+          if curl -f http://138.197.121.81/health; then
             echo "✅ Deployment successful!"
             echo "🎉 Aplicação está funcionando corretamente"
           else

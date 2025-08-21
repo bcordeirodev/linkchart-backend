@@ -58,6 +58,31 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        // Canal personalizado para produção com logs detalhados
+        'production' => [
+            'driver' => 'stack',
+            'channels' => ['daily', 'stderr', 'api_errors'],
+            'ignore_exceptions' => false,
+        ],
+
+        // Canal específico para erros de API
+        'api_errors' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/api-errors.log'),
+            'level' => env('LOG_LEVEL', 'error'),
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
+
+        // Canal para debug em produção (quando necessário)
+        'debug_production' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/debug.log'),
+            'level' => 'debug',
+            'days' => 7,
+            'replace_placeholders' => true,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
