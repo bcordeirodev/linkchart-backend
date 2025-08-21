@@ -40,6 +40,7 @@ services:
     container_name: linkchartredis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass linkchartredis123
+    # command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     ports:
