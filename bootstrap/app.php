@@ -6,6 +6,10 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
+    ->withProviders([
+        // Desabilitar Sanctum Service Provider que conflita com JWT Auth
+        \Laravel\Sanctum\SanctumServiceProvider::class => false,
+    ])
     ->withRouting(
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
