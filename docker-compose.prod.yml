@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: linkchartapi
     restart: unless-stopped
-    ports:
-      - "80:80"
+    expose:
+      - "80"
     env_file:
       - .env
     volumes:

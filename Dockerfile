@@ -75,8 +75,13 @@ COPY --chown=www:www . /var/www
 # Instalar dependências
 RUN composer install --optimize-autoloader --no-dev --no-scripts
 
-# Configurar permissões
-RUN chown -R www:www /var/www \
+# Criar diretórios necessários e configurar permissões
+RUN mkdir -p /var/www/storage/framework/cache/data \
+    && mkdir -p /var/www/storage/framework/sessions \
+    && mkdir -p /var/www/storage/framework/views \
+    && mkdir -p /var/www/storage/logs \
+    && mkdir -p /var/www/bootstrap/cache \
+    && chown -R www:www /var/www \
     && chmod -R 755 /var/www \
     && chmod -R 775 /var/www/storage \
     && chmod -R 775 /var/www/bootstrap/cache
