@@ -118,6 +118,17 @@ Route::middleware(['api.auth:api'])->prefix('reports/link')->controller(\App\Htt
     Route::get('/{linkId}/dashboard', 'getDashboardData')->where('linkId', '[0-9]+');
 });
 
+// ==============================
+// ROTAS DE LOGGING E DIAGNÓSTICO
+// ==============================
+Route::middleware(['api.auth:api'])->prefix('logs')->controller(\App\Http\Controllers\LogController::class)->group(function () {
+    Route::get('/', 'listLogs');                    // GET /logs - Lista arquivos de log
+    Route::get('/recent-errors', 'getRecentErrors'); // GET /logs/recent-errors - Erros recentes
+    Route::get('/diagnostic', 'systemDiagnostic');   // GET /logs/diagnostic - Diagnóstico completo
+    Route::post('/test', 'testLogging');             // POST /logs/test - Testar sistema de logs
+    Route::get('/{filename}', 'readLog');            // GET /logs/{filename} - Ler arquivo específico
+});
+
 // Rota de teste completo para analytics (temporária)
 Route::get('/test-analytics/{linkId}', function($linkId) {
     $service = app(\App\Services\EnhancedLinkAnalyticsService::class);
