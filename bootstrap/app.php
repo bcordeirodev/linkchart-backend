@@ -76,18 +76,23 @@ return Application::configure(basePath: dirname(__DIR__))
         // Tratamento geral para exceções não tratadas
         $exceptions->render(function (\Throwable $e, $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
-                // Log detalhado do erro
-                \Log::channel('api_errors')->error('API Exception', [
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'url' => $request->fullUrl(),
-                    'method' => $request->method(),
-                    'parameters' => $request->all(),
-                    'ip' => $request->ip(),
-                    'user_agent' => $request->userAgent(),
-                    'trace' => $e->getTraceAsString()
-                ]);
+                // Log detalhado do erro (com try-catch para evitar falhas em cascata)
+                try {
+                    \Log::channel('api_errors')->error('API Exception', [
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'url' => $request->fullUrl(),
+                        'method' => $request->method(),
+                        'parameters' => $request->all(),
+                        'ip' => $request->ip(),
+                        'user_agent' => $request->userAgent(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                } catch (\Exception $logError) {
+                    // Se falhar o log, usar error_log como fallback
+                    error_log('Laravel Exception: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+                }
 
                 // Resposta diferente para produção vs desenvolvimento
                 if (config('app.debug')) {

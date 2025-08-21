@@ -81,12 +81,15 @@ RUN git config --global --add safe.directory /var/www \
 RUN mkdir -p /var/www/storage/framework/cache/data \
     && mkdir -p /var/www/storage/framework/sessions \
     && mkdir -p /var/www/storage/framework/views \
+    && mkdir -p /var/www/storage/framework/testing \
     && mkdir -p /var/www/storage/logs \
     && mkdir -p /var/www/bootstrap/cache \
+    && touch /var/www/storage/logs/laravel.log \
     && chown -R www:www /var/www \
     && chmod -R 755 /var/www \
     && chmod -R 775 /var/www/storage \
-    && chmod -R 775 /var/www/bootstrap/cache
+    && chmod -R 775 /var/www/bootstrap/cache \
+    && chmod 664 /var/www/storage/logs/laravel.log
 
 # Expor porta
 EXPOSE 80
