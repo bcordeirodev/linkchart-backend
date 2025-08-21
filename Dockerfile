@@ -89,6 +89,7 @@ RUN mkdir -p /var/www/storage/framework/cache/data \
     && chmod -R 755 /var/www \
     && chmod -R 775 /var/www/storage \
     && chmod -R 775 /var/www/bootstrap/cache \
+    && chmod 664 /var/www/storage/logs/laravel.log \
     && chmod 664 /var/www/storage/logs/laravel.log
 
 # Expor porta
