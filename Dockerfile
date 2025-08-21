@@ -72,8 +72,10 @@ WORKDIR /var/www
 # Copiar aplicação
 COPY --chown=www:www . /var/www
 
-# Instalar dependências
-RUN composer install --optimize-autoloader --no-dev --no-scripts
+# Configurar Git para permitir diretório e instalar dependências
+RUN git config --global --add safe.directory /var/www \
+    && git config --global --add safe.directory /var/www/vendor/fakerphp/faker \
+    && composer install --optimize-autoloader --no-dev --no-scripts
 
 # Criar diretórios necessários e configurar permissões
 RUN mkdir -p /var/www/storage/framework/cache/data \
