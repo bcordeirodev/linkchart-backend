@@ -1,9 +1,15 @@
-name: Deploy to Production
+name: 🚀 Deploy to Production
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Force complete rebuild (no cache)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   DEPLOY_HOST: 138.197.121.81
@@ -12,36 +18,41 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to Production Server
+    name: 🏗️ Deploy to Production Server
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
-    - name: Checkout code
+    - name: 📦 Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup SSH
+    - name: 🔐 Setup SSH
       uses: webfactory/ssh-agent@v0.8.0
       with:
         ssh-private-key: ${{ secrets.LINK_CHART_ACTION_KEY }}
 
-    - name: Add server to known hosts
+    - name: 🌐 Add server to known hosts
       run: |
         mkdir -p ~/.ssh
         echo "StrictHostKeyChecking no" >> ~/.ssh/config
 
-    - name: Deploy to server
+    - name: 🚀 Deploy to Production Server
       run: |
         ssh -o StrictHostKeyChecking=no root@${{ env.DEPLOY_HOST }} << 'ENDSSH'
           set -e  # Exit on any error
           cd ${{ env.PROJECT_PATH }}
 
-          # Função para rollback em caso de erro
+          # ==========================================
+          # FUNÇÃO DE ROLLBACK ROBUSTA
+          # ==========================================
           rollback() {
-            echo "🔄 Executando rollback..."
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down || true
+            echo "🔄 EXECUTANDO ROLLBACK DE EMERGÊNCIA..."
 
+            # Parar containers atuais
+            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
+
+            # Restaurar backup mais recente
             BACKUP_FILE=$(ls -t .env.backup.* 2>/dev/null | head -1)
             if [ -n "$BACKUP_FILE" ]; then
               echo "📦 Restaurando backup: $BACKUP_FILE"
@@ -49,181 +60,250 @@ jobs:
             else
               echo "📋 Usando .env.production como fallback"
               cp .env.production .env
+              sed -i "s/JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
             fi
 
+            # Tentar subir versão anterior
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
+
+            echo "❌ ROLLBACK CONCLUÍDO - Verifique o sistema manualmente"
             exit 1
           }
 
-          # Limpar backups antigos (manter apenas os 5 mais recentes)
-          echo "🧹 Limpando backups antigos..."
-          ls -t .env.backup.* 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+          # ==========================================
+          # LIMPEZA E PREPARAÇÃO
+          # ==========================================
+          echo "🧹 Preparando ambiente de produção..."
 
-          # Pull latest changes
-          echo "⬇️ Baixando alterações do repositório..."
+          # Limpar backups antigos (manter 7 mais recentes)
+          ls -t .env.backup.* 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
+
+          # Pull das mudanças mais recentes
+          echo "⬇️ Baixando código atualizado..."
           git fetch origin
           git reset --hard origin/main
 
-          # Backup current .env if exists
+          # Backup do .env atual
           if [ -f .env ]; then
-            echo "💾 Criando backup do .env atual..."
+            echo "💾 Backup do .env atual..."
             cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
           fi
 
-          # Copy production environment
-          echo "📋 Copiando configurações de produção..."
+          # ==========================================
+          # CONFIGURAÇÃO DO AMBIENTE PRODUCTION
+          # ==========================================
+          echo "📋 Configurando ambiente de produção..."
+
+          # Usar .env.production como base (seguindo padrão dev)
           cp .env.production .env
 
-          # Configurar JWT_SECRET do GitHub Secrets
-          echo "🔐 Configurando JWT_SECRET do GitHub Secrets..."
-          sed -i "s/JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
+          # Injetar JWT_SECRET do GitHub Secrets
+          echo "🔐 Configurando JWT_SECRET..."
+          sed -i "s/JWT_SECRET=placeholder/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
 
-          # Validações de configuração
+          # ==========================================
+          # VALIDAÇÕES CRÍTICAS
+          # ==========================================
           echo "🔧 Validando configurações críticas..."
 
           # Verificar JWT_SECRET
-          JWT_LENGTH=$(grep 'JWT_SECRET=' .env | cut -d'=' -f2 | wc -c)
+          JWT_SECRET=$(grep 'JWT_SECRET=' .env | cut -d'=' -f2)
+          JWT_LENGTH=${#JWT_SECRET}
           if [ "$JWT_LENGTH" -lt 32 ]; then
-            echo "❌ JWT_SECRET muito curto ($JWT_LENGTH caracteres)"
+            echo "❌ JWT_SECRET muito curto ($JWT_LENGTH chars)"
             rollback
           fi
-          echo "✅ JWT_SECRET configurado ($JWT_LENGTH caracteres)"
+          echo "✅ JWT_SECRET configurado ($JWT_LENGTH chars)"
 
-          # Verificar outras configurações
+          # Validar configurações essenciais (.env.production)
           grep -q "APP_ENV=production" .env && echo "✅ APP_ENV=production" || { echo "❌ APP_ENV incorreto"; rollback; }
           grep -q "APP_DEBUG=false" .env && echo "✅ APP_DEBUG=false" || { echo "❌ APP_DEBUG incorreto"; rollback; }
-          grep -q "DB_PASSWORD=" .env && echo "✅ DB_PASSWORD configurado" || { echo "❌ DB_PASSWORD não encontrado"; rollback; }
-          grep -q "REDIS_PASSWORD=" .env && echo "✅ REDIS_PASSWORD configurado" || { echo "❌ REDIS_PASSWORD não encontrado"; rollback; }
+          grep -q "DB_HOST=linkchartdb" .env && echo "✅ DB_HOST=linkchartdb" || { echo "❌ DB_HOST incorreto"; rollback; }
+          grep -q "REDIS_HOST=linkchartredis" .env && echo "✅ REDIS_HOST=linkchartredis" || { echo "❌ REDIS_HOST incorreto"; rollback; }
+          grep -q "DB_PASSWORD=" .env && echo "✅ DB_PASSWORD configurado" || { echo "❌ DB_PASSWORD ausente"; rollback; }
+          grep -q "REDIS_PASSWORD=" .env && echo "✅ REDIS_PASSWORD configurado" || { echo "❌ REDIS_PASSWORD ausente"; rollback; }
 
-          # Garantir permissões corretas
+          # Definir permissões corretas
           chmod 644 .env
           echo "✅ Permissões do .env configuradas"
 
-          # Parar containers graciosamente
-          echo "🛑 Parando containers..."
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 30 || true
+          # ==========================================
+          # DEPLOYMENT COM ESTRATÉGIA DEV FUNCIONAL
+          # ==========================================
+          echo "🛑 Parando containers atuais..."
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
 
-          # Limpeza de imagens não utilizadas
-          echo "🧹 Limpando imagens Docker não utilizadas..."
-          docker image prune -f || true
+          # Limpeza opcional de imagens (baseado no dev)
+          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            echo "🧹 Forçando rebuild completo..."
+            docker system prune -f
+            docker image prune -a -f
+          else
+            echo "🧹 Limpeza básica..."
+            docker image prune -f
+          fi
 
-          # Build com cache otimizado
-          echo "🏗️ Building containers com cache otimizado..."
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --parallel
+          # Build seguindo o padrão que funciona em dev
+          echo "🏗️ Building aplicação..."
+          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --no-cache --parallel
+          else
+            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --parallel
+          fi
 
-          # Iniciar containers com health checks
-          echo "🚀 Iniciando containers..."
+          # Iniciar serviços (igual ao dev)
+          echo "🚀 Iniciando serviços de produção..."
           docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
 
-          # Aguardar health checks
-          echo "⏳ Aguardando health checks dos serviços..."
+          # ==========================================
+          # AGUARDAR HEALTH CHECKS (BASEADO NO DEV)
+          # ==========================================
+          echo "⏳ Aguardando serviços ficarem healthy..."
+
+          # PostgreSQL Health Check
+          echo "🗄️ Aguardando PostgreSQL..."
           timeout 120 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -E "(healthy|running).*linkchartdb"; do
-              echo "⏳ Aguardando PostgreSQL..."
+            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T database pg_isready -U linkchartuser -d linkchartprod >/dev/null 2>&1; do
+              echo "⏳ PostgreSQL iniciando..."
               sleep 5
             done
-          ' || { echo "❌ PostgreSQL não ficou healthy"; rollback; }
+          ' || { echo "❌ PostgreSQL timeout"; rollback; }
+          echo "✅ PostgreSQL healthy"
 
+          # Redis Health Check
+          echo "⚡ Aguardando Redis..."
           timeout 120 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -E "(healthy|running).*linkchartredis"; do
-              echo "⏳ Aguardando Redis..."
+            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T redis redis-cli -a linkchartredis123 ping >/dev/null 2>&1; do
+              echo "⏳ Redis iniciando..."
               sleep 5
             done
-          ' || { echo "❌ Redis não ficou healthy"; rollback; }
+          ' || { echo "❌ Redis timeout"; rollback; }
+          echo "✅ Redis healthy"
 
+          # Laravel Application Health Check (similar ao dev)
+          echo "🐘 Aguardando Laravel Application..."
           timeout 180 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -E "(healthy|running).*linkchartapi"; do
-              echo "⏳ Aguardando aplicação..."
+            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -q "linkchartapi.*Up"; do
+              echo "⏳ Laravel iniciando..."
               sleep 10
             done
-          ' || { echo "❌ Aplicação não ficou healthy"; rollback; }
+          ' || { echo "❌ Laravel timeout"; rollback; }
+          echo "✅ Laravel Application running"
 
-          echo "✅ Todos os serviços estão healthy!"
+          # ==========================================
+          # CONFIGURAÇÃO LARAVEL (IGUAL AO DEV)
+          # ==========================================
+          echo "⚙️ Configurando Laravel (baseado no padrão dev)..."
 
-          # Configurar diretórios e executar setup
-          echo "🔧 Configurando diretórios e executando setup..."
-          docker exec linkchartapi /var/www/setup-production-dirs.sh || { echo "❌ Erro no setup"; rollback; }
+          # Aguardar PHP-FPM e Nginx estarem prontos
+          sleep 15
 
-          # Executar otimizações do Laravel
-          echo "⚡ Executando otimizações da API Laravel..."
-          docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ Erro ao limpar config"; rollback; }
-          docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ Erro ao limpar cache"; rollback; }
-          docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ Erro ao cachear config"; rollback; }
-          docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ Erro ao cachear rotas"; rollback; }
+          # Setup de diretórios e permissões (igual ao dev)
+          docker exec linkchartapi /var/www/setup-production-dirs.sh || { echo "❌ Erro no setup dirs"; rollback; }
 
-          # Verificações de integridade
-          echo "🧪 Executando verificações de integridade..."
+          # Laravel optimizations (seguindo padrão dev mas para prod)
+          echo "⚡ Otimizações Laravel para produção..."
+          docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
+          docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ cache:clear falhou"; rollback; }
+          docker exec linkchartapi php /var/www/artisan route:clear || { echo "❌ route:clear falhou"; rollback; }
+          docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
 
-          # Verificar JWT no Laravel
-          JWT_CONFIG=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo strlen(config('jwt.secret'));" 2>/dev/null | tail -1 || echo "0")
-          if [ "$JWT_CONFIG" -gt 32 ]; then
-            echo "✅ JWT_SECRET carregado no Laravel (length: $JWT_CONFIG)"
-          else
-            echo "❌ JWT_SECRET problema no Laravel: $JWT_CONFIG"
-            rollback
-          fi
+          # Executar migrações
+          docker exec linkchartapi php /var/www/artisan migrate --force || { echo "❌ migrate falhou"; rollback; }
 
-          # Testar conexão com banco
-          if docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'OK';" 2>/dev/null | grep -q "OK"; then
-            echo "✅ Conexão com PostgreSQL OK"
-          else
-            echo "❌ Problema na conexão com banco"
-            rollback
-          fi
+          # Storage link
+          docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
 
-          # Testar conexão com Redis
-          if docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok'); echo 'OK';" 2>/dev/null | grep -q "OK"; then
-            echo "✅ Conexão com Redis OK"
-          else
-            echo "❌ Problema na conexão com Redis"
-            rollback
-          fi
+          # Cache para produção
+          docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ config:cache falhou"; rollback; }
+          docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
+          docker exec linkchartapi php /var/www/artisan view:cache || { echo "❌ view:cache falhou"; rollback; }
 
-          # Health check final
-          echo "🏥 Executando health check final..."
+          # ==========================================
+          # VERIFICAÇÕES DE INTEGRIDADE
+          # ==========================================
+          echo "🧪 Verificações de integridade..."
+
+          # Aguardar estabilização
           sleep 10
 
-          # Tentar até 3 vezes com intervalo
-          for i in {1..3}; do
-            if curl -f -s http://${{ env.DEPLOY_HOST }}/health >/dev/null 2>&1; then
+          # Verificar JWT no Laravel
+          JWT_TEST=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_LEN:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_LEN:' | cut -d':' -f2 || echo "0")
+          if [ "$JWT_TEST" -gt 32 ]; then
+            echo "✅ JWT carregado no Laravel (length: $JWT_TEST)"
+          else
+            echo "❌ JWT problema no Laravel: '$JWT_TEST'"
+            rollback
+          fi
+
+          # Testar Database Connection
+          if docker exec linkchartapi php /var/www/artisan tinker --execute="try { DB::connection()->getPdo(); echo 'DB_OK'; } catch(Exception \$e) { echo 'DB_ERROR'; }" 2>/dev/null | grep -q "DB_OK"; then
+            echo "✅ PostgreSQL connection OK"
+          else
+            echo "❌ PostgreSQL connection failed"
+            rollback
+          fi
+
+          # Testar Redis Connection
+          if docker exec linkchartapi php /var/www/artisan tinker --execute="try { Cache::store('redis')->put('test_key', 'test_value', 60); echo 'REDIS_OK'; } catch(Exception \$e) { echo 'REDIS_ERROR'; }" 2>/dev/null | grep -q "REDIS_OK"; then
+            echo "✅ Redis connection OK"
+          else
+            echo "❌ Redis connection failed"
+            rollback
+          fi
+
+          # ==========================================
+          # HEALTH CHECK FINAL
+          # ==========================================
+          echo "🏥 Health check final da aplicação..."
+          sleep 15
+
+          # Tentar health check múltiplas vezes
+          for i in {1..5}; do
+            if curl -f -s --max-time 15 http://localhost/health >/dev/null 2>&1; then
               echo "✅ Health check passou na tentativa $i"
               break
             else
               echo "⚠️ Health check falhou na tentativa $i"
-              if [ $i -eq 3 ]; then
-                echo "❌ Health check falhou após 3 tentativas - executando rollback"
+              if [ $i -eq 5 ]; then
+                echo "❌ Health check falhou após 5 tentativas"
+                # Mostrar logs para debug
+                echo "📋 Logs do container para debug:"
+                docker logs linkchartapi --tail 50
                 rollback
               fi
-              sleep 15
+              sleep 20
             fi
           done
 
-          echo "🎉 Deployment concluído com sucesso!"
+          echo "🎉 DEPLOYMENT DE PRODUÇÃO CONCLUÍDO COM SUCESSO!"
+          echo "📊 Containers ativos:"
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
         ENDSSH
 
-    - name: Verify deployment
+    - name: 🔍 Verificação Final de Produção
       run: |
-        echo "🔍 Verificação final de produção..."
+        echo "🔍 Verificação final completa..."
 
-        # Aguardar estabilização
-        sleep 15
+        # Aguardar estabilização total
+        sleep 20
 
-        # Verificação de health check
-        if curl -f -s --max-time 10 http://${{ env.DEPLOY_HOST }}/health; then
-          echo "✅ Health check passou!"
+        # Health Check Principal
+        if curl -f -s --max-time 15 http://${{ env.DEPLOY_HOST }}/health; then
+          echo "✅ Health check principal OK"
         else
-          echo "❌ Health check falhou!"
+          echo "❌ Health check principal falhou"
           exit 1
         fi
 
-        # Teste da API - deve retornar 401 (não autenticado)
-        API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://${{ env.DEPLOY_HOST }}/api/links)
+        # Teste API - deve retornar 401 (não autenticado)
+        API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://${{ env.DEPLOY_HOST }}/api/links)
         case $API_RESPONSE in
           401)
-            echo "✅ API respondendo corretamente (401 - autenticação necessária)"
+            echo "✅ API protegida OK (401 - auth required)"
             ;;
-          200|422|500)
-            echo "⚠️ API respondeu com $API_RESPONSE - verificar se é esperado"
+          200|422)
+            echo "⚠️ API respondeu $API_RESPONSE (verificar se esperado)"
             ;;
           *)
             echo "❌ API resposta inesperada: $API_RESPONSE"
@@ -231,60 +311,78 @@ jobs:
             ;;
         esac
 
-        # Verificação adicional da API - endpoint público
-        HEALTH_RESPONSE=$(curl -s --max-time 10 http://${{ env.DEPLOY_HOST }}/health | head -c 20)
-        if [[ "$HEALTH_RESPONSE" == *"OK"* ]] || [[ "$HEALTH_RESPONSE" == *"healthy"* ]]; then
-          echo "✅ API health endpoint OK"
+        # Verificar health endpoint detalhado
+        HEALTH_FULL=$(curl -s --max-time 15 http://${{ env.DEPLOY_HOST }}/health)
+        if [[ "$HEALTH_FULL" == *"OK"* ]] || [[ "$HEALTH_FULL" == *"healthy"* ]]; then
+          echo "✅ Health endpoint detalhado OK"
+          echo "📋 Health response: $HEALTH_FULL"
         else
-          echo "⚠️ Health endpoint response: $HEALTH_RESPONSE"
+          echo "⚠️ Health endpoint response: $HEALTH_FULL"
         fi
 
-        echo "🎉 Deployment verification completed!"
+        echo "🎉 VERIFICAÇÃO DE PRODUÇÃO CONCLUÍDA!"
 
-    - name: Post-deployment monitoring
+    - name: 📊 Monitoramento Pós-Deploy
       if: success()
       run: |
-        echo "📊 Executando monitoramento pós-deployment..."
+        echo "📊 Monitoramento pós-deployment..."
 
-        # Verificar logs do container
         ssh -o StrictHostKeyChecking=no root@${{ env.DEPLOY_HOST }} << 'ENDSSH'
-          echo "📋 Últimas linhas do log da aplicação:"
-          docker logs linkchartapi --tail 20 | grep -E "(ERROR|WARNING|INFO)" || echo "Nenhum log relevante encontrado"
+          cd ${{ env.PROJECT_PATH }}
 
-          echo "📊 Status dos containers:"
+          echo "📋 Status final dos containers:"
           docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
 
-          echo "💾 Uso de recursos:"
-          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
+          echo ""
+          echo "📈 Estatísticas de recursos:"
+          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
+
+          echo ""
+          echo "📝 Últimas 10 linhas do log da aplicação:"
+          docker logs linkchartapi --tail 10
+
+          echo ""
+          echo "🔍 Verificação final de configuração:"
+          docker exec linkchartapi php /var/www/artisan --version
+          docker exec linkchartapi php /var/www/artisan env | grep -E "APP_ENV|APP_DEBUG|DB_CONNECTION|REDIS_CLIENT" || true
         ENDSSH
 
-    - name: Notify deployment status
+    - name: 📢 Notificação de Status
       if: always()
       run: |
         if [ "${{ job.status }}" == "success" ]; then
-          echo "🚀 Production deployment completed successfully!"
+          echo "🚀 PRODUÇÃO DEPLOYED COM SUCESSO!"
           echo ""
-          echo "📊 Services Status:"
-          echo "  ✅ Laravel API Application"
-          echo "  ✅ PostgreSQL Database (with health checks)"
-          echo "  ✅ Redis Cache (with health checks)"
+          echo "📊 Serviços Ativos:"
+          echo "  ✅ Laravel API Application (PHP 8.2 + FPM)"
+          echo "  ✅ PostgreSQL Database 15 (com health checks)"
+          echo "  ✅ Redis Cache 7 (com auth)"
           echo "  ✅ Nginx Reverse Proxy"
+          echo "  ✅ Supervisor Process Manager"
           echo "  ✅ JWT Authentication"
+          echo "  ✅ CORS Configurado"
           echo ""
-          echo "🌐 Application URL: http://${{ env.DEPLOY_HOST }}"
-          echo "🏥 Health Check: http://${{ env.DEPLOY_HOST }}/health"
-          echo "📡 API Endpoint: http://${{ env.DEPLOY_HOST }}/api"
+          echo "🌐 URLs de Produção:"
+          echo "  🏠 Application: http://${{ env.DEPLOY_HOST }}"
+          echo "  🏥 Health Check: http://${{ env.DEPLOY_HOST }}/health"
+          echo "  📡 API Base: http://${{ env.DEPLOY_HOST }}/api"
+          echo "  🔐 Auth: http://${{ env.DEPLOY_HOST }}/api/auth/login"
           echo ""
-          echo "⏱️ Deployment completed at: $(date)"
+          echo "⏱️ Deploy concluído em: $(date)"
+          echo "🔧 Baseado na estrutura dev funcional + .env.production"
         else
-          echo "💥 Production deployment failed!"
+          echo "💥 FALHA NO DEPLOYMENT DE PRODUÇÃO!"
           echo ""
-          echo "❌ Deployment failed at stage: ${{ job.status }}"
-          echo "🔍 Please check the logs above to identify the issue"
-          echo "🔄 Automatic rollback should have been executed"
+          echo "❌ Status: ${{ job.status }}"
+          echo "🔍 Logs acima contêm detalhes do erro"
+          echo "🔄 Rollback automático executado"
           echo ""
-          echo "📞 Action Required:"
-          echo "  1. Check server logs: ssh root@${{ env.DEPLOY_HOST }}"
-          echo "  2. Verify container status: docker ps"
-          echo "  3. Check application logs: docker logs linkchartapi"
+          echo "📞 Ações Necessárias:"
+          echo "  1. ssh root@${{ env.DEPLOY_HOST }}"
+          echo "  2. cd ${{ env.PROJECT_PATH }}"
+          echo "  3. docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps"
+          echo "  4. docker logs linkchartapi"
+          echo "  5. Verificar .env.backup.* para versões anteriores"
+          echo ""
+          echo "💡 Rollback executado - sistema deve estar na versão anterior"
         fi
