@@ -1,0 +1,26 @@
+services:
+  app:
+    image: linkchartapi-test
+    container_name: linkchartapi-test
+    ports:
+      - "8081:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_KEY=base64:bFwv6GWHNm4BUS6ZsUqC97DmaoRno0+vRG0NX7SFoRo=
+      - JWT_SECRET=KdpOloP5VmYg79DNBTnotjqysXqeGJYVq1nqpgE328YX68ThMttE9h3CxKLGfidG
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/tmp/test.db
+      - CACHE_STORE=file
+      - SESSION_DRIVER=file
+      - QUEUE_CONNECTION=sync
+      - LOG_CHANNEL=stack
+      - LOG_LEVEL=info
+    volumes:
+      - ./storage/logs:/var/www/storage/logs
+    networks:
+      - test-net
+
+networks:
+  test-net:
+    driver: bridge

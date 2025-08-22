@@ -1,0 +1,141 @@
+# ==========================================
+# DOCKERFILE PARA DESENVOLVIMENTO LOCAL
+# ==========================================
+
+FROM php:8.2-fpm-alpine
+
+# Instalar dependências do sistema
+RUN apk add --no-cache \
+    nginx \
+    supervisor \
+    postgresql-dev \
+    git \
+    unzip \
+    curl \
+    oniguruma-dev \
+    libxml2-dev \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
+    libzip-dev \
+    bash \
+    netcat-openbsd
+
+# Instalar dependências de build temporárias para Redis e Xdebug
+RUN apk add --no-cache --virtual .build-deps \
+    autoconf \
+    gcc \
+    g++ \
+    make \
+    pkgconfig \
+    linux-headers
+
+# Instalar extensões PHP
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+    pdo_pgsql \
+    mbstring \
+    xml \
+    gd \
+    zip \
+    bcmath \
+    opcache \
+    pcntl
+
+# Instalar Redis extension
+RUN pecl install redis && docker-php-ext-enable redis
+
+# Instalar Xdebug para desenvolvimento
+RUN pecl install xdebug && docker-php-ext-enable xdebug
+
+# Remover dependências de build temporárias
+RUN apk del .build-deps
+
+# Instalar Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Configurar PHP para desenvolvimento
+COPY docker/php/php-dev.ini /usr/local/etc/php/php.ini
+COPY docker/php/xdebug.ini /usr/local/etc/php/conf.d/xdebug.ini
+
+# Configurar PHP-FPM para usar www-data
+RUN echo '[www]' > /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'user = www-data' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'group = www-data' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'listen = 9000' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'listen.owner = www-data' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'listen.group = www-data' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'pm = dynamic' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'pm.max_children = 20' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'pm.start_servers = 2' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'pm.min_spare_servers = 1' >> /usr/local/etc/php-fpm.d/www.conf \
+    && echo 'pm.max_spare_servers = 3' >> /usr/local/etc/php-fpm.d/www.conf
+
+# Configurar Nginx para desenvolvimento
+COPY docker/nginx/dev.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+
+# Configurar Supervisor
+COPY docker/supervisor/supervisord-dev.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Configurar diretórios e permissões
+RUN mkdir -p /var/log/supervisor /var/log/nginx && \
+    chown -R www-data:www-data /var/log/supervisor
+
+# Definir diretório de trabalho
+WORKDIR /var/www
+
+# Copiar arquivos de configuração primeiro
+COPY composer.json composer.lock ./
+RUN composer install --no-scripts --no-autoloader
+
+# Copiar aplicação
+COPY --chown=www-data:www-data . /var/www
+
+# Finalizar instalação do Composer
+RUN composer dump-autoload --optimize
+
+# Criar diretórios necessários e configurar permissões
+RUN mkdir -p /var/www/storage/framework/cache/data \
+    && mkdir -p /var/www/storage/framework/sessions \
+    && mkdir -p /var/www/storage/framework/views \
+    && mkdir -p /var/www/storage/framework/testing \
+    && mkdir -p /var/www/storage/logs \
+    && mkdir -p /var/www/storage/app/public \
+    && mkdir -p /var/www/bootstrap/cache \
+    && touch /var/www/storage/logs/laravel.log \
+    && chown -R www-data:www-data /var/www \
+    && chmod -R 755 /var/www \
+    && chmod -R 777 /var/www/storage \
+    && chmod -R 777 /var/www/bootstrap/cache \
+    && chmod 666 /var/www/storage/logs/laravel.log
+
+# Aguardar banco de dados e configurar aplicação
+RUN echo '#!/bin/bash\n\
+echo "🚀 Iniciando Laravel..."\n\
+while ! nc -z database 5432; do sleep 1; done\n\
+echo "✅ PostgreSQL conectado!"\n\
+while ! nc -z redis 6379; do sleep 1; done\n\
+echo "✅ Redis conectado!"\n\
+\n\
+# Garantir permissões novamente\n\
+chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache\n\
+chmod -R 777 /var/www/storage /var/www/bootstrap/cache\n\
+\n\
+# Configurar Laravel\n\
+cd /var/www\n\
+[ ! -f .env ] && cp .env.local .env\n\
+php artisan config:clear\n\
+php artisan cache:clear\n\
+php artisan migrate --force\n\
+php artisan storage:link\n\
+\n\
+echo "✅ Laravel configurado!"\n\
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' > /usr/local/bin/start.sh \
+    && chmod +x /usr/local/bin/start.sh
+
+# Expor porta
+EXPOSE 80
+
+# Comando de inicialização (executar como root para supervisor)
+CMD ["/usr/local/bin/start.sh"]

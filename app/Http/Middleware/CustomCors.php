@@ -26,19 +26,20 @@ class CustomCors
 
         // Se é uma requisição OPTIONS (preflight)
         if ($request->getMethod() === 'OPTIONS') {
-            $response = response('', 200);
+            $response = response('', 204);
         } else {
             $response = $next($request);
         }
 
-        // Adicionar headers CORS
+        // Aplicar headers CORS sempre para origens permitidas
         if (in_array($origin, $allowedOrigins) || !$origin) {
-            $response->headers->set('Access-Control-Allow-Origin', $origin ?: '*');
+            $response->headers->set('Access-Control-Allow-Origin', $origin ?: 'http://localhost:3000');
             $response->headers->set('Access-Control-Allow-Credentials', 'true');
-            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
             $response->headers->set('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Accept,Origin');
             $response->headers->set('Access-Control-Expose-Headers', 'Content-Length,Content-Range');
             $response->headers->set('Access-Control-Max-Age', '3600');
+            $response->headers->set('Vary', 'Origin');
         }
 
         return $response;

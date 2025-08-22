@@ -14,10 +14,18 @@ services:
       - ./storage/app:/var/www/storage/app
       - ./.env:/var/www/.env
     depends_on:
-      - database
-      - redis
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - linkchartnet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   database:
     image: postgres:15-alpine
@@ -34,6 +42,12 @@ services:
       - "5432:5432"
     networks:
       - linkchartnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U linkchartuser -d linkchartprod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -46,6 +60,12 @@ services:
       - "6379:6379"
     networks:
       - linkchartnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
 
 # nginx:
     # image: nginx:alpine
