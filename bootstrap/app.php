@@ -97,7 +97,9 @@ return Application::configure(basePath: dirname(__DIR__))
                 }
 
                 // Resposta diferente para produção vs desenvolvimento
-                if (config('app.debug')) {
+                // SAFE: Usar env() direto para evitar problema de container resolution
+                $isDebug = (bool) env('APP_DEBUG', false);
+                if ($isDebug) {
                     return response()->json([
                         'error' => 'Server Error',
                         'message' => $e->getMessage(),

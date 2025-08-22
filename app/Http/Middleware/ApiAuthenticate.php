@@ -39,7 +39,8 @@ class ApiAuthenticate extends Middleware
             return null;
         }
 
-        return route('login');
+        // SAFE: Para API pura, não usar route() helper que pode falhar durante bootstrap
+        return '/login';
     }
 }
 

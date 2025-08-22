@@ -237,10 +237,10 @@ class MetricsCollector
     private function isCacheAvailable(): bool
     {
         try {
-            // Verificar se é driver file e se diretório existe
-            $cacheDriver = config('cache.default');
+            // SAFE: Usar env() direto para evitar problema de container resolution
+            $cacheDriver = env('CACHE_DRIVER', 'file');
             if ($cacheDriver === 'file') {
-                $cachePath = config('cache.stores.file.path', storage_path('framework/cache/data'));
+                $cachePath = env('CACHE_PATH', storage_path('framework/cache/data'));
                 if (!is_dir($cachePath)) {
                     // Tentar criar o diretório
                     if (!mkdir($cachePath, 0755, true) && !is_dir($cachePath)) {

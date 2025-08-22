@@ -351,8 +351,53 @@ jobs:
           # Storage link
           docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
 
-          # Cache para produção
+          # ==========================================
+          # VERIFICAÇÃO E CORREÇÃO JWT_SECRET
+          # ==========================================
+          echo "🔐 Verificando JWT_SECRET no container..."
+
+          # Verificar se JWT_SECRET está sendo lido corretamente
+          JWT_FROM_ENV=$(docker exec linkchartapi cat /var/www/.env | grep 'JWT_SECRET=' | cut -d'=' -f2)
+          echo "📋 JWT_SECRET do .env no container: ${#JWT_FROM_ENV} chars"
+
+          # Limpar cache antes de recriar (crítico para JWT)
+          echo "🧹 Limpando cache para JWT_SECRET..."
+          docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
+
+          # Verificar JWT via env() ANTES do cache
+          JWT_VIA_ENV=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_ENV:' . strlen(env('JWT_SECRET'));" 2>/dev/null | grep 'JWT_ENV:' | cut -d':' -f2 || echo "0")
+          echo "🔍 JWT via env(): $JWT_VIA_ENV chars"
+
+          if [ "$JWT_VIA_ENV" -lt 32 ]; then
+            echo "❌ PROBLEMA CRÍTICO: env('JWT_SECRET') não funciona!"
+            echo "📋 Conteúdo do .env no container:"
+            docker exec linkchartapi head -20 /var/www/.env
+            rollback
+          fi
+
+          # Cache para produção (DEPOIS da verificação JWT)
+          echo "⚡ Recriando config cache com JWT_SECRET correto..."
           docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ config:cache falhou"; rollback; }
+
+          # Verificar JWT APÓS config:cache
+          JWT_FROM_CONFIG=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_CONFIG:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_CONFIG:' | cut -d':' -f2 || echo "0")
+          echo "✅ JWT via config(): $JWT_FROM_CONFIG chars"
+
+          if [ "$JWT_FROM_CONFIG" -lt 32 ]; then
+            echo "❌ PROBLEMA CRÍTICO: config('jwt.secret') ainda está com placeholder!"
+            echo "🔄 Tentando corrigir com force clear..."
+            docker exec linkchartapi php /var/www/artisan optimize:clear
+            docker exec linkchartapi php /var/www/artisan config:cache
+
+            # Verificar novamente
+            JWT_FROM_CONFIG_2=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_CONFIG2:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_CONFIG2:' | cut -d':' -f2 || echo "0")
+            if [ "$JWT_FROM_CONFIG_2" -lt 32 ]; then
+              echo "❌ JWT_SECRET ainda não funciona após force clear"
+              rollback
+            fi
+            echo "✅ JWT corrigido após force clear: $JWT_FROM_CONFIG_2 chars"
+          fi
+
           docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan view:cache || { echo "❌ view:cache falhou"; rollback; }
 
@@ -364,14 +409,7 @@ jobs:
           # Aguardar estabilização
           sleep 10
 
-          # Verificar JWT no Laravel
-          JWT_TEST=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_LEN:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_LEN:' | cut -d':' -f2 || echo "0")
-          if [ "$JWT_TEST" -gt 32 ]; then
-            echo "✅ JWT carregado no Laravel (length: $JWT_TEST)"
-          else
-            echo "❌ JWT problema no Laravel: '$JWT_TEST'"
-            rollback
-          fi
+          # JWT já foi verificado acima - pular verificação duplicada
 
           # Testar Database Connection
           if docker exec linkchartapi php /var/www/artisan tinker --execute="try { DB::connection()->getPdo(); echo 'DB_OK'; } catch(Exception \$e) { echo 'DB_ERROR'; }" 2>/dev/null | grep -q "DB_OK"; then
