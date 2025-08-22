@@ -195,9 +195,8 @@ jobs:
               echo "📦 Restaurando backup: $BACKUP_FILE"
               cp "$BACKUP_FILE" .env
             else
-              echo "📋 Usando .env.production como fallback"
+              echo "📋 Usando .env.production como fallback (JWT_SECRET já incluído)"
               cp .env.production .env
-              sed -i "s/JWT_SECRET=.*/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
             fi
 
             # Tentar subir versão anterior
@@ -232,11 +231,8 @@ jobs:
           echo "📋 Configurando ambiente de produção..."
 
           # Usar .env.production como base (seguindo padrão dev)
+          echo "📋 Copiando .env.production para .env (JWT_SECRET já incluído)..."
           cp .env.production .env
-
-          # Injetar JWT_SECRET do GitHub Secrets
-          echo "🔐 Configurando JWT_SECRET..."
-          sed -i "s/JWT_SECRET=placeholder/JWT_SECRET=${{ secrets.JWT_SECRET }}/" .env
 
           # ==========================================
           # VALIDAÇÕES CRÍTICAS
@@ -420,19 +416,19 @@ jobs:
           sleep 10
 
           # JWT já foi verificado acima - pular verificação duplicada
-          
+
           # Verificar permissões críticas
           echo "🔍 Verificando permissões críticas..."
-          
+
           LOGS_WRITABLE=$(docker exec linkchartapi test -w /var/www/storage/logs && echo "OK" || echo "FAIL")
           CACHE_WRITABLE=$(docker exec linkchartapi test -w /var/www/storage/framework/cache/data && echo "OK" || echo "FAIL")
           BOOTSTRAP_WRITABLE=$(docker exec linkchartapi test -w /var/www/bootstrap/cache && echo "OK" || echo "FAIL")
-          
+
           echo "📋 Permissões status:"
           echo "  - storage/logs: $LOGS_WRITABLE"
-          echo "  - framework/cache: $CACHE_WRITABLE"  
+          echo "  - framework/cache: $CACHE_WRITABLE"
           echo "  - bootstrap/cache: $BOOTSTRAP_WRITABLE"
-          
+
           if [ "$LOGS_WRITABLE" != "OK" ] || [ "$CACHE_WRITABLE" != "OK" ] || [ "$BOOTSTRAP_WRITABLE" != "OK" ]; then
             echo "❌ Problemas de permissões detectados - aplicando correção emergencial"
             docker exec linkchartapi chmod -R 777 /var/www/storage/
