@@ -50,15 +50,15 @@ RUN apk del .build-deps
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Configurar PHP para produção
-COPY docker/php/php.ini /usr/local/etc/php/php.ini
-COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY docker/php/php-prod.ini /usr/local/etc/php/php.ini
+COPY docker/php/opcache-prod.ini /usr/local/etc/php/conf.d/opcache.ini
 
-# Configurar Nginx
+# Configurar Nginx para produção
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx/prod.conf /etc/nginx/conf.d/default.conf
 
-# Configurar Supervisor
-COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Configurar Supervisor para produção
+COPY docker/supervisor/supervisord-prod.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Criar usuário para aplicação e diretórios necessários
 RUN addgroup -g 1000 www && \
