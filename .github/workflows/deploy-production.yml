@@ -338,6 +338,16 @@ jobs:
           # Setup de diretórios e permissões (igual ao dev)
           docker exec linkchartapi /var/www/setup-production-dirs.sh || { echo "❌ Erro no setup dirs"; rollback; }
 
+          # ==========================================
+          # CORREÇÃO CRÍTICA DE PERMISSÕES
+          # ==========================================
+          echo "🔧 Aplicando correção de permissões..."
+
+          # Copiar script de correção para o container
+          docker cp docker/scripts/fix-permissions.sh linkchartapi:/tmp/fix-permissions.sh
+          docker exec linkchartapi chmod +x /tmp/fix-permissions.sh
+          docker exec linkchartapi /tmp/fix-permissions.sh || { echo "❌ Erro na correção de permissões"; rollback; }
+
           # Laravel optimizations (seguindo padrão dev mas para prod)
           echo "⚡ Otimizações Laravel para produção..."
           docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
@@ -410,6 +420,25 @@ jobs:
           sleep 10
 
           # JWT já foi verificado acima - pular verificação duplicada
+          
+          # Verificar permissões críticas
+          echo "🔍 Verificando permissões críticas..."
+          
+          LOGS_WRITABLE=$(docker exec linkchartapi test -w /var/www/storage/logs && echo "OK" || echo "FAIL")
+          CACHE_WRITABLE=$(docker exec linkchartapi test -w /var/www/storage/framework/cache/data && echo "OK" || echo "FAIL")
+          BOOTSTRAP_WRITABLE=$(docker exec linkchartapi test -w /var/www/bootstrap/cache && echo "OK" || echo "FAIL")
+          
+          echo "📋 Permissões status:"
+          echo "  - storage/logs: $LOGS_WRITABLE"
+          echo "  - framework/cache: $CACHE_WRITABLE"  
+          echo "  - bootstrap/cache: $BOOTSTRAP_WRITABLE"
+          
+          if [ "$LOGS_WRITABLE" != "OK" ] || [ "$CACHE_WRITABLE" != "OK" ] || [ "$BOOTSTRAP_WRITABLE" != "OK" ]; then
+            echo "❌ Problemas de permissões detectados - aplicando correção emergencial"
+            docker exec linkchartapi chmod -R 777 /var/www/storage/
+            docker exec linkchartapi chmod -R 777 /var/www/bootstrap/cache/
+            echo "✅ Correção emergencial aplicada"
+          fi
 
           # Testar Database Connection
           if docker exec linkchartapi php /var/www/artisan tinker --execute="try { DB::connection()->getPdo(); echo 'DB_OK'; } catch(Exception \$e) { echo 'DB_ERROR'; }" 2>/dev/null | grep -q "DB_OK"; then
