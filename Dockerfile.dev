@@ -56,6 +56,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Configurar PHP para desenvolvimento
 COPY docker/php/php-dev.ini /usr/local/etc/php/php.ini
+COPY docker/php/opcache-dev.ini /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/php/xdebug.ini /usr/local/etc/php/conf.d/xdebug.ini
 
 # Configurar PHP-FPM para usar www-data
