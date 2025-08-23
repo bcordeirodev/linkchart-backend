@@ -22,6 +22,7 @@ class RedirectController
 
     /**
      * Processa o redirecionamento de um link encurtado.
+     * Retorna JSON com URL original para o front-end fazer o redirect.
      */
     public function handle(string $slug, Request $request)
     {
@@ -32,17 +33,26 @@ class RedirectController
                                   ->first();
 
             if (!$link) {
-                abort(404, 'Link não encontrado ou expirado.');
+                return response()->json([
+                    'error' => 'Link não encontrado',
+                    'message' => 'O link solicitado não foi encontrado ou está inativo.'
+                ], 404);
             }
 
             // Verifica se o link não expirou
             if ($link->expires_at && now()->isAfter($link->expires_at)) {
-                abort(404, 'Link expirado.');
+                return response()->json([
+                    'error' => 'Link expirado',
+                    'message' => 'Este link expirou e não está mais disponível.'
+                ], 404);
             }
 
             // Verifica se já pode ser usado (starts_in)
             if ($link->starts_in && now()->isBefore($link->starts_in)) {
-                abort(404, 'Link ainda não está disponível.');
+                return response()->json([
+                    'error' => 'Link não disponível',
+                    'message' => 'Este link ainda não está disponível.'
+                ], 404);
             }
 
             // Registra tracking do clique com tratamento de erro
@@ -74,8 +84,19 @@ class RedirectController
                 $link->increment('clicks');
             }
 
-            // Redireciona para a URL original
-            return redirect()->away($link->original_url, 301);
+            // Retorna URL original para o front-end fazer o redirect
+            return response()->json([
+                'success' => true,
+                'redirect_url' => $link->original_url,
+                'link' => [
+                    'id' => $link->id,
+                    'slug' => $link->slug,
+                    'title' => $link->title,
+                    'description' => $link->description,
+                    'clicks' => $link->clicks,
+                    'created_at' => $link->created_at->format('d/m/Y H:i:s'),
+                ]
+            ]);
         } catch (\Exception $e) {
             // Log do erro para debugging
             \Log::error('Erro no redirecionamento', [
@@ -83,7 +104,11 @@ class RedirectController
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            abort(500, 'Erro interno do servidor.');
+
+            return response()->json([
+                'error' => 'Erro interno do servidor',
+                'message' => 'Ocorreu um erro ao processar o redirecionamento.'
+            ], 500);
         }
     }
 }
