@@ -14,6 +14,9 @@ use App\Http\Controllers\AuthController;
 Route::middleware(['metrics.redirect', 'rate.limit.advanced:link.redirect'])
     ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
+// ROTA TEMPORÁRIA DE TESTE - SEM MIDDLEWARES
+Route::get('/r-test/{slug}', [RedirectController::class, 'handle']);
+
 // Rota pública de preview - SEM rate limiting (apenas informação)
 Route::get('/link/by-slug/{slug}', [LinkController::class, 'showBySlug']);
 
