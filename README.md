@@ -98,3 +98,4 @@ Acesse `/api/documentation` para ver a documentação completa da API.
 ## 📄 Licença
 
 Este projeto está sob a licença MIT.
+# Deploy trigger sáb 23 ago 2025 14:05:15 -03
