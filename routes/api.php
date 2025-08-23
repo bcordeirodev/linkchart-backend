@@ -10,24 +10,10 @@ use App\Http\Controllers\RedirectController;
 use App\Http\Controllers\WordController;
 use App\Http\Controllers\AuthController;
 
-// Rota pública de redirecionamento - ÚNICA com rate limiting e coleta de métricas específicas
+// Rota pública de redirecionamento - TEMPORARIAMENTE SEM RATE LIMITING
 // SISTEMA ROBUSTO: Métricas nunca impedem redirecionamento
-Route::middleware(['metrics.redirect', 'rate.limit.advanced:link.redirect'])
-    ->get('/r/{slug}', [RedirectController::class, 'handle']);
-
-// TESTE: Apenas com metrics.redirect
 Route::middleware(['metrics.redirect'])
-    ->get('/r-metrics/{slug}', [RedirectController::class, 'handle']);
-
-// TESTE: Apenas com rate.limit.advanced
-Route::middleware(['rate.limit.advanced:link.redirect'])
-    ->get('/r-ratelimit/{slug}', [RedirectController::class, 'handle']);
-
-// ROTA TEMPORÁRIA DE TESTE - SEM MIDDLEWARES
-Route::get('/r-test/{slug}', [RedirectController::class, 'handle']);
-
-// Rota pública de preview - SEM rate limiting (apenas informação)
-Route::get('/link/by-slug/{slug}', [LinkController::class, 'showBySlug']);
+    ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
 // ==============================
 // ROTAS DE AUTENTICAÇÃO
