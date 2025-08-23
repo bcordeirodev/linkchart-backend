@@ -11,6 +11,7 @@ use App\Http\Controllers\WordController;
 use App\Http\Controllers\AuthController;
 
 // Rota pública de redirecionamento - ÚNICA com rate limiting e coleta de métricas específicas
+// SISTEMA ROBUSTO: Métricas nunca impedem redirecionamento
 Route::middleware(['metrics.redirect', 'rate.limit.advanced:link.redirect'])
     ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
