@@ -15,6 +15,14 @@ use App\Http\Controllers\AuthController;
 Route::middleware(['metrics.redirect', 'rate.limit.advanced:link.redirect'])
     ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
+// TESTE: Apenas com metrics.redirect
+Route::middleware(['metrics.redirect'])
+    ->get('/r-metrics/{slug}', [RedirectController::class, 'handle']);
+
+// TESTE: Apenas com rate.limit.advanced
+Route::middleware(['rate.limit.advanced:link.redirect'])
+    ->get('/r-ratelimit/{slug}', [RedirectController::class, 'handle']);
+
 // ROTA TEMPORÁRIA DE TESTE - SEM MIDDLEWARES
 Route::get('/r-test/{slug}', [RedirectController::class, 'handle']);
 
