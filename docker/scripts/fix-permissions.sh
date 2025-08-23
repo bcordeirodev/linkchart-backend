@@ -3,6 +3,13 @@
 # ==========================================
 # SCRIPT DE CORREÇÃO DE PERMISSÕES
 # ==========================================
+#
+# CORREÇÃO CRÍTICA (2025-08-23):
+# - Problema identificado: Laravel cria subdiretórios em cache/data/
+#   com ownership root:root em vez de www-data:www-data
+# - Solução: Aplicar chown após chmod para garantir ownership correto
+# - Adicionado teste de criação de subdiretórios para validação
+# ==========================================
 
 echo "🔧 Corrigindo permissões para Laravel..."
 
@@ -40,9 +47,9 @@ chmod -R 775 bootstrap/cache/
 
 # Permissões específicas para logs
 chmod -R 777 storage/logs/
-chmod 666 storage/logs/*.log
+chmod 666 storage/logs/*.log 2>/dev/null || true
 
-# Permissões específicas para cache
+# Permissões específicas para cache (CRÍTICO: 777 + ownership correto)
 chmod -R 777 storage/framework/cache/
 chmod -R 777 storage/framework/sessions/
 chmod -R 777 storage/framework/views/
@@ -50,6 +57,13 @@ chmod -R 777 storage/framework/testing/
 
 # Permissões para storage/app
 chmod -R 775 storage/app/
+
+# CORREÇÃO CRÍTICA: Garantir ownership correto após permissões
+echo "🔧 Aplicando correção crítica de ownership..."
+chown -R www-data:www-data storage/framework/cache/
+chown -R www-data:www-data storage/framework/sessions/
+chown -R www-data:www-data storage/framework/views/
+chown -R www-data:www-data storage/framework/testing/
 
 echo "✅ Permissões corrigidas!"
 
@@ -75,6 +89,19 @@ if [ -w bootstrap/cache/ ]; then
 else
     echo "❌ bootstrap/cache/ NOT writable"
     chmod 777 bootstrap/cache/
+fi
+
+# VERIFICAÇÃO ADICIONAL: Testar criação de subdiretórios no cache
+echo "🧪 Testando criação de subdiretórios de cache..."
+TEST_DIR="storage/framework/cache/data/test/$(date +%s)"
+if mkdir -p "$TEST_DIR" 2>/dev/null; then
+    echo "✅ Subdiretórios de cache podem ser criados"
+    rm -rf "storage/framework/cache/data/test" 2>/dev/null || true
+else
+    echo "❌ ERRO: Não é possível criar subdiretórios de cache"
+    echo "🔧 Aplicando correção emergencial..."
+    chmod -R 777 storage/framework/cache/
+    chown -R www-data:www-data storage/framework/cache/
 fi
 
 echo "🎉 Correção de permissões concluída!"
