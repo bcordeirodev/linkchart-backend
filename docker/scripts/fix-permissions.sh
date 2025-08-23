@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # ==========================================
 # SCRIPT DE CORREÇÃO DE PERMISSÕES
@@ -26,9 +26,9 @@ touch storage/logs/laravel-$(date +%Y-%m-%d).log
 
 # Configurar ownership correto
 echo "👤 Configurando ownership..."
-chown -R www:www /var/www
-chown -R www:www storage/
-chown -R www:www bootstrap/cache/
+chown -R www-data:www-data /var/www
+chown -R www-data:www-data storage/
+chown -R www-data:www-data bootstrap/cache/
 
 # Configurar permissões específicas
 echo "🔐 Configurando permissões..."

@@ -331,18 +331,19 @@ jobs:
           # Aguardar PHP-FPM e Nginx estarem prontos
           sleep 15
 
-          # Setup de diretórios e permissões (igual ao dev)
-          docker exec linkchartapi /var/www/setup-production-dirs.sh || { echo "❌ Erro no setup dirs"; rollback; }
-
           # ==========================================
-          # CORREÇÃO CRÍTICA DE PERMISSÕES
+          # SETUP DE DIRETÓRIOS E PERMISSÕES
           # ==========================================
-          echo "🔧 Aplicando correção de permissões..."
+          echo "🔧 Configurando diretórios e permissões..."
 
-          # Copiar script de correção para o container
-          docker cp docker/scripts/fix-permissions.sh linkchartapi:/tmp/fix-permissions.sh
-          docker exec linkchartapi chmod +x /tmp/fix-permissions.sh
-          docker exec linkchartapi /tmp/fix-permissions.sh || { echo "❌ Erro na correção de permissões"; rollback; }
+          # Copiar script de permissões (faz tudo: diretórios + ownership + permissões)
+          docker cp docker/scripts/fix-permissions.sh linkchartapi:/var/www/fix-permissions.sh
+
+          # Tornar script executável
+          docker exec linkchartapi chmod +x /var/www/fix-permissions.sh
+
+          # Executar configuração completa (diretórios + permissões)
+          docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
 
           # Laravel optimizations (seguindo padrão dev mas para prod)
           echo "⚡ Otimizações Laravel para produção..."
@@ -392,8 +393,8 @@ jobs:
           if [ "$JWT_FROM_CONFIG" -lt 32 ]; then
             echo "❌ PROBLEMA CRÍTICO: config('jwt.secret') ainda está com placeholder!"
             echo "🔄 Tentando corrigir com force clear..."
-            docker exec linkchartapi php /var/www/artisan optimize:clear
-            docker exec linkchartapi php /var/www/artisan config:cache
+          docker exec linkchartapi php /var/www/artisan optimize:clear
+          docker exec linkchartapi php /var/www/artisan config:cache
 
             # Verificar novamente
             JWT_FROM_CONFIG_2=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_CONFIG2:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_CONFIG2:' | cut -d':' -f2 || echo "0")
