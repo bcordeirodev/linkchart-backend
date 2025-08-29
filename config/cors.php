@@ -15,21 +15,13 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'health'],
+    'paths' => ['api/*'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
-        'http://localhost:3000',      // Front-end local
-        'http://127.0.0.1:3000',     // Alternativa localhost
-        'https://linkchartapp.vercel.app', // Produção Vercel
-        'https://your-frontend.vercel.app', // Configuração atual
-        'http://138.197.121.81',     // API própria
-    ],
+    'allowed_origins' => ['*'],
 
-    'allowed_origins_patterns' => [
-        '#^https://.*\.vercel\.app$#', // Qualquer subdomínio do Vercel
-    ],
+    'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
 
@@ -37,6 +29,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 
 ];

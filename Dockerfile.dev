@@ -111,29 +111,9 @@ RUN mkdir -p /var/www/storage/framework/cache/data \
     && chmod -R 777 /var/www/bootstrap/cache \
     && chmod 666 /var/www/storage/logs/laravel.log
 
-# Aguardar banco de dados e configurar aplicação
-RUN echo '#!/bin/bash\n\
-echo "🚀 Iniciando Laravel..."\n\
-while ! nc -z database 5432; do sleep 1; done\n\
-echo "✅ PostgreSQL conectado!"\n\
-while ! nc -z redis 6379; do sleep 1; done\n\
-echo "✅ Redis conectado!"\n\
-\n\
-# Garantir permissões novamente\n\
-chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache\n\
-chmod -R 777 /var/www/storage /var/www/bootstrap/cache\n\
-\n\
-# Configurar Laravel\n\
-cd /var/www\n\
-[ ! -f .env ] && cp .env.local .env\n\
-php artisan config:clear\n\
-php artisan cache:clear\n\
-php artisan migrate --force\n\
-php artisan storage:link\n\
-\n\
-echo "✅ Laravel configurado!"\n\
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' > /usr/local/bin/start.sh \
-    && chmod +x /usr/local/bin/start.sh
+# Copiar script de entrada personalizado
+COPY docker/scripts/dev-entrypoint.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
 
 # Expor porta
 EXPOSE 80

@@ -26,13 +26,16 @@ return Application::configure(basePath: dirname(__DIR__))
             'rate.limit.advanced' => \App\Http\Middleware\AdvancedRateLimit::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
-            'custom.cors' => \App\Http\Middleware\CustomCors::class,
         ]);
 
         // Aplicar middlewares globalmente para rotas API
         $middleware->api([
-            \App\Http\Middleware\CustomCors::class, // CORS personalizado primeiro
             \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
+        ]);
+
+        // CORS básico do Laravel apenas para API
+        $middleware->api([
+            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

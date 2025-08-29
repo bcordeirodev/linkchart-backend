@@ -10,6 +10,8 @@ use App\Http\Controllers\RedirectController;
 use App\Http\Controllers\WordController;
 use App\Http\Controllers\AuthController;
 
+
+
 // Rota pública de redirecionamento - TEMPORARIAMENTE SEM RATE LIMITING
 // SISTEMA ROBUSTO: Métricas nunca impedem redirecionamento
 Route::middleware(['metrics.redirect'])
