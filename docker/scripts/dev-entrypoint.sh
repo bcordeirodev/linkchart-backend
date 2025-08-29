@@ -65,6 +65,11 @@ if [ ! -L /var/www/public/storage ]; then
     php artisan storage:link
 fi
 
+# Corrigir nginx para CORS (remover bloqueio de OPTIONS)
+echo "🔧 Configurando nginx para CORS..."
+sed -i '/if ($request_method = '\''OPTIONS'\'')/,/}/d' /etc/nginx/conf.d/default.conf
+nginx -s reload 2>/dev/null || true
+
 # Limpar caches
 echo "🧹 Limpando caches..."
 php artisan config:clear
