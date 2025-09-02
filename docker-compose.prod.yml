@@ -6,7 +6,7 @@ services:
     container_name: linkchartapi
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8000:80"
     volumes:
       - ./storage/logs:/var/www/storage/logs
       - ./storage/app:/var/www/storage/app

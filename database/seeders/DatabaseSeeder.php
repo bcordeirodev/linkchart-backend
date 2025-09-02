@@ -36,7 +36,17 @@ class DatabaseSeeder extends Seeder
             'title' => 'Link de Teste Analytics',
             'slug' => 'teste-analytics',
             'original_url' => 'https://www.example.com',
-            'shorted_url' => config('app.url') . '/r/teste-analytics',
+            'is_active' => true,
+            'clicks' => 0,
+        ]);
+
+        // Criar link ID 3 para testes
+        \App\Models\Link::factory()->create([
+            'id' => 3,
+            'user_id' => 2,
+            'title' => 'Link de Teste Completo',
+            'slug' => 'teste-completo',
+            'original_url' => 'https://www.example.org',
             'is_active' => true,
             'clicks' => 0,
         ]);
@@ -44,6 +54,7 @@ class DatabaseSeeder extends Seeder
         // Popular clicks com dados realísticos
         $this->call([
             ClicksSeeder::class,
+            LinkThreeClicksSeeder::class,
         ]);
     }
 }
