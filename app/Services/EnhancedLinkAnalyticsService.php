@@ -108,7 +108,7 @@ class EnhancedLinkAnalyticsService
     }
 
     /**
-     * Dados para mapa de calor - versão otimizada
+     * Dados para mapa de calor - versão otimizada e enriquecida
      */
     private function getHeatmapDataOptimized(int $linkId): array
     {
@@ -118,20 +118,88 @@ class EnhancedLinkAnalyticsService
                 longitude,
                 city,
                 country,
-                COUNT(*) as clicks
+                iso_code,
+                currency,
+                state_name,
+                continent,
+                timezone,
+                COUNT(*) as clicks,
+                MAX(created_at) as last_click
             ')
             ->where('link_id', $linkId)
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
-            ->groupBy('latitude', 'longitude', 'city', 'country')
+            ->whereNotNull('country')
+            ->where('country', '!=', 'localhost')
+            ->where('country', '!=', '')
+            ->groupBy('latitude', 'longitude', 'city', 'country', 'iso_code', 'currency', 'state_name', 'continent', 'timezone')
+            ->orderBy('clicks', 'desc')
             ->get()
             ->map(function ($item) {
                 return [
                     'lat' => (float) $item->latitude,
                     'lng' => (float) $item->longitude,
-                    'city' => $item->city,
+                    'city' => $item->city ?: 'Cidade Desconhecida',
                     'country' => $item->country,
                     'clicks' => (int) $item->clicks,
+                    'iso_code' => $item->iso_code,
+                    'currency' => $item->currency,
+                    'state_name' => $item->state_name,
+                    'continent' => $item->continent,
+                    'timezone' => $item->timezone,
+                    'last_click' => $item->last_click,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Dados globais para mapa de calor - agregando todos os links fornecidos
+     */
+    public function getGlobalHeatmapData(array $linkIds): array
+    {
+        if (empty($linkIds)) {
+            return [];
+        }
+
+        return \DB::table('clicks')
+            ->selectRaw('
+                latitude,
+                longitude,
+                city,
+                country,
+                iso_code,
+                currency,
+                state_name,
+                continent,
+                timezone,
+                COUNT(*) as clicks,
+                MAX(created_at) as last_click,
+                COUNT(DISTINCT link_id) as total_links
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->whereNotNull('country')
+            ->where('country', '!=', 'localhost')
+            ->where('country', '!=', '')
+            ->groupBy('latitude', 'longitude', 'city', 'country', 'iso_code', 'currency', 'state_name', 'continent', 'timezone')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'lat' => (float) $item->latitude,
+                    'lng' => (float) $item->longitude,
+                    'city' => $item->city ?: 'Cidade Desconhecida',
+                    'country' => $item->country,
+                    'clicks' => (int) $item->clicks,
+                    'iso_code' => $item->iso_code,
+                    'currency' => $item->currency,
+                    'state_name' => $item->state_name,
+                    'continent' => $item->continent,
+                    'timezone' => $item->timezone,
+                    'last_click' => $item->last_click,
+                    'total_links' => (int) $item->total_links,
                 ];
             })
             ->toArray();

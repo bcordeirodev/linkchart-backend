@@ -23,7 +23,7 @@ return [
     | Authentication Guards
     |--------------------------------------------------------------------------
     |
-    | Next, you may define every authentication guard for your application.
+    | React, you may define every authentication guard for your application.
     | Of course, a great default configuration has been defined for you
     | which utilizes session storage plus the Eloquent user provider.
     |

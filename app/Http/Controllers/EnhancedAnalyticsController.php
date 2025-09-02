@@ -51,7 +51,7 @@ class EnhancedAnalyticsController
     }
 
     /**
-     * Dados específicos para mapa de calor
+     * Dados específicos para mapa de calor com informações enriquecidas
      */
     public function getHeatmapData(int $linkId): JsonResponse
     {
@@ -65,14 +65,169 @@ class EnhancedAnalyticsController
             }
 
             $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
+            $heatmapData = $analytics['geographic']['heatmap_data'] ?? [];
+
+            // Adicionar metadados úteis
+            $totalClicks = array_sum(array_column($heatmapData, 'clicks'));
+            $uniqueCountries = count(array_unique(array_column($heatmapData, 'country')));
+            $uniqueCities = count(array_unique(array_column($heatmapData, 'city')));
+            $maxClicks = $heatmapData ? max(array_column($heatmapData, 'clicks')) : 0;
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics['geographic']['heatmap_data'] ?? []
+                'data' => $heatmapData,
+                'metadata' => [
+                    'total_clicks' => $totalClicks,
+                    'unique_countries' => $uniqueCountries,
+                    'unique_cities' => $uniqueCities,
+                    'max_clicks' => $maxClicks,
+                    'total_locations' => count($heatmapData),
+                    'last_updated' => now()->toISOString(),
+                    'link_info' => [
+                        'id' => $link->id,
+                        'title' => $link->title,
+                        'short_url' => $link->short_url,
+                        'is_active' => $link->is_active
+                    ]
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar dados do mapa de calor.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dados do heatmap em tempo real (sem autenticação para polling rápido)
+     */
+    public function getHeatmapDataRealtime(int $linkId): JsonResponse
+    {
+        try {
+            // Verificar se o link existe e está ativo (sem verificar usuário para performance)
+            $link = Link::where('id', $linkId)
+                ->where('is_active', true)
+                ->first();
+
+            if (!$link) {
+                return response()->json(['error' => 'Link não encontrado ou inativo.'], 404);
+            }
+
+            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
+            $heatmapData = $analytics['geographic']['heatmap_data'] ?? [];
+
+            // Retornar apenas os dados essenciais para performance
+            return response()->json([
+                'success' => true,
+                'data' => $heatmapData,
+                'timestamp' => now()->toISOString(),
+                'total_locations' => count($heatmapData)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados em tempo real.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dados de heatmap geral - todos os links ativos do usuário
+     */
+    public function getGlobalHeatmapData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'metadata' => [
+                        'total_clicks' => 0,
+                        'unique_countries' => 0,
+                        'unique_cities' => 0,
+                        'max_clicks' => 0,
+                        'total_locations' => 0,
+                        'total_links' => 0,
+                        'last_updated' => now()->toISOString()
+                    ]
+                ]);
+            }
+
+            // Buscar dados de heatmap agregados de todos os links
+            $heatmapData = $this->analyticsService->getGlobalHeatmapData($activeLinks);
+
+            // Calcular metadados
+            $totalClicks = array_sum(array_column($heatmapData, 'clicks'));
+            $uniqueCountries = count(array_unique(array_column($heatmapData, 'country')));
+            $uniqueCities = count(array_unique(array_column($heatmapData, 'city')));
+            $maxClicks = $heatmapData ? max(array_column($heatmapData, 'clicks')) : 0;
+
+            return response()->json([
+                'success' => true,
+                'data' => $heatmapData,
+                'metadata' => [
+                    'total_clicks' => $totalClicks,
+                    'unique_countries' => $uniqueCountries,
+                    'unique_cities' => $uniqueCities,
+                    'max_clicks' => $maxClicks,
+                    'total_locations' => count($heatmapData),
+                    'total_links' => count($activeLinks),
+                    'last_updated' => now()->toISOString()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados globais do heatmap.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dados de heatmap geral em tempo real (sem autenticação para polling rápido)
+     */
+    public function getGlobalHeatmapDataRealtime(): JsonResponse
+    {
+        try {
+            // Buscar todos os links ativos (sem filtro de usuário para performance)
+            $activeLinks = Link::where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'timestamp' => now()->toISOString(),
+                    'total_locations' => 0
+                ]);
+            }
+
+            // Buscar dados agregados
+            $heatmapData = $this->analyticsService->getGlobalHeatmapData($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $heatmapData,
+                'timestamp' => now()->toISOString(),
+                'total_locations' => count($heatmapData)
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados globais em tempo real.',
                 'message' => $e->getMessage()
             ], 500);
         }

@@ -112,6 +112,16 @@ Route::middleware(['api.auth:api'])->prefix('analytics/link')->controller(\App\H
     Route::get('/{linkId}/traffic-quality', 'getTrafficQualityReport')->where('linkId', '[0-9]+');
 });
 
+// Analytics Globais (protegidas) - NOVOS
+Route::middleware(['api.auth:api'])->prefix('analytics/global')->controller(\App\Http\Controllers\EnhancedAnalyticsController::class)->group(function () {
+    Route::get('/heatmap', 'getGlobalHeatmapData'); // Heatmap de todos os links ativos do usuário
+});
+
+// Endpoints de heatmap em tempo real (sem autenticação para performance)
+Route::get('analytics/link/{linkId}/heatmap/realtime', [\App\Http\Controllers\EnhancedAnalyticsController::class, 'getHeatmapDataRealtime'])
+    ->where('linkId', '[0-9]+');
+Route::get('analytics/global/heatmap/realtime', [\App\Http\Controllers\EnhancedAnalyticsController::class, 'getGlobalHeatmapDataRealtime']);
+
 // Relatórios executivos (protegidos)
 Route::middleware(['api.auth:api'])->prefix('reports/link')->controller(\App\Http\Controllers\AnalyticsReportController::class)->group(function () {
     Route::get('/{linkId}/executive', 'getExecutiveReport')->where('linkId', '[0-9]+');

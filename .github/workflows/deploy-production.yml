@@ -12,7 +12,7 @@ on:
         type: boolean
 
 env:
-  DEPLOY_HOST: 138.197.121.81
+  DEPLOY_HOST: 134.209.33.182
   PROJECT_PATH: /var/www/linkchartapi
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
 
@@ -35,7 +35,7 @@ jobs:
     - name: 🌐 Add server to known hosts
       run: |
         mkdir -p ~/.ssh
-        echo "Host 138.197.121.81" >> ~/.ssh/config
+        echo "Host 134.209.33.182" >> ~/.ssh/config
         echo "    StrictHostKeyChecking no" >> ~/.ssh/config
         echo "    UserKnownHostsFile /dev/null" >> ~/.ssh/config
         echo "    ServerAliveInterval 60" >> ~/.ssh/config
@@ -461,7 +461,7 @@ jobs:
 
           # Tentar health check múltiplas vezes
           for i in {1..5}; do
-            if curl -f -s --max-time 15 http://localhost/health >/dev/null 2>&1; then
+            if curl -f -s --max-time 15 http://localhost:8000/health >/dev/null 2>&1; then
               echo "✅ Health check passou na tentativa $i"
               break
             else
@@ -507,7 +507,7 @@ jobs:
         sleep 20
 
         # Health Check Principal
-        if curl -f -s --max-time 15 http://${{ env.DEPLOY_HOST }}/health; then
+        if curl -f -s --max-time 15 http://${{ env.DEPLOY_HOST }}:8000/health; then
           echo "✅ Health check principal OK"
         else
           echo "❌ Health check principal falhou"
@@ -515,7 +515,7 @@ jobs:
         fi
 
         # Teste API - deve retornar 401 (não autenticado)
-        API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://${{ env.DEPLOY_HOST }}/api/links)
+        API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://${{ env.DEPLOY_HOST }}:8000/api/links)
         case $API_RESPONSE in
           401)
             echo "✅ API protegida OK (401 - auth required)"
@@ -530,7 +530,7 @@ jobs:
         esac
 
         # Verificar health endpoint detalhado
-        HEALTH_FULL=$(curl -s --max-time 15 http://${{ env.DEPLOY_HOST }}/health)
+        HEALTH_FULL=$(curl -s --max-time 15 http://${{ env.DEPLOY_HOST }}:8000/health)
         if [[ "$HEALTH_FULL" == *"OK"* ]] || [[ "$HEALTH_FULL" == *"healthy"* ]]; then
           echo "✅ Health endpoint detalhado OK"
           echo "📋 Health response: $HEALTH_FULL"
@@ -581,10 +581,10 @@ jobs:
           echo "  ✅ CORS Configurado"
           echo ""
           echo "🌐 URLs de Produção:"
-          echo "  🏠 Application: http://${{ env.DEPLOY_HOST }}"
-          echo "  🏥 Health Check: http://${{ env.DEPLOY_HOST }}/health"
-          echo "  📡 API Base: http://${{ env.DEPLOY_HOST }}/api"
-          echo "  🔐 Auth: http://${{ env.DEPLOY_HOST }}/api/auth/login"
+          echo "  🏠 Application: http://${{ env.DEPLOY_HOST }}:8000"
+          echo "  🏥 Health Check: http://${{ env.DEPLOY_HOST }}:8000/health"
+          echo "  📡 API Base: http://${{ env.DEPLOY_HOST }}:8000/api"
+          echo "  🔐 Auth: http://${{ env.DEPLOY_HOST }}:8000/api/auth/login"
           echo ""
           echo "⏱️ Deploy concluído em: $(date)"
           echo "🔧 Baseado na estrutura dev funcional + .env.production"
