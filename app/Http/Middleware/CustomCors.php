@@ -15,6 +15,13 @@ class CustomCors
     {
         $origin = $request->headers->get('Origin');
 
+        // Origens permitidas (usar configuração do .env)
+        $allowedOrigins = explode(',', env('CORS_ALLOWED_ORIGINS', ''));
+        $allowedOrigins = array_map('trim', $allowedOrigins);
+
+        // Verificar se origem é permitida
+        $isOriginAllowed = in_array($origin, $allowedOrigins) || in_array('*', $allowedOrigins);
+
         // Se é uma requisição OPTIONS (preflight), responder imediatamente
         if ($request->getMethod() === 'OPTIONS') {
             $response = response('', 204);
@@ -22,12 +29,17 @@ class CustomCors
             $response = $next($request);
         }
 
-        // Aplicar headers CORS sempre
-        $response->headers->set('Access-Control-Allow-Origin', $origin ?: '*');
+        // Aplicar headers CORS
+        if ($isOriginAllowed) {
+            $response->headers->set('Access-Control-Allow-Origin', $origin ?: '*');
+        } else {
+            $response->headers->set('Access-Control-Allow-Origin', 'http://134.209.33.182:3000');
+        }
+
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-        $response->headers->set('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Accept,Origin');
-        $response->headers->set('Access-Control-Expose-Headers', 'Content-Length,Content-Range');
+        $response->headers->set('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Accept,Origin,X-CSRF-Token');
+        $response->headers->set('Access-Control-Expose-Headers', 'Content-Length,Content-Range,Authorization');
         $response->headers->set('Access-Control-Max-Age', '3600');
         $response->headers->set('Vary', 'Origin');
 
