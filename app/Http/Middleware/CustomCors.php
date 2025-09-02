@@ -15,12 +15,13 @@ class CustomCors
     {
         $origin = $request->headers->get('Origin');
 
-        // Origens permitidas (usar configuração do .env)
-        $allowedOrigins = explode(',', env('CORS_ALLOWED_ORIGINS', ''));
+                // Origens permitidas (usar configuração do .env)
+        $corsOrigins = env('CORS_ALLOWED_ORIGINS', 'http://134.209.33.182:3000');
+        $allowedOrigins = explode(',', $corsOrigins);
         $allowedOrigins = array_map('trim', $allowedOrigins);
 
         // Verificar se origem é permitida
-        $isOriginAllowed = in_array($origin, $allowedOrigins) || in_array('*', $allowedOrigins);
+        $isOriginAllowed = empty($origin) || in_array($origin, $allowedOrigins) || in_array('*', $allowedOrigins);
 
         // Se é uma requisição OPTIONS (preflight), responder imediatamente
         if ($request->getMethod() === 'OPTIONS') {
@@ -30,8 +31,8 @@ class CustomCors
         }
 
         // Aplicar headers CORS
-        if ($isOriginAllowed) {
-            $response->headers->set('Access-Control-Allow-Origin', $origin ?: '*');
+        if ($isOriginAllowed && $origin) {
+            $response->headers->set('Access-Control-Allow-Origin', $origin);
         } else {
             $response->headers->set('Access-Control-Allow-Origin', 'http://134.209.33.182:3000');
         }
