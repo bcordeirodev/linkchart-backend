@@ -33,7 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         //     \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
         // ]);
 
-        // CORS básico do Laravel apenas para API
+        // CORS básico do Laravel apenas para API.
         $middleware->api([
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
