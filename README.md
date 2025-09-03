@@ -55,7 +55,7 @@ docker-compose exec app php artisan optimize
 4. Configurar `.env.production`
 5. Executar `./deploy.sh`
 
-Ver `DEPLOYMENT_GUIDE.md` para instruções completas.
+Ver `README-DOCKER.md` para instruções completas.
 
 ## 📊 Funcionalidades
 
@@ -98,4 +98,4 @@ Acesse `/api/documentation` para ver a documentação completa da API.
 ## 📄 Licença
 
 Este projeto está sob a licença MIT.
-# Deploy trigger sáb 23 ago 2025 14:05:15 -03
+

@@ -85,6 +85,9 @@ make prod-down
 
 # Build produção
 make prod-build
+
+# Logs produção
+make prod-logs
 ```
 
 ## 🌐 URLs de Acesso
@@ -322,6 +325,6 @@ make setup
 - ✅ Aplicação Laravel funcionando
 - ✅ Makefile com comandos úteis
 - ✅ GitHub Actions integrado
-- ⚠️ Pequeno ajuste pendente no schema do banco
+- ✅ Deploy automático funcionando 100%
 
 **🌐 Aplicação disponível em: http://localhost:8000**
