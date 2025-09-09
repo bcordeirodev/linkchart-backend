@@ -26,13 +26,16 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
-            'force.cors' => \App\Http\Middleware\ForceCorsProd::class,
         ]);
 
         // Aplicar middlewares globalmente para rotas API
         $middleware->api([
-            \App\Http\Middleware\ForceCorsProd::class,    // CORS forçado - SEMPRE funciona
             \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
+        ]);
+
+        // CORS básico do Laravel apenas para API
+        $middleware->api([
+            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
         // NOTA: Rota /r/* configurada em web.php com middlewares específicos
@@ -116,20 +119,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
                 $response = response()->json($responseData, 500);
 
-                // FORÇA CORS EM CASO DE ERRO
-                $origin = $request->headers->get('Origin');
-                $allowedOrigins = ['http://134.209.33.182', 'http://134.209.33.182:3000', 'http://localhost:3000'];
-
-                if ($origin && in_array($origin, $allowedOrigins)) {
-                    $response->headers->set('Access-Control-Allow-Origin', $origin);
-                } else {
-                    $response->headers->set('Access-Control-Allow-Origin', 'http://134.209.33.182');
-                }
-
-                $response->headers->set('Access-Control-Allow-Credentials', 'true');
-                $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-                $response->headers->set('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Accept,Origin,X-CSRF-Token');
-                $response->headers->set('Vary', 'Origin');
+                // Laravel CORS padrão será aplicado automaticamente
 
                 return $response;
             }
