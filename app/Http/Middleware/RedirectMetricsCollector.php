@@ -52,6 +52,11 @@ class RedirectMetricsCollector
     private function collectRedirectMetrics(array $metrics): void
     {
         try {
+            // Verificar se Cache está disponível
+            if (!$this->isCacheAvailable()) {
+                Log::info('Cache not available, skipping redirect metrics collection');
+                return;
+            }
             $hour = now()->format('Y-m-d-H');
             $day = now()->format('Y-m-d');
 
@@ -147,8 +152,8 @@ class RedirectMetricsCollector
 
             Cache::put($dayKey, $dayMetrics, 86400); // 24 horas
 
-            // Log estruturado para análise posterior
-            Log::channel('analytics')->info('redirect_metrics', [
+            // Log estruturado para análise posterior (usando canal padrão)
+            Log::info('redirect_metrics', [
                 'slug' => $metrics['slug'],
                 'ip' => $metrics['ip'],
                 'country' => $metrics['country'],
@@ -228,5 +233,20 @@ class RedirectMetricsCollector
 
         $domain = parse_url($referer, PHP_URL_HOST);
         return $domain ?: 'Unknown';
+    }
+
+    /**
+     * Verifica se o Cache está disponível
+     */
+    private function isCacheAvailable(): bool
+    {
+        try {
+            // Testar operação de cache simples
+            Cache::put('cache_test_redirect_' . uniqid(), 'test', 1);
+            return true;
+        } catch (\Exception $e) {
+            Log::info('Cache not available for redirect metrics: ' . $e->getMessage());
+            return false;
+        }
     }
 }
