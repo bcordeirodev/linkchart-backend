@@ -30,7 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Aplicar middlewares globalmente para rotas API
         $middleware->api([
-            \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
+            // MetricsCollector removido - deve estar apenas na rota /r/{slug}
         ]);
 
         // CORS básico do Laravel apenas para API
