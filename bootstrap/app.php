@@ -26,10 +26,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
+            'custom.cors' => \App\Http\Middleware\CustomCors::class,
         ]);
 
         // Aplicar middlewares globalmente para rotas API
         $middleware->api([
+            \App\Http\Middleware\CustomCors::class,       // CORS customizado para produção
             \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
         ]);
 
