@@ -68,6 +68,7 @@ class Link extends Model
 
     public function getShortedUrl(): string
     {
+        // URL encurtada deve apontar para o frontend (redirect page)
         $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
         return "{$frontendUrl}/r/{$this->slug}";
     }

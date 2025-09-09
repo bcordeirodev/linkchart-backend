@@ -70,11 +70,11 @@ class UpdateLinkDTO
             is_active: $request->has('is_active') ? $request->boolean('is_active') : null,
             starts_in: $request->input('starts_in'),
             click_limit: $request->has('click_limit') ? ($request->input('click_limit') ? (int) $request->input('click_limit') : null) : null,
-            utm_source: $request->input('utm_source'),
-            utm_medium: $request->input('utm_medium'),
-            utm_campaign: $request->input('utm_campaign'),
-            utm_term: $request->input('utm_term'),
-            utm_content: $request->input('utm_content')
+            utm_source: $request->input('utm_source') ?: null,
+            utm_medium: $request->input('utm_medium') ?: null,
+            utm_campaign: $request->input('utm_campaign') ?: null,
+            utm_term: $request->input('utm_term') ?: null,
+            utm_content: $request->input('utm_content') ?: null
         );
     }
 

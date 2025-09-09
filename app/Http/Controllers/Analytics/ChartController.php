@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Analytics;
 
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
-use App\Services\ChartService;
+use App\Services\Analytics\ChartService;
 
-class ChartController
+class ChartController extends Controller
 {
     protected ChartService $chartService;
 

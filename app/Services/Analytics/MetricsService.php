@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Analytics;
 
 use App\Models\Link;
 use App\Models\Click;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
 /**
@@ -12,7 +13,7 @@ use Illuminate\Support\Collection;
  * Elimina duplicação de código entre controladores
  * Centraliza todas as regras de negócio de métricas
  */
-class UnifiedMetricsService
+class MetricsService
 {
     /**
      * Cache key patterns para métricas
@@ -345,6 +346,222 @@ class UnifiedMetricsService
             'clicks_24h' => 0,
             'unique_visitors_24h' => 0,
             'days_since_creation' => 0
+        ];
+    }
+
+    /**
+     * Busca os top links do usuário ordenados por cliques
+     */
+    public function getUserTopLinks(int $userId, int $limit = 5): array
+    {
+        $cacheKey = "metrics:user:{$userId}:top_links:{$limit}";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($userId, $limit) {
+            $topLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->orderByDesc('clicks')
+                ->limit($limit)
+                ->get(['id', 'title', 'slug', 'original_url', 'clicks', 'is_active', 'created_at'])
+                ->map(function ($link) {
+                    return [
+                        'id' => $link->id,
+                        'title' => $link->title ?: 'Link sem título',
+                        'short_url' => $link->slug ? url("/r/{$link->slug}") : url("/r/link-{$link->id}"),
+                        'original_url' => $link->original_url,
+                        'clicks' => $link->clicks ?? 0,
+                        'is_active' => $link->is_active,
+                        'created_at' => $link->created_at->toISOString()
+                    ];
+                })
+                ->toArray();
+
+            return $topLinks;
+        });
+    }
+
+    /**
+     * Buscar dados básicos para gráficos do dashboard
+     * Retorna dados temporais e geográficos simplificados
+     */
+    public function getUserChartData(int $userId, int $hours = 24): array
+    {
+        try {
+            $userLinks = Link::where('user_id', $userId)->get();
+
+            if ($userLinks->isEmpty()) {
+                return [
+                    'temporal' => [
+                        'clicks_by_hour' => [],
+                        'clicks_by_day_of_week' => []
+                    ],
+                    'geographic' => [
+                        'top_countries' => [],
+                        'top_cities' => []
+                    ],
+                    'audience' => [
+                        'device_breakdown' => []
+                    ]
+                ];
+            }
+
+            $linkIds = $userLinks->pluck('id')->toArray();
+
+            // Dados temporais básicos
+            $temporalData = $this->getBasicTemporalData($linkIds, $hours);
+
+            // Dados geográficos básicos
+            $geographicData = $this->getBasicGeographicData($linkIds);
+
+            // Dados de audiência básicos
+            $audienceData = $this->getBasicAudienceData($linkIds);
+
+            return [
+                'temporal' => $temporalData,
+                'geographic' => $geographicData,
+                'audience' => $audienceData
+            ];
+
+        } catch (\Exception $e) {
+            \Log::error('Erro ao buscar dados de gráficos: ' . $e->getMessage());
+
+            return [
+                'temporal' => [
+                    'clicks_by_hour' => [],
+                    'clicks_by_day_of_week' => []
+                ],
+                'geographic' => [
+                    'top_countries' => [],
+                    'top_cities' => []
+                ],
+                'audience' => [
+                    'device_breakdown' => []
+                ]
+            ];
+        }
+    }
+
+    /**
+     * Dados temporais básicos para gráficos
+     */
+    private function getBasicTemporalData(array $linkIds, int $hours): array
+    {
+        // Usar um período maior para garantir que temos dados (últimos 30 dias)
+        $searchPeriod = max($hours, 24 * 30); // Mínimo 30 dias
+
+        // Cliques por hora (distribuição geral dos dados disponíveis) - PostgreSQL
+        $clicksByHour = DB::table('clicks')
+            ->whereIn('link_id', $linkIds)
+            ->where('created_at', '>=', now()->subHours($searchPeriod))
+            ->selectRaw('EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as clicks')
+            ->groupBy('hour')
+            ->orderBy('hour')
+            ->get()
+            ->keyBy('hour');
+
+        $hourlyData = [];
+        for ($i = 0; $i < 24; $i++) {
+            $hourlyData[] = [
+                'hour' => $i,
+                'clicks' => $clicksByHour->get($i)->clicks ?? 0,
+                'label' => sprintf('%02d:00', $i)
+            ];
+        }
+
+        // Cliques por dia da semana (últimos 30 dias) - PostgreSQL
+        $clicksByDay = DB::table('clicks')
+            ->whereIn('link_id', $linkIds)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->selectRaw('EXTRACT(DOW FROM created_at) as day, COUNT(*) as clicks')
+            ->groupBy('day')
+            ->get()
+            ->keyBy('day');
+
+        $dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        $dailyData = [];
+        for ($i = 0; $i < 7; $i++) {
+            $dailyData[] = [
+                'day' => $i,
+                'day_name' => $dayNames[$i],
+                'clicks' => $clicksByDay->get($i)->clicks ?? 0
+            ];
+        }
+
+        return [
+            'clicks_by_hour' => $hourlyData,
+            'clicks_by_day_of_week' => $dailyData
+        ];
+    }
+
+    /**
+     * Dados geográficos básicos para gráficos
+     */
+    private function getBasicGeographicData(array $linkIds): array
+    {
+        // Top 10 países
+        $topCountries = DB::table('clicks')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('country')
+            ->where('country', '!=', '')
+            ->selectRaw('country, COUNT(*) as clicks')
+            ->groupBy('country')
+            ->orderByDesc('clicks')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'country' => $item->country,
+                    'clicks' => $item->clicks
+                ];
+            })
+            ->toArray();
+
+        // Top 10 cidades
+        $topCities = DB::table('clicks')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('city')
+            ->where('city', '!=', '')
+            ->selectRaw('city, COUNT(*) as clicks')
+            ->groupBy('city')
+            ->orderByDesc('clicks')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'city' => $item->city,
+                    'clicks' => $item->clicks
+                ];
+            })
+            ->toArray();
+
+        return [
+            'top_countries' => $topCountries,
+            'top_cities' => $topCities
+        ];
+    }
+
+    /**
+     * Dados de audiência básicos para gráficos
+     */
+    private function getBasicAudienceData(array $linkIds): array
+    {
+        // Dispositivos
+        $deviceData = DB::table('clicks')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('device')
+            ->selectRaw('device, COUNT(*) as clicks')
+            ->groupBy('device')
+            ->orderByDesc('clicks')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'device' => ucfirst($item->device),
+                    'clicks' => $item->clicks
+                ];
+            })
+            ->toArray();
+
+        return [
+            'device_breakdown' => $deviceData
         ];
     }
 }

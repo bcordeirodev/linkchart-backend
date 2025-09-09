@@ -19,7 +19,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(
             \App\Contracts\Services\LinkServiceInterface::class,
-            \App\Services\LinkService::class
+            \App\Services\Links\LinkService::class
         );
     }
 

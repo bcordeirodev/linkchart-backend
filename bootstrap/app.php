@@ -7,11 +7,12 @@ use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
+        web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/health', // Health check customizado
         then: function () {
-            // Apenas rotas essenciais para API pura
+            // Fallback apenas para rotas não encontradas
             Route::fallback(function () {
                 return response()->json([
                     'error' => 'Not Found',
@@ -23,7 +24,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
-            'rate.limit.advanced' => \App\Http\Middleware\AdvancedRateLimit::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
         ]);
@@ -33,10 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
         ]);
 
-        // CORS básico do Laravel apenas para API
-        // $middleware->api([
-        //     \Illuminate\Http\Middleware\HandleCors::class,
-        // ]);
+        // NOTA: Rota /r/* configurada em web.php com middlewares específicos
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Tratamento para erros de autenticação
