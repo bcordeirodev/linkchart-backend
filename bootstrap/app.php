@@ -26,10 +26,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
+            'force.cors' => \App\Http\Middleware\ForceCorsProd::class,
         ]);
 
         // Aplicar middlewares globalmente para rotas API
         $middleware->api([
+            \App\Http\Middleware\ForceCorsProd::class,    // CORS forçado - SEMPRE funciona
             \App\Http\Middleware\MetricsCollector::class, // Coletar métricas de todas as requisições
         ]);
 
@@ -99,21 +101,37 @@ return Application::configure(basePath: dirname(__DIR__))
                 // Resposta diferente para produção vs desenvolvimento
                 // SAFE: Usar env() direto para evitar problema de container resolution
                 $isDebug = (bool) env('APP_DEBUG', false);
-                if ($isDebug) {
-                    return response()->json([
-                        'error' => 'Server Error',
-                        'message' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                        'trace' => $e->getTrace()
-                    ], 500);
+
+                $responseData = $isDebug ? [
+                    'error' => 'Server Error',
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTrace()
+                ] : [
+                    'error' => 'Server Error',
+                    'message' => 'Erro interno do servidor. Verifique os logs para mais detalhes.',
+                    'error_id' => uniqid('err_')
+                ];
+
+                $response = response()->json($responseData, 500);
+
+                // FORÇA CORS EM CASO DE ERRO
+                $origin = $request->headers->get('Origin');
+                $allowedOrigins = ['http://134.209.33.182', 'http://134.209.33.182:3000', 'http://localhost:3000'];
+
+                if ($origin && in_array($origin, $allowedOrigins)) {
+                    $response->headers->set('Access-Control-Allow-Origin', $origin);
                 } else {
-                    return response()->json([
-                        'error' => 'Server Error',
-                        'message' => 'Erro interno do servidor. Verifique os logs para mais detalhes.',
-                        'error_id' => uniqid('err_')
-                    ], 500);
+                    $response->headers->set('Access-Control-Allow-Origin', 'http://134.209.33.182');
                 }
+
+                $response->headers->set('Access-Control-Allow-Credentials', 'true');
+                $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+                $response->headers->set('Access-Control-Allow-Headers', 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,Accept,Origin,X-CSRF-Token');
+                $response->headers->set('Vary', 'Origin');
+
+                return $response;
             }
         });
     })->create();
