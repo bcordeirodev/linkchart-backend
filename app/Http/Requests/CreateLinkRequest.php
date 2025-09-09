@@ -43,6 +43,16 @@ class CreateLinkRequest extends FormRequest
                     }
                 }
             ],
+            'title' => [
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'description' => [
+                'nullable',
+                'string',
+                'max:1000',
+            ],
             'expires_at' => [
                 'nullable',
                 'date',
@@ -71,6 +81,13 @@ class CreateLinkRequest extends FormRequest
                 'not_in:api,admin,www,mail,ftp', // Slugs reservados
             ],
             'is_active' => 'boolean',
+
+            // UTM Parameters
+            'utm_source' => 'nullable|string|max:100',
+            'utm_medium' => 'nullable|string|max:100',
+            'utm_campaign' => 'nullable|string|max:100',
+            'utm_term' => 'nullable|string|max:100',
+            'utm_content' => 'nullable|string|max:100',
         ];
     }
 
@@ -108,6 +125,8 @@ class CreateLinkRequest extends FormRequest
     {
         return [
             'original_url' => 'URL original',
+            'title' => 'título',
+            'description' => 'descrição',
             'expires_at' => 'data de expiração',
             'starts_in' => 'data de início',
             'custom_slug' => 'slug personalizado',

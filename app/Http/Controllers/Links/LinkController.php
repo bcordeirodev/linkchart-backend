@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Links;
 
 use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreateLinkDTO;
@@ -8,7 +8,8 @@ use App\DTOs\UpdateLinkDTO;
 use App\Http\Requests\CreateLinkRequest;
 use App\Http\Requests\UpdateLinkRequest;
 use App\Http\Resources\LinkResource;
-use App\Services\LinkAuditService;
+use App\Services\Links\LinkAuditService;
+use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,7 +20,7 @@ use Illuminate\Http\Request;
  * - SRP: Responsável apenas por receber requisições HTTP e retornar respostas
  * - DIP: Depende da abstração LinkServiceInterface
  */
-class LinkController
+class LinkController extends Controller
 {
     protected LinkServiceInterface $linkService;
     protected LinkAuditService $auditService;

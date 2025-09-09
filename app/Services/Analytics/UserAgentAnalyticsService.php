@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Analytics;
 
 use App\Models\Click;
 use App\Models\Link;
@@ -8,10 +8,10 @@ use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 /**
- * Serviço para análises avançadas específicas
- * Funcionalidades que estavam sendo perdidas
+ * Serviço para análises de User-Agent e comportamento do usuário
+ * Responsável por análises detalhadas de browsers, referrers, engajamento e qualidade de tráfego
  */
-class AdvancedAnalyticsService
+class UserAgentAnalyticsService
 {
     /**
      * Análise de User-Agent detalhada

@@ -81,11 +81,11 @@ class UpdateLinkRequest extends FormRequest
                 'min:1',
                 'max:1000000', // Máximo 1 milhão de cliques
             ],
-            'utm_source' => 'sometimes|string|max:100',
-            'utm_medium' => 'sometimes|string|max:100',
-            'utm_campaign' => 'sometimes|string|max:100',
-            'utm_term' => 'sometimes|string|max:100',
-            'utm_content' => 'sometimes|string|max:100',
+            'utm_source' => 'sometimes|nullable|string|max:100',
+            'utm_medium' => 'sometimes|nullable|string|max:100',
+            'utm_campaign' => 'sometimes|nullable|string|max:100',
+            'utm_term' => 'sometimes|nullable|string|max:100',
+            'utm_content' => 'sometimes|nullable|string|max:100',
         ];
     }
 

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Links;
 
 use App\Models\Link;
 use App\Models\Click;

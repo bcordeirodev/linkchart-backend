@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Auth;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -168,6 +168,107 @@ class AuthController extends Controller
             return response()->json([
                 'error' => 'Server Error',
                 'message' => 'Erro ao renovar token'
+            ], 500);
+        }
+    }
+
+    /**
+     * Atualizar perfil do usuário
+     */
+    public function updateProfile(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users,email,' . auth()->id(),
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Validation Error',
+                    'message' => 'Dados inválidos fornecidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = auth()->user();
+            $user->update($request->only(['name', 'email']));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Perfil atualizado com sucesso',
+                'user' => $user->fresh() // Retorna dados atualizados
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Update Profile Error', [
+                'user_id' => auth()->id(),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Server Error',
+                'message' => 'Erro ao atualizar perfil. Verifique os logs.',
+                'error_id' => uniqid('profile_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Alterar senha do usuário
+     */
+    public function changePassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'current_password' => 'required|string',
+                'new_password' => 'required|string|min:6|confirmed',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => 'Validation Error',
+                    'message' => 'Dados inválidos fornecidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = auth()->user();
+
+            // Verificar senha atual
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'error' => 'Invalid Password',
+                    'message' => 'Senha atual incorreta'
+                ], 422);
+            }
+
+            // Atualizar senha
+            $user->update([
+                'password' => Hash::make($request->new_password)
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Senha alterada com sucesso'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Change Password Error', [
+                'user_id' => auth()->id(),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Server Error',
+                'message' => 'Erro ao alterar senha. Verifique os logs.',
+                'error_id' => uniqid('pwd_')
             ], 500);
         }
     }

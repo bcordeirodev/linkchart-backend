@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Analytics;
 
-use App\Services\UnifiedMetricsService;
+use App\Services\Analytics\MetricsService;
+use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,10 +12,10 @@ use Illuminate\Http\Request;
  * Elimina duplicação entre controladores de analytics
  * Fornece endpoints consolidados para o frontend
  */
-class UnifiedMetricsController
+class MetricsController extends Controller
 {
     public function __construct(
-        private UnifiedMetricsService $metricsService
+        private MetricsService $metricsService
     ) {}
 
     /**
@@ -31,12 +32,22 @@ class UnifiedMetricsController
             }
 
             $hours = $request->get('hours', 24); // Padrão 24h
+            $includeCharts = $request->get('include_charts', false); // Incluir dados para gráficos
 
             // Buscar todas as métricas necessárias em uma única requisição
             $basicMetrics = $this->metricsService->getUserBasicMetrics($userId, $hours);
             $performanceMetrics = $this->metricsService->getUserPerformanceMetrics($userId, $hours);
             $geographicMetrics = $this->metricsService->getUserGeographicMetrics($userId);
             $audienceMetrics = $this->metricsService->getUserAudienceMetrics($userId);
+
+            // Buscar dados para gráficos se solicitado
+            $chartData = [];
+            if ($includeCharts) {
+                $chartData = $this->metricsService->getUserChartData($userId, $hours);
+            }
+
+            // Buscar top links
+            $topLinks = $this->metricsService->getUserTopLinks($userId, 5);
 
             return response()->json([
                 'success' => true,
@@ -88,7 +99,13 @@ class UnifiedMetricsController
                     'avg_response_time' => $performanceMetrics['avg_response_time'],
                     'countries_reached' => $geographicMetrics['countries_reached'],
                     'links_with_traffic' => $basicMetrics['links_with_traffic']
-                ]
+                ],
+
+                // Top links do usuário
+                'top_links' => $topLinks,
+
+                // Dados para gráficos (se solicitado)
+                'charts' => $chartData
             ]);
 
         } catch (\Exception $e) {

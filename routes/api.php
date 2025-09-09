@@ -1,157 +1,103 @@
 <?php
 
-use App\Http\Controllers\ChartController;
-use App\Http\Controllers\RateLimitController;
-use App\Http\Controllers\GeographicAnalyticsController;
+use App\Http\Controllers\Analytics\ChartController;
+use App\Http\Controllers\Analytics\AnalyticsController;
+use App\Http\Controllers\Analytics\MetricsController;
+use App\Http\Controllers\Links\LinkController;
+use App\Http\Controllers\Links\RedirectController;
+use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Http\Request;
-use App\Http\Controllers\LinkController;
-use App\Http\Controllers\RedirectController;
-use App\Http\Controllers\WordController;
-use App\Http\Controllers\AuthController;
 
 
 
-// Rota pública de redirecionamento - TEMPORARIAMENTE SEM RATE LIMITING
-// SISTEMA ROBUSTO: Métricas nunca impedem redirecionamento
+/**
+ * 🚀 ROTA PÚBLICA DE REDIRECIONAMENTO - CORAÇÃO DO SISTEMA
+ *
+ * FUNCIONALIDADE:
+ * - Recebe requisição AJAX/fetch do frontend com headers CORS
+ * - Coleta TODAS as métricas possíveis do navegador (User-Agent, IP, Referer, etc.)
+ * - Retorna JSON com URL original para frontend redirecionar
+ * - Middleware específico para coleta completa de dados
+ */
 Route::middleware(['metrics.redirect'])
     ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
-// ==============================
-// ROTAS DE AUTENTICAÇÃO
-// ==============================
+/**
+ * ==============================
+ * ROTAS DE AUTENTICAÇÃO
+ * ==============================
+ * Endpoints usados pelo front-end para autenticação de usuários
+ */
 Route::prefix('auth')->controller(AuthController::class)->group(function () {
-    Route::post('/login', 'login');
-    Route::post('/register', 'register');
-    Route::post('/google', 'googleLogin');
+    Route::post('/login', 'login');              // ✅ USADO: AuthService.signIn()
+    Route::post('/register', 'register');        // ✅ USADO: AuthService.signUp()
+    Route::post('/google', 'googleLogin');       // ✅ USADO: Login social
 });
 
-// ==============================
-// ROTAS PROTEGIDAS POR JWT
-// ==============================
+/**
+ * ==============================
+ * ROTAS PROTEGIDAS POR JWT
+ * ==============================
+ * Todas as rotas abaixo requerem autenticação via JWT
+ */
 Route::middleware(['api.auth:api'])->group(function () {
-    Route::get('/me', [AuthController::class, 'me']);
-    Route::put('/profile', [AuthController::class, 'updateProfile']);
-    Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/analytics', [ChartController::class, 'index']);
+    // === AUTENTICAÇÃO E PERFIL ===
+    Route::get('/me', [AuthController::class, 'me']);                    // ✅ USADO: AuthService.getMe()
+    Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
+    Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
+    Route::post('/logout', [AuthController::class, 'logout']);           // ✅ USADO: AuthService.signOut()
 
-    // === MÉTRICAS UNIFICADAS (NOVO) ===
-    Route::prefix('metrics')->controller(\App\Http\Controllers\UnifiedMetricsController::class)->group(function () {
-        Route::get('/dashboard', 'getDashboardMetrics');           // GET /metrics/dashboard
-        Route::get('/category/{category}', 'getMetricsByCategory'); // GET /metrics/category/performance
-        Route::get('/link/{linkId}', 'getLinkMetrics');            // GET /metrics/link/123
-        Route::get('/compare', 'compareMetrics');                  // GET /metrics/compare?current=24&previous=48
-        Route::delete('/cache', 'clearCache');                     // DELETE /metrics/cache
+    // === ANALYTICS LEGADOS ===
+    Route::get('/analytics', [ChartController::class, 'index']);         // ✅ USADO: useDashboardData hook
+
+    // === MÉTRICAS ===
+    Route::prefix('metrics')->controller(MetricsController::class)->group(function () {
+        Route::get('/dashboard', 'getDashboardMetrics');                 // ✅ USADO: useDashboardData hook
     });
 
-    // === ENDPOINTS LEGADOS (DEPRECATED) ===
-    // TODO: Migrar front-end para usar /metrics/dashboard
-    // Route::get('/redirect-dashboard', [\App\Http\Controllers\RedirectDashboardController::class, 'dashboard']); // REMOVIDO - controller deletado
 
-    // ❌ REMOVIDO: Use /metrics/dashboard ou /metrics/category/performance
 
-    // Validação de consistência de dados (seguro - filtrado por usuário)
-    Route::get('/data-validation', function() {
-        $userId = auth()->id();
-        $service = app(\App\Services\RedirectAnalyticsService::class);
-        return response()->json($service->validateDataConsistencyForUser($userId));
-    });
 
-    // Rate Limiting Management (apenas endpoints essenciais)
-    Route::prefix('rate-limit')->withoutMiddleware([\App\Http\Middleware\AdvancedRateLimit::class])
-        ->controller(RateLimitController::class)->group(function () {
-        // ❌ REMOVIDOS: dashboard, status, performance - Use /metrics/* endpoints
-
-        Route::get('/config', 'rateLimitConfig');       // Manter para configurações
-        Route::get('/violations', 'violations');        // Manter para segurança
-
-        // Admin only routes (would need admin middleware)
-        Route::post('/reset-user', 'resetUserLimits'); // ->middleware('admin')
-    });
-
-    // Links - SEM rate limiting (apenas gerenciamento administrativo)
+    // === CRIAÇÃO DE LINKS (LEGACY) ===
     Route::prefix('gerar-url')->controller(LinkController::class)->group(function () {
-        Route::post('/', 'store'); // Criação de links SEM rate limiting
+        Route::post('/', 'store');                      // ✅ USADO: LinkService.createShortUrl()
     });
 
-    // Links Routes (RESTful API)
+    // === GERENCIAMENTO DE LINKS (RESTful API) ===
     Route::prefix('links')->controller(LinkController::class)->group(function () {
-        Route::get('/', 'index');
-        Route::post('/', 'store');
-        Route::get('/{id}', 'show')->where('id', '[0-9]+');
-        Route::put('/{id}', 'update')->where('id', '[0-9]+');
-        Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');
-        Route::get('/{id}/analytics', 'analyticsByLinkId')->where('id', '[0-9]+');
+        Route::get('/', 'index');                                        // ✅ USADO: LinkService.all()
+        Route::post('/', 'store');                                       // ✅ USADO: LinkService.save()
+        Route::get('/{id}', 'show')->where('id', '[0-9]+');            // ✅ USADO: LinkService.findOne()
+        Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
+        Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
+        Route::get('/{id}/analytics', 'analyticsByLinkId')->where('id', '[0-9]+'); // ✅ USADO: LinkService.getAnalytics()
+    });
+
+    // === DADOS DETALHADOS DE LINKS ===
+    Route::prefix('link')->controller(LinkController::class)->group(function () {
+        Route::get('/{id}/clicks', 'getClicksData')->where('id', '[0-9]+'); // ✅ USADO: LinkClicksRealTime component
+    });
+
+    // === ANALYTICS POR LINK ===
+    Route::prefix('analytics/link')->controller(AnalyticsController::class)->group(function () {
+        Route::get('/{linkId}/dashboard', 'getLinkDashboardData')->where('linkId', '[0-9]+');     // ✅ NOVO: useDashboardData (linkMode)
+        Route::get('/{linkId}/comprehensive', 'getLinkAnalytics')->where('linkId', '[0-9]+');       // ✅ USADO: useEnhancedAnalytics
+        Route::get('/{linkId}/heatmap', 'getHeatmapData')->where('linkId', '[0-9]+');             // ✅ USADO: useHeatmapData
+        Route::get('/{linkId}/geographic', 'getGeographicAnalytics')->where('linkId', '[0-9]+');  // ✅ USADO: useGeographicData
+        Route::get('/{linkId}/insights', 'getBusinessInsights')->where('linkId', '[0-9]+');       // ✅ USADO: useInsightsData
+        Route::get('/{linkId}/temporal', 'getTemporalAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useTemporalData
+        Route::get('/{linkId}/temporal-advanced', 'getAdvancedTemporalAnalytics')->where('linkId', '[0-9]+'); // ✅ USADO: useTemporalData
+        Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useAudienceData
+    });
+
+    // === ANALYTICS GLOBAIS ===
+    Route::prefix('analytics/global')->controller(AnalyticsController::class)->group(function () {
+        Route::get('/dashboard', 'getGlobalDashboardData');     // ✅ NOVO: useDashboardData (globalMode)
+        Route::get('/heatmap', 'getGlobalHeatmapData');         // ✅ USADO: useHeatmapData (globalMode)
+        Route::get('/geographic', 'getGlobalGeographicData');   // ✅ USADO: useGeographicData (globalMode)
+        Route::get('/temporal', 'getGlobalTemporalData');       // ✅ USADO: useTemporalData (globalMode)
+        Route::get('/audience', 'getGlobalAudienceData');       // ✅ USADO: useAudienceData (globalMode)
+        Route::get('/insights', 'getGlobalInsightsData');       // ✅ USADO: useInsightsData (globalMode)
+        Route::get('/performance', 'getGlobalPerformanceData'); // ✅ NOVO: useLinkPerformance hook
     });
 });
-
-// Rotas adicionais para LinkController (protegidas por autenticação) - SINGULAR
-Route::middleware(['api.auth:api'])->prefix('link')->controller(LinkController::class)->group(function () {
-    Route::get('/{id}/audit', 'auditHistory')->where('id', '[0-9]+'); // Histórico de auditoria por ID
-    Route::get('/{slug}/analytics', 'analytics')->where('slug', '[a-zA-Z0-9\-_]+'); // Analytics por slug
-    Route::get('/{id}/clicks', 'getClicksData')->where('id', '[0-9]+'); // Dados de cliques detalhados
-});
-
-// Enhanced Analytics Routes (protegidas) - ADICIONADO AGORA
-Route::middleware(['api.auth:api'])->prefix('analytics/link')->controller(\App\Http\Controllers\EnhancedAnalyticsController::class)->group(function () {
-    // Analytics básicos
-    Route::get('/{linkId}/comprehensive', 'getLinkAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/heatmap', 'getHeatmapData')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/geographic', 'getGeographicAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/insights', 'getBusinessInsights')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/temporal', 'getTemporalAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/summary', 'getExecutiveSummary')->where('linkId', '[0-9]+');
-
-    // Analytics avançados - NOVOS
-    Route::get('/{linkId}/browser', 'getBrowserAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/referrer', 'getRefererAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/temporal-advanced', 'getAdvancedTemporalAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/engagement', 'getEngagementAnalytics')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/performance-region', 'getPerformanceByRegion')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/traffic-quality', 'getTrafficQualityReport')->where('linkId', '[0-9]+');
-});
-
-// Analytics Globais (protegidas) - NOVOS
-Route::middleware(['api.auth:api'])->prefix('analytics/global')->controller(\App\Http\Controllers\EnhancedAnalyticsController::class)->group(function () {
-    Route::get('/heatmap', 'getGlobalHeatmapData'); // Heatmap de todos os links ativos do usuário
-});
-
-// Endpoints de heatmap em tempo real (sem autenticação para performance)
-Route::get('analytics/link/{linkId}/heatmap/realtime', [\App\Http\Controllers\EnhancedAnalyticsController::class, 'getHeatmapDataRealtime'])
-    ->where('linkId', '[0-9]+');
-Route::get('analytics/global/heatmap/realtime', [\App\Http\Controllers\EnhancedAnalyticsController::class, 'getGlobalHeatmapDataRealtime']);
-
-// Relatórios executivos (protegidos)
-Route::middleware(['api.auth:api'])->prefix('reports/link')->controller(\App\Http\Controllers\AnalyticsReportController::class)->group(function () {
-    Route::get('/{linkId}/executive', 'getExecutiveReport')->where('linkId', '[0-9]+');
-    Route::get('/{linkId}/dashboard', 'getDashboardData')->where('linkId', '[0-9]+');
-});
-
-// ==============================
-// ROTAS DE LOGGING E DIAGNÓSTICO
-// ==============================
-Route::middleware(['api.auth:api'])->prefix('logs')->controller(\App\Http\Controllers\LogController::class)->group(function () {
-    Route::get('/', 'listLogs');                    // GET /logs - Lista arquivos de log
-    Route::get('/recent-errors', 'getRecentErrors'); // GET /logs/recent-errors - Erros recentes
-    Route::get('/diagnostic', 'systemDiagnostic');   // GET /logs/diagnostic - Diagnóstico completo
-    Route::post('/test', 'testLogging');             // POST /logs/test - Testar sistema de logs
-    Route::get('/{filename}', 'readLog');            // GET /logs/{filename} - Ler arquivo específico
-});
-
-// Rota de teste completo para analytics (temporária)
-Route::get('/test-analytics/{linkId}', function($linkId) {
-    $service = app(\App\Services\EnhancedLinkAnalyticsService::class);
-    $analytics = $service->getComprehensiveLinkAnalytics($linkId);
-
-    return response()->json([
-        'success' => true,
-        'has_data' => $analytics['overview']['total_clicks'] > 0,
-        'link_info' => $analytics['link_info'],
-        'overview' => $analytics['overview'],
-        'geographic' => $analytics['geographic'],
-        'temporal' => $analytics['temporal'],
-        'audience' => $analytics['audience'],
-        'insights' => $analytics['insights'],
-    ]);
-})->where('linkId', '[0-9]+');

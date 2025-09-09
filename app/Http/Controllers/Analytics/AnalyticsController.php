@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Analytics;
 
-use App\Services\EnhancedLinkAnalyticsService;
-use App\Services\AdvancedAnalyticsService;
+use App\Services\Analytics\LinkAnalyticsService;
+use App\Services\Analytics\UserAgentAnalyticsService;
+use Illuminate\Routing\Controller;
 use App\Models\Link;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,11 +13,11 @@ use Illuminate\Http\Request;
  * Controller para Analytics Avançados
  * Focado em valor de negócio e insights acionáveis
  */
-class EnhancedAnalyticsController
+class AnalyticsController extends Controller
 {
     public function __construct(
-        private EnhancedLinkAnalyticsService $analyticsService,
-        private AdvancedAnalyticsService $advancedAnalyticsService
+        private LinkAnalyticsService $analyticsService,
+        private UserAgentAnalyticsService $userAgentAnalyticsService
     ) {}
 
     /**
@@ -247,11 +248,11 @@ class EnhancedAnalyticsController
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
+            $analytics = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics['geographic'] ?? []
+                'data' => $analytics
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -303,11 +304,11 @@ class EnhancedAnalyticsController
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
+            $analytics = $this->analyticsService->getLinkTemporalAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics['temporal'] ?? []
+                'data' => $analytics
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -331,11 +332,11 @@ class EnhancedAnalyticsController
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
+            $analytics = $this->analyticsService->getLinkAudienceAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics['audience'] ?? []
+                'data' => $analytics
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -459,7 +460,7 @@ class EnhancedAnalyticsController
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
-            $analytics = $this->advancedAnalyticsService->getAdvancedTemporalAnalytics($linkId);
+            $analytics = $this->userAgentAnalyticsService->getAdvancedTemporalAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
@@ -552,6 +553,334 @@ class EnhancedAnalyticsController
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar relatório de qualidade.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dados geográficos globais - todos os links ativos do usuário
+     */
+    public function getGlobalGeographicData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'top_countries' => [],
+                        'top_states' => [],
+                        'top_cities' => [],
+                        'heatmap_data' => []
+                    ]
+                ]);
+            }
+
+            // Usar o service para buscar dados agregados
+            $analytics = $this->analyticsService->getGlobalGeographicAnalytics($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados geográficos globais.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dados temporais globais - todos os links ativos do usuário
+     */
+    public function getGlobalTemporalData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'clicks_by_hour' => [],
+                        'clicks_by_day_of_week' => []
+                    ]
+                ]);
+            }
+
+            // Usar o service para buscar dados agregados
+            $analytics = $this->analyticsService->getGlobalTemporalAnalytics($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados temporais globais.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dados de audiência globais - todos os links ativos do usuário
+     */
+    public function getGlobalAudienceData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'device_breakdown' => [],
+                        'browser_breakdown' => [],
+                        'os_breakdown' => []
+                    ]
+                ]);
+            }
+
+            // Usar o service para buscar dados agregados
+            $analytics = $this->analyticsService->getGlobalAudienceAnalytics($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados de audiência globais.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Insights globais - todos os links ativos do usuário
+     */
+    public function getGlobalInsightsData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'insights' => [],
+                        'summary' => [
+                            'total_insights' => 0,
+                            'high_priority' => 0,
+                            'actionable_insights' => 0,
+                            'avg_confidence' => 0
+                        ]
+                    ]
+                ]);
+            }
+
+            // Usar o service para buscar insights agregados
+            $analytics = $this->analyticsService->getGlobalInsightsAnalytics($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar insights globais.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Performance global - todos os links ativos do usuário
+     */
+    /**
+     * Dashboard global consolidado - dados para a tab Dashboard
+     * Combina métricas básicas com dados de gráficos
+     */
+    public function getGlobalDashboardData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'summary' => [
+                            'total_clicks' => 0,
+                            'total_links' => 0,
+                            'active_links' => 0,
+                            'unique_visitors' => 0,
+                            'success_rate' => 100,
+                            'avg_response_time' => 0,
+                            'countries_reached' => 0,
+                            'links_with_traffic' => 0
+                        ],
+                        'top_links' => [],
+                        'temporal_data' => [
+                            'clicks_by_hour' => [],
+                            'clicks_by_day_of_week' => []
+                        ],
+                        'geographic_data' => [
+                            'top_countries' => [],
+                            'top_cities' => []
+                        ],
+                        'audience_data' => [
+                            'device_breakdown' => []
+                        ]
+                    ]
+                ]);
+            }
+
+            // Usar o service para buscar analytics consolidados
+            $analytics = $this->analyticsService->getGlobalDashboardAnalytics($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados do dashboard global.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Dashboard de link individual - dados para a tab Dashboard
+     * Combina métricas básicas com dados de gráficos para um link específico
+     */
+    public function getLinkDashboardData(int $linkId): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Verificar permissão do usuário
+            $link = Link::where('id', $linkId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$link) {
+                return response()->json([
+                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.'
+                ], 404);
+            }
+
+            // Usar o service para buscar analytics consolidados do link específico
+            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados do dashboard do link.',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getGlobalPerformanceData(): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+
+            if (!$userId) {
+                return response()->json(['error' => 'Usuário não autenticado.'], 401);
+            }
+
+            // Buscar todos os links ativos do usuário
+            $activeLinks = Link::where('user_id', $userId)
+                ->where('is_active', true)
+                ->pluck('id')
+                ->toArray();
+
+            if (empty($activeLinks)) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'total_redirects_24h' => 0,
+                        'unique_visitors' => 0,
+                        'avg_response_time' => 0,
+                        'success_rate' => 100
+                    ]
+                ]);
+            }
+
+            // Usar o service para buscar performance agregada
+            $analytics = $this->analyticsService->getGlobalPerformanceAnalytics($activeLinks);
+
+            return response()->json([
+                'success' => true,
+                'data' => $analytics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao buscar dados de performance globais.',
                 'message' => $e->getMessage()
             ], 500);
         }

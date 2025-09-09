@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Links;
 
 use App\Contracts\Repositories\LinkRepositoryInterface;
 use App\Contracts\Services\LinkServiceInterface;

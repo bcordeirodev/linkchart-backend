@@ -28,7 +28,8 @@ class LinkResource extends JsonResource
             'updated_at'      => $this->updated_at->format('d/m/Y H:i:s'),
             'is_expired'      => $this->isExpired(),
             'is_active_valid' => $this->isActiveAndNotExpired(),
-            'shorted_url'     => $this->getShortedUrl(),
+            'short_url'       => $this->getShortedUrl(),
+            'shorted_url'     => $this->getShortedUrl(), // Mantido para compatibilidade
             'clicks'          => $this->clicks()->count(),
             'utm_source'      => $this->utm_source,
             'utm_medium'      => $this->utm_medium,
