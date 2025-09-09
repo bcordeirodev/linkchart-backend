@@ -16,7 +16,7 @@ class CustomCors
         $origin = $request->headers->get('Origin');
 
                 // Origens permitidas (usar configuração do .env)
-        $corsOrigins = env('CORS_ALLOWED_ORIGINS', 'http://134.209.33.182:3000');
+        $corsOrigins = env('CORS_ALLOWED_ORIGINS', 'http://134.209.33.182,http://134.209.33.182:3000');
         $allowedOrigins = explode(',', $corsOrigins);
         $allowedOrigins = array_map('trim', $allowedOrigins);
 
@@ -33,8 +33,10 @@ class CustomCors
         // Aplicar headers CORS
         if ($isOriginAllowed && $origin) {
             $response->headers->set('Access-Control-Allow-Origin', $origin);
+        } elseif (in_array('*', $allowedOrigins)) {
+            $response->headers->set('Access-Control-Allow-Origin', '*');
         } else {
-            $response->headers->set('Access-Control-Allow-Origin', 'http://134.209.33.182:3000');
+            $response->headers->set('Access-Control-Allow-Origin', 'http://134.209.33.182');
         }
 
         $response->headers->set('Access-Control-Allow-Credentials', 'true');
