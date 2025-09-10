@@ -345,6 +345,30 @@ jobs:
           # Executar configuração completa (diretórios + permissões)
           docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
 
+          # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
+          echo "🔍 Verificação crítica do sistema de logs..."
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          LOG_TEST_RESULT=$(docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG_ENTRY' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+
+          if [ "$LOG_TEST_RESULT" != "SUCCESS" ]; then
+            echo "❌ ERRO CRÍTICO: Sistema de logs não funciona após fix-permissions"
+            echo "🔧 Aplicando correção emergencial de logs..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
+            docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
+
+            # Testar novamente
+            LOG_TEST_RESULT2=$(docker exec linkchartapi sh -c "echo 'DEPLOY_EMERGENCY_FIX_TEST' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+            if [ "$LOG_TEST_RESULT2" != "SUCCESS" ]; then
+              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona mesmo após correção emergencial"
+              rollback
+            else
+              echo "✅ Sistema de logs corrigido com sucesso"
+            fi
+          else
+            echo "✅ Sistema de logs funcionando corretamente"
+          fi
+
           # Laravel optimizations (seguindo padrão dev mas para prod)
           echo "⚡ Otimizações Laravel para produção..."
           docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
@@ -435,6 +459,29 @@ jobs:
             docker exec linkchartapi chmod -R 777 /var/www/storage/
             docker exec linkchartapi chmod -R 777 /var/www/bootstrap/cache/
             echo "✅ Correção emergencial aplicada"
+          fi
+
+          # VERIFICAÇÃO ADICIONAL: Testar escrita real em logs
+          echo "🔍 Testando escrita real em logs..."
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          LOG_WRITE_TEST=$(docker exec linkchartapi sh -c "echo '[$(date)] DEPLOY_INTEGRITY_CHECK: Log system operational' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+
+          if [ "$LOG_WRITE_TEST" != "SUCCESS" ]; then
+            echo "❌ ERRO: Sistema de logs falhou na verificação de integridade"
+            echo "🔧 Aplicando correção final de logs..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
+            docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
+
+            # Testar novamente
+            LOG_WRITE_TEST2=$(docker exec linkchartapi sh -c "echo '[$(date)] DEPLOY_FINAL_FIX: Log system restored' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+            if [ "$LOG_WRITE_TEST2" != "SUCCESS" ]; then
+              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona - continuando deploy mas com logs comprometidos"
+            else
+              echo "✅ Sistema de logs restaurado com sucesso"
+            fi
+          else
+            echo "✅ Sistema de logs funcionando perfeitamente"
           fi
 
           # Testar Database Connection

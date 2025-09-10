@@ -38,6 +38,10 @@ touch storage/logs/debug.log
 # Garantir que os logs existam com conteúdo inicial
 echo "$(date): Log system initialized" >> storage/logs/laravel-$(date +%Y-%m-%d).log
 
+# CORREÇÃO CRÍTICA: Garantir permissões corretas nos logs IMEDIATAMENTE após criação
+chmod 666 storage/logs/*.log 2>/dev/null || true
+chown www-data:www-data storage/logs/*.log 2>/dev/null || true
+
 # Configurar ownership correto
 echo "👤 Configurando ownership..."
 chown -R www-data:www-data /var/www
@@ -133,5 +137,32 @@ echo "📋 Permissões storage/logs/: $LOG_DIR_PERMS"
 # Listar arquivos de log criados
 echo "📋 Arquivos de log criados:"
 ls -la storage/logs/ | head -10
+
+# VERIFICAÇÃO FINAL CRÍTICA: Garantir que TODOS os logs são graváveis
+echo "🔍 Verificação final de logs..."
+for logfile in storage/logs/*.log; do
+    if [ -f "$logfile" ]; then
+        if [ ! -w "$logfile" ]; then
+            echo "❌ ERRO CRÍTICO: $logfile não é gravável"
+            chmod 666 "$logfile"
+            chown www-data:www-data "$logfile"
+            echo "✅ Corrigido: $logfile"
+        else
+            echo "✅ OK: $logfile é gravável"
+        fi
+    fi
+done
+
+# Testar escrita em log atual para garantir que funciona
+CURRENT_LOG="storage/logs/laravel-$(date +%Y-%m-%d).log"
+TEST_MESSAGE="[$(date)] DEPLOY TEST: Log system working correctly"
+if echo "$TEST_MESSAGE" >> "$CURRENT_LOG" 2>/dev/null; then
+    echo "✅ SUCESSO: Sistema de logs funcionando corretamente"
+else
+    echo "❌ ERRO CRÍTICO: Sistema de logs ainda não funciona"
+    chmod 666 "$CURRENT_LOG"
+    chown www-data:www-data "$CURRENT_LOG"
+    echo "$TEST_MESSAGE" >> "$CURRENT_LOG" || echo "❌ FALHA TOTAL NO SISTEMA DE LOGS"
+fi
 
 echo "🎉 Correção de permissões concluída!"
