@@ -554,7 +554,7 @@ jobs:
         sleep 20
 
         # Health Check Principal
-        if curl -f -s --max-time 15 http://${{ env.DEPLOY_HOST }}:8000/health; then
+        if curl -f -k -s --max-time 15 https://api.linkcharts.com.br/health; then
           echo "✅ Health check principal OK"
         else
           echo "❌ Health check principal falhou"
@@ -562,7 +562,7 @@ jobs:
         fi
 
         # Teste API - deve retornar 401 (não autenticado)
-        API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 http://${{ env.DEPLOY_HOST }}:8000/api/links)
+        API_RESPONSE=$(curl -s -k -o /dev/null -w "%{http_code}" --max-time 15 https://api.linkcharts.com.br/api/links)
         case $API_RESPONSE in
           401)
             echo "✅ API protegida OK (401 - auth required)"
@@ -577,7 +577,7 @@ jobs:
         esac
 
         # Verificar health endpoint detalhado
-        HEALTH_FULL=$(curl -s --max-time 15 http://${{ env.DEPLOY_HOST }}:8000/health)
+        HEALTH_FULL=$(curl -s -k --max-time 15 https://api.linkcharts.com.br/health)
         if [[ "$HEALTH_FULL" == *"OK"* ]] || [[ "$HEALTH_FULL" == *"healthy"* ]]; then
           echo "✅ Health endpoint detalhado OK"
           echo "📋 Health response: $HEALTH_FULL"
@@ -628,10 +628,10 @@ jobs:
           echo "  ✅ CORS Configurado"
           echo ""
           echo "🌐 URLs de Produção:"
-          echo "  🏠 Application: http://${{ env.DEPLOY_HOST }}:8000"
-          echo "  🏥 Health Check: http://${{ env.DEPLOY_HOST }}:8000/health"
-          echo "  📡 API Base: http://${{ env.DEPLOY_HOST }}:8000/api"
-          echo "  🔐 Auth: http://${{ env.DEPLOY_HOST }}:8000/api/auth/login"
+          echo "  🏠 Application: https://api.linkcharts.com.br"
+          echo "  🏥 Health Check: https://api.linkcharts.com.br/health"
+          echo "  📡 API Base: https://api.linkcharts.com.br/api"
+          echo "  🔐 Auth: https://api.linkcharts.com.br/api/auth/login"
           echo ""
           echo "⏱️ Deploy concluído em: $(date)"
           echo "🔧 Baseado na estrutura dev funcional + .env.production"
