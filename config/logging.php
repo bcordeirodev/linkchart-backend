@@ -61,7 +61,7 @@ return [
         // Canal personalizado para produção com logs detalhados
         'production' => [
             'driver' => 'stack',
-            'channels' => ['daily', 'stderr', 'api_errors'],
+            'channels' => ['daily', 'stderr'],
             'ignore_exceptions' => false,
         ],
 
