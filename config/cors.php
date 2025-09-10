@@ -19,7 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'https://linkcharts.com.br',
+        'https://www.linkcharts.com.br',
+        'http://localhost:3000', // Para desenvolvimento
+        'http://127.0.0.1:3000', // Para desenvolvimento
+    ],
 
     'allowed_origins_patterns' => [],
 
