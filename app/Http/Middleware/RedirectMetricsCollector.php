@@ -22,26 +22,50 @@ class RedirectMetricsCollector
         $userAgent = $request->userAgent();
         $referer = $request->headers->get('referer');
 
+        Log::info('RedirectMetricsCollector: Starting', [
+            'slug' => $slug,
+            'ip' => $ip,
+            'user_agent' => substr($userAgent, 0, 100) // Truncar para log
+        ]);
+
         // Processar redirecionamento
         $response = $next($request);
 
         $responseTime = microtime(true) - $startTime;
         $statusCode = $response->getStatusCode();
 
-        // Coletar métricas específicas de redirecionamento
-        $this->collectRedirectMetrics([
+        Log::info('RedirectMetricsCollector: Response processed', [
             'slug' => $slug,
-            'ip' => $ip,
-            'user_agent' => $userAgent,
-            'referer' => $referer,
             'status_code' => $statusCode,
-            'response_time' => $responseTime,
-            'timestamp' => now(),
-            'success' => $statusCode >= 200 && $statusCode < 400,
-            'country' => $this->getCountryFromIp($ip),
-            'device' => $this->getDeviceType($userAgent),
-            'utm_params' => $request->query(),
+            'response_time' => $responseTime
         ]);
+
+        // Coletar métricas específicas de redirecionamento com try-catch
+        try {
+            $this->collectRedirectMetrics([
+                'slug' => $slug,
+                'ip' => $ip,
+                'user_agent' => $userAgent,
+                'referer' => $referer,
+                'status_code' => $statusCode,
+                'response_time' => $responseTime,
+                'timestamp' => now(),
+                'success' => $statusCode >= 200 && $statusCode < 400,
+                'country' => $this->getCountryFromIp($ip),
+                'device' => $this->getDeviceType($userAgent),
+                'utm_params' => $request->query(),
+            ]);
+
+            Log::info('RedirectMetricsCollector: Metrics collected successfully', ['slug' => $slug]);
+        } catch (\Exception $e) {
+            Log::error('RedirectMetricsCollector: Failed to collect metrics', [
+                'slug' => $slug,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            // Não falhar a requisição por causa das métricas
+        }
 
         return $response;
     }
@@ -51,17 +75,31 @@ class RedirectMetricsCollector
      */
     private function collectRedirectMetrics(array $metrics): void
     {
+        Log::info('RedirectMetricsCollector: collectRedirectMetrics called', [
+            'slug' => $metrics['slug'] ?? 'unknown'
+        ]);
+
         try {
             // Verificar se Cache está disponível
             if (!$this->isCacheAvailable()) {
-                Log::info('Cache not available, skipping redirect metrics collection');
+                Log::warning('RedirectMetricsCollector: Cache not available, skipping metrics collection');
                 return;
             }
+
+            Log::info('RedirectMetricsCollector: Cache available, proceeding with metrics');
+
             $hour = now()->format('Y-m-d-H');
             $day = now()->format('Y-m-d');
 
+            Log::info('RedirectMetricsCollector: Time variables set', [
+                'hour' => $hour,
+                'day' => $day
+            ]);
+
             // Métricas por hora de redirecionamentos
             $hourKey = "redirect_metrics:hour:{$hour}";
+            Log::info('RedirectMetricsCollector: Getting hourly metrics', ['key' => $hourKey]);
+            
             $hourMetrics = Cache::get($hourKey, [
                 'total_redirects' => 0,
                 'successful_redirects' => 0,
@@ -73,6 +111,11 @@ class RedirectMetricsCollector
                 'avg_response_time' => 0,
                 'total_response_time' => 0,
                 'top_slugs' => [],
+            ]);
+            
+            Log::info('RedirectMetricsCollector: Current hourly metrics', [
+                'total_redirects' => $hourMetrics['total_redirects'],
+                'unique_ips_count' => count($hourMetrics['unique_ips'])
             ]);
 
             $hourMetrics['total_redirects']++;
@@ -111,10 +154,19 @@ class RedirectMetricsCollector
             $hourMetrics['avg_response_time'] =
                 $hourMetrics['total_response_time'] / $hourMetrics['total_redirects'];
 
+            Log::info('RedirectMetricsCollector: Saving hourly metrics', [
+                'key' => $hourKey,
+                'total_redirects' => $hourMetrics['total_redirects'],
+                'successful' => $hourMetrics['successful_redirects'],
+                'failed' => $hourMetrics['failed_redirects']
+            ]);
+            
             Cache::put($hourKey, $hourMetrics, 3600); // 1 hora
 
             // Métricas diárias agregadas
             $dayKey = "redirect_metrics:day:{$day}";
+            Log::info('RedirectMetricsCollector: Processing daily metrics', ['key' => $dayKey]);
+            
             $dayMetrics = Cache::get($dayKey, [
                 'total_redirects' => 0,
                 'unique_ips_count' => 0,
@@ -180,17 +232,49 @@ class RedirectMetricsCollector
      */
     private function getCountryFromIp(?string $ip): ?string
     {
+        Log::info('RedirectMetricsCollector: Getting country for IP', ['ip' => $ip]);
+        
         if (!$ip || in_array($ip, ['127.0.0.1', '::1'])) {
+            Log::info('RedirectMetricsCollector: Localhost IP detected');
             return 'localhost';
         }
 
         try {
+            // Verificar cache primeiro
+            $cacheKey = "geoip:country:{$ip}";
+            $cachedCountry = Cache::get($cacheKey);
+            
+            if ($cachedCountry !== null) {
+                Log::info('RedirectMetricsCollector: Country found in cache', ['country' => $cachedCountry]);
+                return $cachedCountry;
+            }
+            
+            Log::info('RedirectMetricsCollector: Attempting GeoIP lookup');
+            
             if (function_exists('geoip')) {
                 $location = geoip($ip);
-                return $location->getAttribute('country');
+                $country = $location->getAttribute('country');
+                
+                if ($country) {
+                    Log::info('RedirectMetricsCollector: Country found via GeoIP', ['country' => $country]);
+                    // Cache por 24 horas
+                    Cache::put($cacheKey, $country, 86400);
+                    return $country;
+                }
             }
+            
+            Log::info('RedirectMetricsCollector: No GeoIP function or no country found');
+            
+            // Cache null result por 1 hora para evitar lookups repetidos
+            Cache::put($cacheKey, null, 3600);
+            
         } catch (\Exception $e) {
-            Log::debug('GeoIP lookup failed', ['ip' => $ip, 'error' => $e->getMessage()]);
+            Log::error('RedirectMetricsCollector: GeoIP lookup failed', [
+                'ip' => $ip, 
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
         }
 
         return null;
@@ -241,11 +325,30 @@ class RedirectMetricsCollector
     private function isCacheAvailable(): bool
     {
         try {
+            $testKey = 'cache_test_redirect_' . uniqid();
+            Log::info('RedirectMetricsCollector: Testing cache availability', ['test_key' => $testKey]);
+            
             // Testar operação de cache simples
-            Cache::put('cache_test_redirect_' . uniqid(), 'test', 1);
-            return true;
+            Cache::put($testKey, 'test', 1);
+            
+            // Verificar se consegue ler
+            $testValue = Cache::get($testKey);
+            
+            if ($testValue === 'test') {
+                Log::info('RedirectMetricsCollector: Cache is available and working');
+                // Limpar teste
+                Cache::forget($testKey);
+                return true;
+            } else {
+                Log::warning('RedirectMetricsCollector: Cache write succeeded but read failed');
+                return false;
+            }
         } catch (\Exception $e) {
-            Log::info('Cache not available for redirect metrics: ' . $e->getMessage());
+            Log::error('RedirectMetricsCollector: Cache not available', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
             return false;
         }
     }
