@@ -31,6 +31,13 @@ echo "📋 Criando arquivos de log..."
 touch storage/logs/laravel.log
 touch storage/logs/laravel-$(date +%Y-%m-%d).log
 
+# Criar logs específicos para produção
+touch storage/logs/api-errors.log
+touch storage/logs/debug.log
+
+# Garantir que os logs existam com conteúdo inicial
+echo "$(date): Log system initialized" >> storage/logs/laravel-$(date +%Y-%m-%d).log
+
 # Configurar ownership correto
 echo "👤 Configurando ownership..."
 chown -R www-data:www-data /var/www
@@ -103,5 +110,28 @@ else
     chmod -R 777 storage/framework/cache/
     chown -R www-data:www-data storage/framework/cache/
 fi
+
+# VERIFICAÇÃO ESPECÍFICA PARA LOGS
+echo "📋 Testando sistema de logs..."
+TEST_LOG_MESSAGE="Test log entry at $(date)"
+
+# Testar escrita direta no log
+if echo "$TEST_LOG_MESSAGE" >> storage/logs/laravel-$(date +%Y-%m-%d).log 2>/dev/null; then
+    echo "✅ Log direto funciona"
+else
+    echo "❌ ERRO: Não é possível escrever no log"
+    echo "🔧 Aplicando correção emergencial para logs..."
+    chmod 777 storage/logs/
+    chmod 666 storage/logs/*.log 2>/dev/null || true
+    chown www-data:www-data storage/logs/*.log 2>/dev/null || true
+fi
+
+# Verificar se o diretório de logs está correto
+LOG_DIR_PERMS=$(ls -ld storage/logs/ | awk '{print $1}')
+echo "📋 Permissões storage/logs/: $LOG_DIR_PERMS"
+
+# Listar arquivos de log criados
+echo "📋 Arquivos de log criados:"
+ls -la storage/logs/ | head -10
 
 echo "🎉 Correção de permissões concluída!"
