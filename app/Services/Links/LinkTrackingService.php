@@ -7,6 +7,7 @@ use App\Models\Click;
 use App\Models\LinkUtm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Jenssegers\Agent\Agent;
 
 class LinkTrackingService
 {
@@ -15,14 +16,27 @@ class LinkTrackingService
      */
     public function registrarClique(Link $link, Request $request): void
     {
-        $ip = $request->ip() ?: '127.0.0.1'; // Fallback para localhost se IP for null
+        $startTime = microtime(true);
+        $ip = $request->ip() ?: '127.0.0.1';
         $userAgent = $request->userAgent() ?: 'Unknown';
 
-        // Resolve localização detalhada, com fallback para localhost
+        // Resolve localização detalhada
         $locationData = $this->resolveDetailedLocation($ip);
 
-        // Registra clique no banco com dados geográficos detalhados
-        $click = Click::create([
+        // Parse detalhado do User-Agent
+        $deviceData = $this->parseUserAgent($userAgent);
+
+        // Dados temporais enriquecidos
+        $temporalData = $this->enrichTemporalData(now(), $locationData['timezone']);
+
+        // Análise de comportamento
+        $behaviorData = $this->analyzeVisitorBehavior($ip, $link->id);
+
+        // Dados de performance
+        $performanceData = $this->collectPerformanceData($request, $startTime);
+
+        // Registra clique no banco com todos os dados enriquecidos
+        $click = Click::create(array_merge([
             'link_id'    => $link->id,
             'ip'         => $ip,
             'user_agent' => $userAgent,
@@ -30,7 +44,7 @@ class LinkTrackingService
             'country'    => $locationData['country'],
             'city'       => $locationData['city'],
             'device'     => $this->resolveDevice($userAgent),
-            // Novos campos geográficos detalhados
+            // Campos geográficos detalhados
             'iso_code'   => $locationData['iso_code'],
             'state'      => $locationData['state'],
             'state_name' => $locationData['state_name'],
@@ -40,7 +54,7 @@ class LinkTrackingService
             'timezone'   => $locationData['timezone'],
             'continent'  => $locationData['continent'],
             'currency'   => $locationData['currency'],
-        ]);
+        ], $deviceData, $temporalData, $behaviorData, $performanceData));
 
         // Captura e registra UTM de query params ou headers
         $utm = $this->extractUtmData($request);
@@ -189,5 +203,193 @@ class LinkTrackingService
         }
 
         return 'desktop';
+    }
+
+    /**
+     * Parse detalhado do User-Agent usando Jenssegers\Agent
+     */
+    private function parseUserAgent(string $userAgent): array
+    {
+        try {
+            $agent = new Agent();
+            $agent->setUserAgent($userAgent);
+
+            return [
+                'browser' => $agent->browser() ?: 'Unknown',
+                'browser_version' => $agent->version($agent->browser()) ?: null,
+                'os' => $agent->platform() ?: 'Unknown',
+                'os_version' => $agent->version($agent->platform()) ?: null,
+                'is_mobile' => $agent->isMobile(),
+                'is_tablet' => $agent->isTablet(),
+                'is_desktop' => $agent->isDesktop(),
+                'is_bot' => $agent->isRobot(),
+            ];
+        } catch (\Exception $e) {
+            Log::warning('Failed to parse user agent', [
+                'user_agent' => $userAgent,
+                'error' => $e->getMessage()
+            ]);
+
+            // Fallback para dados básicos
+            return [
+                'browser' => 'Unknown',
+                'browser_version' => null,
+                'os' => 'Unknown',
+                'os_version' => null,
+                'is_mobile' => false,
+                'is_tablet' => false,
+                'is_desktop' => true,
+                'is_bot' => false,
+            ];
+        }
+    }
+
+    /**
+     * Enriquece dados temporais com análise de padrões
+     */
+    private function enrichTemporalData(\DateTime $timestamp, ?string $timezone): array
+    {
+        try {
+            $localTime = clone $timestamp;
+            
+            // Converter para timezone local se disponível
+            if ($timezone) {
+                try {
+                    $localTime->setTimezone(new \DateTimeZone($timezone));
+                } catch (\Exception $e) {
+                    // Usar UTC se timezone inválido
+                    Log::warning('Invalid timezone', ['timezone' => $timezone]);
+                }
+            }
+            
+            $hour = (int)$localTime->format('H');
+            $dayOfWeek = (int)$localTime->format('N'); // 1=Monday, 7=Sunday
+            
+            return [
+                'hour_of_day' => $hour,
+                'day_of_week' => $dayOfWeek,
+                'day_of_month' => (int)$localTime->format('d'),
+                'month' => (int)$localTime->format('m'),
+                'year' => (int)$localTime->format('Y'),
+                'local_time' => $localTime->format('Y-m-d H:i:s'),
+                'is_weekend' => in_array($dayOfWeek, [6, 7]), // Saturday, Sunday
+                'is_business_hours' => $hour >= 9 && $hour <= 17,
+            ];
+        } catch (\Exception $e) {
+            Log::warning('Failed to enrich temporal data', [
+                'error' => $e->getMessage(),
+                'timezone' => $timezone
+            ]);
+
+            // Fallback para dados UTC
+            $hour = (int)$timestamp->format('H');
+            $dayOfWeek = (int)$timestamp->format('N');
+            
+            return [
+                'hour_of_day' => $hour,
+                'day_of_week' => $dayOfWeek,
+                'day_of_month' => (int)$timestamp->format('d'),
+                'month' => (int)$timestamp->format('m'),
+                'year' => (int)$timestamp->format('Y'),
+                'local_time' => $timestamp->format('Y-m-d H:i:s'),
+                'is_weekend' => in_array($dayOfWeek, [6, 7]),
+                'is_business_hours' => $hour >= 9 && $hour <= 17,
+            ];
+        }
+    }
+
+    /**
+     * Analisa comportamento do visitante
+     */
+    private function analyzeVisitorBehavior(string $ip, int $linkId): array
+    {
+        try {
+            // Verificar se é visitante recorrente (últimas 24h)
+            $recentClicks = Click::where('ip', $ip)
+                ->where('created_at', '>=', now()->subDay())
+                ->count();
+            
+            // Contar cliques na sessão (última hora)
+            $sessionClicks = Click::where('ip', $ip)
+                ->where('created_at', '>=', now()->subHour())
+                ->count() + 1; // +1 para o clique atual
+            
+            return [
+                'is_return_visitor' => $recentClicks > 0,
+                'session_clicks' => $sessionClicks,
+                'click_source' => $this->categorizeClickSource(request()->headers->get('referer')),
+            ];
+        } catch (\Exception $e) {
+            Log::warning('Failed to analyze visitor behavior', [
+                'ip' => $ip,
+                'link_id' => $linkId,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'is_return_visitor' => false,
+                'session_clicks' => 1,
+                'click_source' => 'unknown',
+            ];
+        }
+    }
+
+    /**
+     * Categoriza fonte do clique baseado no referer
+     */
+    private function categorizeClickSource(?string $referer): string
+    {
+        if (!$referer || $referer === '-') {
+            return 'direct';
+        }
+        
+        $domain = parse_url($referer, PHP_URL_HOST);
+        
+        if (!$domain) {
+            return 'unknown';
+        }
+        
+        $domain = strtolower($domain);
+        
+        // Redes sociais
+        if (preg_match('/(facebook|twitter|instagram|linkedin|tiktok|youtube|whatsapp|telegram)/i', $domain)) {
+            return 'social';
+        }
+        
+        // Motores de busca
+        if (preg_match('/(google|bing|yahoo|duckduckgo|baidu|yandex)/i', $domain)) {
+            return 'search';
+        }
+        
+        // Email
+        if (preg_match('/(gmail|outlook|mail|webmail|hotmail)/i', $domain)) {
+            return 'email';
+        }
+        
+        return 'referral';
+    }
+
+    /**
+     * Coleta dados de performance
+     */
+    private function collectPerformanceData(Request $request, float $startTime): array
+    {
+        try {
+            $responseTime = (microtime(true) - $startTime) * 1000; // ms
+            
+            return [
+                'response_time' => round($responseTime, 3),
+                'accept_language' => $request->header('Accept-Language'),
+            ];
+        } catch (\Exception $e) {
+            Log::warning('Failed to collect performance data', [
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'response_time' => null,
+                'accept_language' => null,
+            ];
+        }
     }
 }
