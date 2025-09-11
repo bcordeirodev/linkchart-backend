@@ -37,6 +37,10 @@ Thumbs.db
 
 # Logs
 *.log
+server.log
+
+# Temporary directories
+/html/
 
 # Environment files (keep templates)
 # .env.local
