@@ -8,7 +8,15 @@ use App\Http\Controllers\Links\RedirectController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
-// Laravel 12 CORS via middleware - sem rota OPTIONS explícita
+/**
+ * ==============================
+ * PREFLIGHT OPTIONS - CORS
+ * ==============================
+ * Laravel 12 precisa de rota explícita para OPTIONS
+ */
+Route::options('{any}', function () {
+    return response('', 204);
+})->where('any', '.*');
 
 
 /**
