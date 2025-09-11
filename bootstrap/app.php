@@ -28,12 +28,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
         ]);
 
-        // Aplicar middlewares globalmente para rotas API
-        $middleware->api([
-            // MetricsCollector removido - deve estar apenas na rota /r/{slug}
+        // Laravel 12 - CORS global para capturar OPTIONS preflight
+        $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
+
+        $middleware->web([
+            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
-        // CORS básico do Laravel apenas para API
         $middleware->api([
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
@@ -85,7 +86,7 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->expectsJson() || $request->is('api/*')) {
                 // Log detalhado do erro (com try-catch para evitar falhas em cascata)
                 try {
-                    \Log::channel('api_errors')->error('API Exception', [
+                    \Illuminate\Support\Facades\Log::channel('api_errors')->error('API Exception', [
                         'message' => $e->getMessage(),
                         'file' => $e->getFile(),
                         'line' => $e->getLine(),
@@ -117,11 +118,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'error_id' => uniqid('err_')
                 ];
 
-                $response = response()->json($responseData, 500);
-
-                // Laravel CORS padrão será aplicado automaticamente
-
-                return $response;
+                return new \Illuminate\Http\JsonResponse($responseData, 500);
             }
         });
     })->create();

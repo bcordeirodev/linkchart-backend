@@ -8,6 +8,7 @@ use App\Http\Controllers\Links\RedirectController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
+// Laravel 12 CORS via middleware - sem rota OPTIONS explícita
 
 
 /**

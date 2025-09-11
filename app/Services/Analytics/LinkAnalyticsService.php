@@ -87,13 +87,17 @@ class LinkAnalyticsService
     }
 
     /**
-     * Analytics temporais otimizados
+     * Analytics temporais otimizados - ENHANCED VERSION
      */
     private function getTemporalAnalyticsOptimized(int $linkId): array
     {
         return [
             'clicks_by_hour' => $this->getClicksByHourOptimized($linkId),
             'clicks_by_day_of_week' => $this->getClicksByDayOfWeekOptimized($linkId),
+            // NEW: Enhanced temporal analytics
+            'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId),
+            'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId),
+            'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId),
         ];
     }
 
@@ -730,13 +734,27 @@ class LinkAnalyticsService
         if (empty($linkIds)) {
             return [
                 'clicks_by_hour' => [],
-                'clicks_by_day_of_week' => []
+                'clicks_by_day_of_week' => [],
+                // NEW: Enhanced global temporal analytics
+                'hourly_patterns_local' => [],
+                'weekend_vs_weekday' => [
+                    'weekend' => ['clicks' => 0, 'unique_visitors' => 0, 'avg_response_time' => 0],
+                    'weekday' => ['clicks' => 0, 'unique_visitors' => 0, 'avg_response_time' => 0],
+                ],
+                'business_hours_analysis' => [
+                    'business_hours' => ['clicks' => 0, 'unique_visitors' => 0, 'avg_response_time' => 0, 'avg_session_depth' => 0],
+                    'non_business_hours' => ['clicks' => 0, 'unique_visitors' => 0, 'avg_response_time' => 0, 'avg_session_depth' => 0],
+                ],
             ];
         }
 
         return [
             'clicks_by_hour' => $this->getGlobalClicksByHour($linkIds),
             'clicks_by_day_of_week' => $this->getGlobalClicksByDayOfWeek($linkIds),
+            // NEW: Enhanced global temporal analytics
+            'hourly_patterns_local' => $this->getGlobalHourlyPatternsLocal($linkIds),
+            'weekend_vs_weekday' => $this->getGlobalWeekendVsWeekday($linkIds),
+            'business_hours_analysis' => $this->getGlobalBusinessHoursAnalysis($linkIds),
         ];
     }
 
@@ -1845,5 +1863,239 @@ class LinkAnalyticsService
                 'percentage' => round(($clicks / $total) * 100, 2),
             ];
         }, array_keys($languageCounts), $languageCounts), 0, 15);
+    }
+
+    // =====================================
+    // ENHANCED TEMPORAL ANALYTICS METHODS
+    // =====================================
+
+    /**
+     * Padrões de hora local considerando timezone do usuário
+     */
+    private function getHourlyPatternsLocal(int $linkId): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                hour_of_day,
+                COUNT(*) as clicks,
+                AVG(response_time) as avg_response_time,
+                COUNT(DISTINCT ip) as unique_visitors
+            ')
+            ->where('link_id', $linkId)
+            ->whereNotNull('hour_of_day')
+            ->groupBy('hour_of_day')
+            ->orderBy('hour_of_day')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'hour' => (int) $item->hour_of_day,
+                    'clicks' => (int) $item->clicks,
+                    'avg_response_time' => round((float) $item->avg_response_time, 2),
+                    'unique_visitors' => (int) $item->unique_visitors,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Análise de fim de semana vs dias úteis
+     */
+    private function getWeekendVsWeekday(int $linkId): array
+    {
+        $weekendData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time
+            ')
+            ->where('link_id', $linkId)
+            ->where('is_weekend', true)
+            ->first();
+
+        $weekdayData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time
+            ')
+            ->where('link_id', $linkId)
+            ->where('is_weekend', false)
+            ->first();
+
+        return [
+            'weekend' => [
+                'clicks' => (int) ($weekendData->clicks ?? 0),
+                'unique_visitors' => (int) ($weekendData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($weekendData->avg_response_time ?? 0), 2),
+                'percentage' => 0, // Calculado no frontend
+            ],
+            'weekday' => [
+                'clicks' => (int) ($weekdayData->clicks ?? 0),
+                'unique_visitors' => (int) ($weekdayData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($weekdayData->avg_response_time ?? 0), 2),
+                'percentage' => 0, // Calculado no frontend
+            ],
+        ];
+    }
+
+    /**
+     * Análise de horário comercial vs não comercial
+     */
+    private function getBusinessHoursAnalysis(int $linkId): array
+    {
+        $businessHoursData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time,
+                AVG(session_clicks) as avg_session_depth
+            ')
+            ->where('link_id', $linkId)
+            ->where('is_business_hours', true)
+            ->first();
+
+        $nonBusinessHoursData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time,
+                AVG(session_clicks) as avg_session_depth
+            ')
+            ->where('link_id', $linkId)
+            ->where('is_business_hours', false)
+            ->first();
+
+        return [
+            'business_hours' => [
+                'clicks' => (int) ($businessHoursData->clicks ?? 0),
+                'unique_visitors' => (int) ($businessHoursData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($businessHoursData->avg_response_time ?? 0), 2),
+                'avg_session_depth' => round((float) ($businessHoursData->avg_session_depth ?? 0), 1),
+                'time_range' => '09:00-17:00',
+            ],
+            'non_business_hours' => [
+                'clicks' => (int) ($nonBusinessHoursData->clicks ?? 0),
+                'unique_visitors' => (int) ($nonBusinessHoursData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($nonBusinessHoursData->avg_response_time ?? 0), 2),
+                'avg_session_depth' => round((float) ($nonBusinessHoursData->avg_session_depth ?? 0), 1),
+                'time_range' => '17:01-08:59',
+            ],
+        ];
+    }
+
+    // =====================================
+    // ENHANCED GLOBAL TEMPORAL ANALYTICS METHODS
+    // =====================================
+
+    /**
+     * Padrões de hora local globais
+     */
+    private function getGlobalHourlyPatternsLocal(array $linkIds): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                hour_of_day,
+                COUNT(*) as clicks,
+                AVG(response_time) as avg_response_time,
+                COUNT(DISTINCT ip) as unique_visitors
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('hour_of_day')
+            ->groupBy('hour_of_day')
+            ->orderBy('hour_of_day')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'hour' => (int) $item->hour_of_day,
+                    'clicks' => (int) $item->clicks,
+                    'avg_response_time' => round((float) $item->avg_response_time, 2),
+                    'unique_visitors' => (int) $item->unique_visitors,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Análise global de fim de semana vs dias úteis
+     */
+    private function getGlobalWeekendVsWeekday(array $linkIds): array
+    {
+        $weekendData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->where('is_weekend', true)
+            ->first();
+
+        $weekdayData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->where('is_weekend', false)
+            ->first();
+
+        return [
+            'weekend' => [
+                'clicks' => (int) ($weekendData->clicks ?? 0),
+                'unique_visitors' => (int) ($weekendData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($weekendData->avg_response_time ?? 0), 2),
+            ],
+            'weekday' => [
+                'clicks' => (int) ($weekdayData->clicks ?? 0),
+                'unique_visitors' => (int) ($weekdayData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($weekdayData->avg_response_time ?? 0), 2),
+            ],
+        ];
+    }
+
+    /**
+     * Análise global de horário comercial
+     */
+    private function getGlobalBusinessHoursAnalysis(array $linkIds): array
+    {
+        $businessHoursData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time,
+                AVG(session_clicks) as avg_session_depth
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->where('is_business_hours', true)
+            ->first();
+
+        $nonBusinessHoursData = \DB::table('clicks')
+            ->selectRaw('
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(response_time) as avg_response_time,
+                AVG(session_clicks) as avg_session_depth
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->where('is_business_hours', false)
+            ->first();
+
+        return [
+            'business_hours' => [
+                'clicks' => (int) ($businessHoursData->clicks ?? 0),
+                'unique_visitors' => (int) ($businessHoursData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($businessHoursData->avg_response_time ?? 0), 2),
+                'avg_session_depth' => round((float) ($businessHoursData->avg_session_depth ?? 0), 1),
+                'time_range' => '09:00-17:00',
+            ],
+            'non_business_hours' => [
+                'clicks' => (int) ($nonBusinessHoursData->clicks ?? 0),
+                'unique_visitors' => (int) ($nonBusinessHoursData->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($nonBusinessHoursData->avg_response_time ?? 0), 2),
+                'avg_session_depth' => round((float) ($nonBusinessHoursData->avg_session_depth ?? 0), 1),
+                'time_range' => '17:01-08:59',
+            ],
+        ];
     }
 }
