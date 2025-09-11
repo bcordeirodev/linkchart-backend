@@ -98,7 +98,7 @@ class LinkAnalyticsService
     }
 
     /**
-     * Analytics de audiência otimizados
+     * Analytics de audiência otimizados - ENHANCED VERSION
      */
     private function getAudienceAnalyticsOptimized(int $linkId): array
     {
@@ -106,6 +106,11 @@ class LinkAnalyticsService
             'device_breakdown' => $this->getDeviceBreakdownOptimized($linkId),
             'browser_breakdown' => $this->getBrowserBreakdownOptimized($linkId),
             'os_breakdown' => $this->getOSBreakdownOptimized($linkId),
+            // NEW: Enhanced analytics with detailed data
+            'browsers' => $this->getBrowserDistribution($linkId),
+            'operating_systems' => $this->getOSDistribution($linkId),
+            'device_performance' => $this->getDevicePerformance($linkId),
+            'languages' => $this->getLanguageDistribution($linkId),
         ];
     }
 
@@ -414,65 +419,51 @@ class LinkAnalyticsService
     }
 
     /**
-     * Breakdown de browsers para um link específico
-     * Extrai informações do user_agent
+     * Breakdown de browsers para um link específico - UPDATED to use new fields
      */
     private function getBrowserBreakdownOptimized(int $linkId): array
     {
-        $clicks = \DB::table('clicks')
-            ->select('user_agent')
+        return \DB::table('clicks')
+            ->selectRaw('
+                COALESCE(browser, "Unknown") as browser,
+                COUNT(*) as clicks
+            ')
             ->where('link_id', $linkId)
-            ->whereNotNull('user_agent')
-            ->get();
-
-        $browserCounts = [];
-
-        foreach ($clicks as $click) {
-            $browser = $this->extractBrowserFromUserAgent($click->user_agent);
-            if ($browser) {
-                $browserCounts[$browser] = ($browserCounts[$browser] ?? 0) + 1;
-            }
-        }
-
-        arsort($browserCounts);
-
-        return array_slice(array_map(function ($browser, $clicks) {
-            return [
-                'browser' => $browser,
-                'clicks' => $clicks,
-            ];
-        }, array_keys($browserCounts), $browserCounts), 0, 10);
+            ->groupBy('browser')
+            ->orderBy('clicks', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'browser' => $item->browser,
+                    'clicks' => (int) $item->clicks,
+                ];
+            })
+            ->toArray();
     }
 
     /**
-     * Breakdown de sistemas operacionais para um link específico
-     * Extrai informações do user_agent
+     * Breakdown de sistemas operacionais para um link específico - UPDATED to use new fields
      */
     private function getOSBreakdownOptimized(int $linkId): array
     {
-        $clicks = \DB::table('clicks')
-            ->select('user_agent')
+        return \DB::table('clicks')
+            ->selectRaw('
+                COALESCE(os, "Unknown") as os,
+                COUNT(*) as clicks
+            ')
             ->where('link_id', $linkId)
-            ->whereNotNull('user_agent')
-            ->get();
-
-        $osCounts = [];
-
-        foreach ($clicks as $click) {
-            $os = $this->extractOSFromUserAgent($click->user_agent);
-            if ($os) {
-                $osCounts[$os] = ($osCounts[$os] ?? 0) + 1;
-            }
-        }
-
-        arsort($osCounts);
-
-        return array_slice(array_map(function ($os, $clicks) {
-            return [
-                'os' => $os,
-                'clicks' => $clicks,
-            ];
-        }, array_keys($osCounts), $osCounts), 0, 10);
+            ->groupBy('os')
+            ->orderBy('clicks', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'os' => $item->os,
+                    'clicks' => (int) $item->clicks,
+                ];
+            })
+            ->toArray();
     }
 
     /**
@@ -758,7 +749,12 @@ class LinkAnalyticsService
             return [
                 'device_breakdown' => [],
                 'browser_breakdown' => [],
-                'os_breakdown' => []
+                'os_breakdown' => [],
+                // NEW: Enhanced global analytics
+                'browsers' => [],
+                'operating_systems' => [],
+                'device_performance' => [],
+                'languages' => [],
             ];
         }
 
@@ -766,6 +762,11 @@ class LinkAnalyticsService
             'device_breakdown' => $this->getGlobalDeviceBreakdown($linkIds),
             'browser_breakdown' => $this->getGlobalBrowserBreakdown($linkIds),
             'os_breakdown' => $this->getGlobalOSBreakdown($linkIds),
+            // NEW: Enhanced global analytics
+            'browsers' => $this->getGlobalBrowserDistribution($linkIds),
+            'operating_systems' => $this->getGlobalOSDistribution($linkIds),
+            'device_performance' => $this->getGlobalDevicePerformance($linkIds),
+            'languages' => $this->getGlobalLanguageDistribution($linkIds),
         ];
     }
 
@@ -1564,5 +1565,285 @@ class LinkAnalyticsService
             ->value('count');
 
         return (float) $nearbyCount;
+    }
+
+    /**
+     * Distribuição detalhada de browsers com versões
+     */
+    private function getBrowserDistribution(int $linkId): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                browser,
+                browser_version,
+                COUNT(*) as clicks,
+                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
+            ')
+            ->where('link_id', $linkId)
+            ->whereNotNull('browser')
+            ->groupBy('browser', 'browser_version')
+            ->orderBy('clicks', 'desc')
+            ->limit(15)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'browser' => $item->browser,
+                    'version' => $item->browser_version,
+                    'clicks' => (int) $item->clicks,
+                    'percentage' => (float) $item->percentage,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Distribuição detalhada de sistemas operacionais com versões
+     */
+    private function getOSDistribution(int $linkId): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                os,
+                os_version,
+                COUNT(*) as clicks,
+                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
+            ')
+            ->where('link_id', $linkId)
+            ->whereNotNull('os')
+            ->groupBy('os', 'os_version')
+            ->orderBy('clicks', 'desc')
+            ->limit(15)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'os' => $item->os,
+                    'version' => $item->os_version,
+                    'clicks' => (int) $item->clicks,
+                    'percentage' => (float) $item->percentage,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Performance por tipo de dispositivo
+     */
+    private function getDevicePerformance(int $linkId): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                device,
+                AVG(response_time) as avg_response_time,
+                MIN(response_time) as min_response_time,
+                MAX(response_time) as max_response_time,
+                COUNT(*) as total_clicks
+            ')
+            ->where('link_id', $linkId)
+            ->whereNotNull('device')
+            ->whereNotNull('response_time')
+            ->groupBy('device')
+            ->orderBy('avg_response_time', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'device' => $item->device,
+                    'avg_response_time' => round((float) $item->avg_response_time, 2),
+                    'min_response_time' => round((float) $item->min_response_time, 2),
+                    'max_response_time' => round((float) $item->max_response_time, 2),
+                    'total_clicks' => (int) $item->total_clicks,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Distribuição de idiomas baseada em Accept-Language
+     */
+    private function getLanguageDistribution(int $linkId): array
+    {
+        $clicks = \DB::table('clicks')
+            ->select('accept_language')
+            ->where('link_id', $linkId)
+            ->whereNotNull('accept_language')
+            ->get();
+
+        $languageCounts = [];
+
+        foreach ($clicks as $click) {
+            // Extrair idioma principal do Accept-Language header
+            $language = $this->extractPrimaryLanguage($click->accept_language);
+            if ($language) {
+                $languageCounts[$language] = ($languageCounts[$language] ?? 0) + 1;
+            }
+        }
+
+        arsort($languageCounts);
+        $total = array_sum($languageCounts);
+
+        return array_slice(array_map(function ($language, $clicks) use ($total) {
+            return [
+                'language' => $language,
+                'clicks' => $clicks,
+                'percentage' => round(($clicks / $total) * 100, 2),
+            ];
+        }, array_keys($languageCounts), $languageCounts), 0, 10);
+    }
+
+    /**
+     * Extrai idioma principal do header Accept-Language
+     */
+    private function extractPrimaryLanguage(?string $acceptLanguage): ?string
+    {
+        if (!$acceptLanguage) {
+            return null;
+        }
+
+        // Accept-Language: pt-BR,pt;q=0.9,en;q=0.8
+        $languages = explode(',', $acceptLanguage);
+        $primaryLang = trim(explode(';', $languages[0])[0]);
+
+        // Mapear códigos para nomes mais amigáveis
+        $languageMap = [
+            'pt-BR' => 'Português (Brasil)',
+            'pt' => 'Português',
+            'en' => 'English',
+            'en-US' => 'English (US)',
+            'es' => 'Español',
+            'fr' => 'Français',
+            'de' => 'Deutsch',
+            'it' => 'Italiano',
+            'zh' => '中文',
+            'ja' => '日本語',
+            'ko' => '한국어',
+            'ar' => 'العربية',
+            'ru' => 'Русский',
+        ];
+
+        return $languageMap[$primaryLang] ?? $primaryLang;
+    }
+
+    // =====================================
+    // ENHANCED GLOBAL AUDIENCE ANALYTICS METHODS
+    // =====================================
+
+    /**
+     * Distribuição global de browsers com versões
+     */
+    private function getGlobalBrowserDistribution(array $linkIds): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                browser,
+                browser_version,
+                COUNT(*) as clicks,
+                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('browser')
+            ->groupBy('browser', 'browser_version')
+            ->orderBy('clicks', 'desc')
+            ->limit(20)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'browser' => $item->browser,
+                    'version' => $item->browser_version,
+                    'clicks' => (int) $item->clicks,
+                    'percentage' => (float) $item->percentage,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Distribuição global de sistemas operacionais com versões
+     */
+    private function getGlobalOSDistribution(array $linkIds): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                os,
+                os_version,
+                COUNT(*) as clicks,
+                ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('os')
+            ->groupBy('os', 'os_version')
+            ->orderBy('clicks', 'desc')
+            ->limit(20)
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'os' => $item->os,
+                    'version' => $item->os_version,
+                    'clicks' => (int) $item->clicks,
+                    'percentage' => (float) $item->percentage,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Performance global por tipo de dispositivo
+     */
+    private function getGlobalDevicePerformance(array $linkIds): array
+    {
+        return \DB::table('clicks')
+            ->selectRaw('
+                device,
+                AVG(response_time) as avg_response_time,
+                MIN(response_time) as min_response_time,
+                MAX(response_time) as max_response_time,
+                COUNT(*) as total_clicks
+            ')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('device')
+            ->whereNotNull('response_time')
+            ->groupBy('device')
+            ->orderBy('avg_response_time', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'device' => $item->device,
+                    'avg_response_time' => round((float) $item->avg_response_time, 2),
+                    'min_response_time' => round((float) $item->min_response_time, 2),
+                    'max_response_time' => round((float) $item->max_response_time, 2),
+                    'total_clicks' => (int) $item->total_clicks,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Distribuição global de idiomas
+     */
+    private function getGlobalLanguageDistribution(array $linkIds): array
+    {
+        $clicks = \DB::table('clicks')
+            ->select('accept_language')
+            ->whereIn('link_id', $linkIds)
+            ->whereNotNull('accept_language')
+            ->get();
+
+        $languageCounts = [];
+
+        foreach ($clicks as $click) {
+            $language = $this->extractPrimaryLanguage($click->accept_language);
+            if ($language) {
+                $languageCounts[$language] = ($languageCounts[$language] ?? 0) + 1;
+            }
+        }
+
+        arsort($languageCounts);
+        $total = array_sum($languageCounts);
+
+        return array_slice(array_map(function ($language, $clicks) use ($total) {
+            return [
+                'language' => $language,
+                'clicks' => $clicks,
+                'percentage' => round(($clicks / $total) * 100, 2),
+            ];
+        }, array_keys($languageCounts), $languageCounts), 0, 15);
     }
 }

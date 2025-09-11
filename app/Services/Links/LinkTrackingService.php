@@ -251,7 +251,7 @@ class LinkTrackingService
     {
         try {
             $localTime = clone $timestamp;
-            
+
             // Converter para timezone local se disponível
             if ($timezone) {
                 try {
@@ -261,10 +261,10 @@ class LinkTrackingService
                     Log::warning('Invalid timezone', ['timezone' => $timezone]);
                 }
             }
-            
+
             $hour = (int)$localTime->format('H');
             $dayOfWeek = (int)$localTime->format('N'); // 1=Monday, 7=Sunday
-            
+
             return [
                 'hour_of_day' => $hour,
                 'day_of_week' => $dayOfWeek,
@@ -284,7 +284,7 @@ class LinkTrackingService
             // Fallback para dados UTC
             $hour = (int)$timestamp->format('H');
             $dayOfWeek = (int)$timestamp->format('N');
-            
+
             return [
                 'hour_of_day' => $hour,
                 'day_of_week' => $dayOfWeek,
@@ -308,12 +308,12 @@ class LinkTrackingService
             $recentClicks = Click::where('ip', $ip)
                 ->where('created_at', '>=', now()->subDay())
                 ->count();
-            
+
             // Contar cliques na sessão (última hora)
             $sessionClicks = Click::where('ip', $ip)
                 ->where('created_at', '>=', now()->subHour())
                 ->count() + 1; // +1 para o clique atual
-            
+
             return [
                 'is_return_visitor' => $recentClicks > 0,
                 'session_clicks' => $sessionClicks,
@@ -342,30 +342,30 @@ class LinkTrackingService
         if (!$referer || $referer === '-') {
             return 'direct';
         }
-        
+
         $domain = parse_url($referer, PHP_URL_HOST);
-        
+
         if (!$domain) {
             return 'unknown';
         }
-        
+
         $domain = strtolower($domain);
-        
+
         // Redes sociais
         if (preg_match('/(facebook|twitter|instagram|linkedin|tiktok|youtube|whatsapp|telegram)/i', $domain)) {
             return 'social';
         }
-        
+
         // Motores de busca
         if (preg_match('/(google|bing|yahoo|duckduckgo|baidu|yandex)/i', $domain)) {
             return 'search';
         }
-        
+
         // Email
         if (preg_match('/(gmail|outlook|mail|webmail|hotmail)/i', $domain)) {
             return 'email';
         }
-        
+
         return 'referral';
     }
 
@@ -376,7 +376,7 @@ class LinkTrackingService
     {
         try {
             $responseTime = (microtime(true) - $startTime) * 1000; // ms
-            
+
             return [
                 'response_time' => round($responseTime, 3),
                 'accept_language' => $request->header('Accept-Language'),
