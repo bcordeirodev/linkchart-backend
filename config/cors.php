@@ -24,6 +24,8 @@ return [
         'https://www.linkcharts.com.br',
         'http://localhost:3000', // Para desenvolvimento
         'http://127.0.0.1:3000', // Para desenvolvimento
+        'http://localhost:5173', // Vite dev server
+        'http://127.0.0.1:5173', // Vite dev server
     ],
 
     'allowed_origins_patterns' => [],
