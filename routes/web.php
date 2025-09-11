@@ -1,8 +1,6 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\WordController;
-use App\Http\Controllers\Links\RedirectController;
 
 Route::get('/', function () {
     return response()->json([
@@ -11,11 +9,3 @@ Route::get('/', function () {
         'status' => 'active'
     ]);
 });
-
-// ROTA DE REDIRECIONAMENTO MOVIDA PARA api.php para CORS automático
-
-// Rota que utiliza o método index() do WordController para retornar todas as palavras.
-// Route::get('/teste', [WordController::class, 'index']);
-// Route::post('/teste', [WordController::class, 'store']);
-// Route::get('/teste/{id}', [WordController::class, 'show']);
-// Route::put('/teste/{id}', [WordController::class, 'update']);

@@ -8,16 +8,6 @@ use App\Http\Controllers\Links\RedirectController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
-/**
- * ==============================
- * PREFLIGHT OPTIONS - CORS
- * ==============================
- * Laravel 12 precisa de rota explícita para OPTIONS
- */
-Route::options('{any}', function () {
-    return response('', 204);
-})->where('any', '.*');
-
 
 /**
  * 🚀 ROTA PÚBLICA DE REDIRECIONAMENTO - CORAÇÃO DO SISTEMA
@@ -63,8 +53,6 @@ Route::middleware(['api.auth:api'])->group(function () {
     Route::prefix('metrics')->controller(MetricsController::class)->group(function () {
         Route::get('/dashboard', 'getDashboardMetrics');                 // ✅ USADO: useDashboardData hook
     });
-
-
 
 
     // === CRIAÇÃO DE LINKS (LEGACY) ===
