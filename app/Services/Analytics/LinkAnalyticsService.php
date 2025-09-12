@@ -429,7 +429,7 @@ class LinkAnalyticsService
     {
         return \DB::table('clicks')
             ->selectRaw('
-                COALESCE(browser, "Unknown") as browser,
+                COALESCE(browser, \'Unknown\') as browser,
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
@@ -453,7 +453,7 @@ class LinkAnalyticsService
     {
         return \DB::table('clicks')
             ->selectRaw('
-                COALESCE(os, "Unknown") as os,
+                COALESCE(os, \'Unknown\') as os,
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
