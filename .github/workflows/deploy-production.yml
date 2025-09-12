@@ -332,6 +332,13 @@ jobs:
           sleep 15
 
           # ==========================================
+          # EXECUTAR MIGRAÇÕES (MOVIDO PARA CIMA)
+          # ==========================================
+          echo "🗄️ Executando migrações de banco de dados..."
+          docker exec linkchartapi php /var/www/artisan migrate --force || { echo "❌ migrate falhou"; rollback; }
+          echo "✅ Migrações executadas com sucesso"
+
+          # ==========================================
           # SETUP DE DIRETÓRIOS E PERMISSÕES
           # ==========================================
           echo "🔧 Configurando diretórios e permissões..."
@@ -375,9 +382,6 @@ jobs:
           docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ cache:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan route:clear || { echo "❌ route:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
-
-          # Executar migrações
-          docker exec linkchartapi php /var/www/artisan migrate --force || { echo "❌ migrate falhou"; rollback; }
 
           # Storage link
           docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
