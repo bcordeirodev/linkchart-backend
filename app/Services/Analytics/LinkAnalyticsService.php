@@ -1177,44 +1177,52 @@ class LinkAnalyticsService
         }
 
         // 1. Insight de alcance global
-        if ($uniqueCountries > 10) {
+        if ($uniqueCountries > 2) {
             $insights[] = [
                 'type' => 'geographic',
-                'title' => 'Excelente Alcance Global',
-                'description' => "Seus {$totalLinks} links alcançaram {$uniqueCountries} países diferentes, demonstrando forte penetração internacional.",
-                'priority' => $uniqueCountries > 20 ? 'high' : 'medium',
+                'title' => $uniqueCountries > 10 ? 'Excelente Alcance Global' : 'Bom Alcance Geográfico',
+                'description' => "Seus {$totalLinks} links alcançaram {$uniqueCountries} países diferentes" .
+                    ($uniqueCountries > 10 ? ', demonstrando forte penetração internacional.' : ', mostrando diversificação geográfica.'),
+                'priority' => $uniqueCountries > 10 ? 'high' : 'medium',
                 'actionable' => true,
-                'recommendation' => 'Considere expandir marketing para os países com maior tráfego.',
+                'recommendation' => $uniqueCountries > 10 ?
+                    'Considere expandir marketing para os países com maior tráfego.' :
+                    'Analise quais países geram mais engajamento para focar estratégias.',
                 'confidence' => 0.9,
-                'impact_score' => 9
+                'impact_score' => $uniqueCountries > 10 ? 9 : 7
             ];
         }
 
         // 2. Insight de volume
-        if ($totalClicks > 1000) {
+        if ($totalClicks > 50) {
             $insights[] = [
                 'type' => 'performance',
-                'title' => 'Alto Volume de Tráfego',
-                'description' => "Seus links geraram {$totalClicks} cliques, indicando forte engajamento da audiência.",
-                'priority' => $totalClicks > 10000 ? 'high' : 'medium',
-                'actionable' => false,
+                'title' => $totalClicks > 1000 ? 'Alto Volume de Tráfego' : 'Bom Engajamento',
+                'description' => "Seus links geraram {$totalClicks} cliques" .
+                    ($totalClicks > 1000 ? ', indicando forte engajamento da audiência.' : ', mostrando interesse do público.'),
+                'priority' => $totalClicks > 1000 ? 'high' : 'medium',
+                'actionable' => $totalClicks < 500,
+                'recommendation' => $totalClicks < 500 ? 'Considere otimizar títulos e descrições para aumentar CTR.' : null,
                 'confidence' => 0.95,
-                'impact_score' => $totalClicks > 10000 ? 9 : 7
+                'impact_score' => $totalClicks > 1000 ? 9 : ($totalClicks > 200 ? 7 : 5)
             ];
         }
 
         // 3. Insight de eficiência dos links
-        $avgClicksPerLink = $totalClicks / $totalLinks;
-        if ($avgClicksPerLink > 500) {
+        $avgClicksPerLink = round($totalClicks / $totalLinks, 1);
+        if ($avgClicksPerLink > 10) {
             $insights[] = [
                 'type' => 'optimization',
-                'title' => 'Links Altamente Eficientes',
-                'description' => "Cada link gera em média {$avgClicksPerLink} cliques, demonstrando excelente qualidade de conteúdo.",
-                'priority' => 'medium',
+                'title' => $avgClicksPerLink > 100 ? 'Links Altamente Eficientes' : 'Boa Performance Média',
+                'description' => "Cada link gera em média {$avgClicksPerLink} cliques" .
+                    ($avgClicksPerLink > 100 ? ', demonstrando excelente qualidade de conteúdo.' : ', indicando bom engajamento.'),
+                'priority' => $avgClicksPerLink > 100 ? 'high' : 'medium',
                 'actionable' => true,
                 'confidence' => 0.85,
-                'impact_score' => 8,
-                'recommendation' => 'Replique as estratégias dos links mais bem-sucedidos nos demais.'
+                'impact_score' => $avgClicksPerLink > 100 ? 8 : 6,
+                'recommendation' => $avgClicksPerLink > 100 ?
+                    'Replique as estratégias dos links mais bem-sucedidos nos demais.' :
+                    'Identifique os links com melhor performance e analise seus padrões.'
             ];
         }
 
