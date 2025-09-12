@@ -688,7 +688,353 @@ class LinkAnalyticsService
             }
         }
 
+        // === NOVOS INSIGHTS - ETAPA 3: INSIGHTS ENHANCEMENTS ===
+        
+        // 6. Insight de retenção de visitantes
+        $retentionData = $this->getReturnVisitorRate($linkId);
+        if ($retentionData['total_visitors'] > 0) {
+            $retentionRate = $retentionData['return_visitor_rate'];
+            $benchmark = $retentionData['benchmark_comparison'];
+            
+            $insights[] = [
+                'type' => 'retention',
+                'title' => 'Taxa de Retenção',
+                'description' => "Sua taxa de visitantes recorrentes é {$retentionRate}% ({$benchmark}). " .
+                    ($retentionRate >= 25 
+                        ? "Excelente! Seu conteúdo está gerando lealdade." 
+                        : "Considere estratégias para aumentar o retorno de visitantes."),
+                'priority' => $retentionRate < 15 ? 'high' : ($retentionRate >= 25 ? 'low' : 'medium'),
+                'actionable' => $retentionRate < 25,
+                'confidence' => 0.85,
+                'impact_score' => $retentionRate < 15 ? 8 : 5,
+                'recommendation' => $retentionRate < 25 
+                    ? 'Implemente newsletters, notificações push ou conteúdo serializado.'
+                    : 'Continue criando conteúdo de qualidade para manter a lealdade.',
+                'data_points' => $retentionData
+            ];
+        }
+
+        // 7. Insight de profundidade de sessão
+        $sessionData = $this->getSessionDepthAnalysis($linkId);
+        if ($sessionData['total_sessions'] > 0) {
+            $avgDepth = $sessionData['avg_session_depth'];
+            $quality = $sessionData['session_quality'];
+            $powerUsers = $sessionData['power_users_percentage'];
+            
+            $insights[] = [
+                'type' => 'engagement',
+                'title' => 'Engajamento por Sessão',
+                'description' => "Usuários clicam em média {$avgDepth} vezes por sessão ({$quality}). " .
+                    "{$powerUsers}% são power users (5+ clicks). " .
+                    ($avgDepth >= 2.5 
+                        ? "Ótimo engajamento!" 
+                        : "Há potencial para aumentar o engajamento."),
+                'priority' => $avgDepth < 1.5 ? 'high' : ($avgDepth >= 2.5 ? 'low' : 'medium'),
+                'actionable' => $avgDepth < 2.5,
+                'confidence' => 0.9,
+                'impact_score' => $avgDepth < 1.5 ? 9 : 6,
+                'recommendation' => $avgDepth < 2.5 
+                    ? 'Adicione call-to-actions, links relacionados ou conteúdo interativo.'
+                    : 'Mantenha a qualidade do conteúdo para sustentar o alto engajamento.',
+                'data_points' => $sessionData
+            ];
+        }
+
+        // 8. Insight de fontes de tráfego
+        $trafficData = $this->getTrafficSourceAnalysis($linkId);
+        if (!empty($trafficData['sources'])) {
+            $topSource = $trafficData['top_source'];
+            $diversity = $trafficData['source_diversity'];
+            $recommendations = $trafficData['recommendations'];
+            
+            $diversityMessage = $diversity < 3 
+                ? "Baixa diversidade de fontes ({$diversity}). Risco de dependência." 
+                : "Boa diversidade de fontes ({$diversity}).";
+            
+            $insights[] = [
+                'type' => 'traffic_source',
+                'title' => 'Análise de Fontes',
+                'description' => "Sua principal fonte é '{$topSource['source']}' ({$topSource['percentage']}%). {$diversityMessage}",
+                'priority' => $diversity < 3 ? 'high' : 'medium',
+                'actionable' => !empty($recommendations),
+                'confidence' => 0.8,
+                'impact_score' => $diversity < 3 ? 8 : 5,
+                'recommendation' => !empty($recommendations) 
+                    ? $recommendations[0]['message'] 
+                    : 'Continue monitorando a performance das diferentes fontes.',
+                'data_points' => $trafficData
+            ];
+        }
+
         return $insights;
+    }
+
+    /**
+     * Análise de taxa de visitantes recorrentes - ETAPA 3: INSIGHTS ENHANCEMENTS
+     */
+    private function getReturnVisitorRate(int $linkId): array
+    {
+        $totalClicks = Click::where('link_id', $linkId)->count();
+        
+        if ($totalClicks === 0) {
+            return [
+                'return_visitor_rate' => 0,
+                'new_visitor_rate' => 0,
+                'total_visitors' => 0,
+                'return_visitors' => 0,
+                'new_visitors' => 0,
+                'retention_score' => 0,
+                'benchmark_comparison' => 'insufficient_data'
+            ];
+        }
+
+        // Contar visitantes recorrentes vs novos
+        $returnVisitors = Click::where('link_id', $linkId)
+            ->where('is_return_visitor', true)
+            ->count();
+        
+        $newVisitors = $totalClicks - $returnVisitors;
+        $returnVisitorRate = round(($returnVisitors / $totalClicks) * 100, 2);
+        $newVisitorRate = round(($newVisitors / $totalClicks) * 100, 2);
+
+        // Calcular score de retenção (0-100)
+        $retentionScore = min(100, round($returnVisitorRate * 1.5, 1)); // Peso maior para retenção
+
+        // Comparação com benchmarks da indústria
+        $benchmarkComparison = 'average';
+        if ($returnVisitorRate >= 40) {
+            $benchmarkComparison = 'excellent';
+        } elseif ($returnVisitorRate >= 25) {
+            $benchmarkComparison = 'good';
+        } elseif ($returnVisitorRate >= 15) {
+            $benchmarkComparison = 'average';
+        } else {
+            $benchmarkComparison = 'needs_improvement';
+        }
+
+        return [
+            'return_visitor_rate' => $returnVisitorRate,
+            'new_visitor_rate' => $newVisitorRate,
+            'total_visitors' => $totalClicks,
+            'return_visitors' => $returnVisitors,
+            'new_visitors' => $newVisitors,
+            'retention_score' => $retentionScore,
+            'benchmark_comparison' => $benchmarkComparison
+        ];
+    }
+
+    /**
+     * Análise de profundidade de sessão - ETAPA 3: INSIGHTS ENHANCEMENTS
+     */
+    private function getSessionDepthAnalysis(int $linkId): array
+    {
+        $sessionData = \DB::table('clicks')
+            ->selectRaw('
+                session_clicks,
+                COUNT(*) as users,
+                COUNT(DISTINCT ip) as unique_ips,
+                AVG(CAST(response_time as DECIMAL)) as avg_response_time
+            ')
+            ->where('link_id', $linkId)
+            ->whereNotNull('session_clicks')
+            ->where('session_clicks', '>', 0)
+            ->groupBy('session_clicks')
+            ->orderBy('session_clicks', 'asc')
+            ->get();
+
+        if ($sessionData->isEmpty()) {
+            return [
+                'avg_session_depth' => 0,
+                'max_session_depth' => 0,
+                'session_distribution' => [],
+                'power_users_count' => 0,
+                'engagement_score' => 0,
+                'session_quality' => 'no_data'
+            ];
+        }
+
+        // Calcular métricas de sessão
+        $totalUsers = $sessionData->sum('users');
+        $weightedSum = $sessionData->sum(function ($item) {
+            return $item->session_clicks * $item->users;
+        });
+        
+        $avgSessionDepth = round($weightedSum / $totalUsers, 2);
+        $maxSessionDepth = $sessionData->max('session_clicks');
+        
+        // Power users (sessões com 5+ clicks)
+        $powerUsersCount = $sessionData->where('session_clicks', '>=', 5)->sum('users');
+        
+        // Score de engajamento (0-100)
+        $engagementScore = min(100, round($avgSessionDepth * 20, 1)); // 5 clicks = 100 score
+        
+        // Qualidade da sessão
+        $sessionQuality = 'low';
+        if ($avgSessionDepth >= 4) {
+            $sessionQuality = 'excellent';
+        } elseif ($avgSessionDepth >= 2.5) {
+            $sessionQuality = 'good';
+        } elseif ($avgSessionDepth >= 1.5) {
+            $sessionQuality = 'average';
+        }
+
+        // Distribuição formatada para gráficos
+        $distribution = $sessionData->map(function ($item) use ($totalUsers) {
+            return [
+                'session_clicks' => $item->session_clicks,
+                'users' => $item->users,
+                'percentage' => round(($item->users / $totalUsers) * 100, 1),
+                'avg_response_time' => round($item->avg_response_time ?? 0, 3)
+            ];
+        })->toArray();
+
+        return [
+            'avg_session_depth' => $avgSessionDepth,
+            'max_session_depth' => $maxSessionDepth,
+            'session_distribution' => $distribution,
+            'power_users_count' => $powerUsersCount,
+            'power_users_percentage' => round(($powerUsersCount / $totalUsers) * 100, 1),
+            'engagement_score' => $engagementScore,
+            'session_quality' => $sessionQuality,
+            'total_sessions' => $totalUsers
+        ];
+    }
+
+    /**
+     * Análise de fontes de tráfego - ETAPA 3: INSIGHTS ENHANCEMENTS
+     */
+    private function getTrafficSourceAnalysis(int $linkId): array
+    {
+        $sourceData = \DB::table('clicks')
+            ->selectRaw('
+                COALESCE(click_source, \'direct\') as source,
+                COUNT(*) as clicks,
+                COUNT(DISTINCT ip) as unique_visitors,
+                AVG(CAST(response_time as DECIMAL)) as avg_response_time,
+                AVG(session_clicks) as avg_session_depth
+            ')
+            ->where('link_id', $linkId)
+            ->groupBy('click_source')
+            ->orderBy('clicks', 'desc')
+            ->get();
+
+        if ($sourceData->isEmpty()) {
+            return [
+                'sources' => [],
+                'top_source' => null,
+                'source_diversity' => 0,
+                'channel_performance' => [],
+                'recommendations' => []
+            ];
+        }
+
+        $totalClicks = $sourceData->sum('clicks');
+        
+        // Categorizar fontes em canais
+        $channelMapping = [
+            'social' => ['facebook', 'twitter', 'instagram', 'linkedin', 'tiktok', 'social'],
+            'search' => ['google', 'bing', 'yahoo', 'search', 'organic'],
+            'direct' => ['direct', 'bookmark', 'typed'],
+            'email' => ['email', 'newsletter', 'campaign'],
+            'referral' => ['referral', 'link', 'website'],
+            'paid' => ['ads', 'paid', 'ppc', 'sponsored']
+        ];
+
+        $channelData = [];
+        
+        foreach ($sourceData as $source) {
+            $channel = 'other';
+            $sourceLower = strtolower($source->source);
+            
+            foreach ($channelMapping as $channelName => $keywords) {
+                foreach ($keywords as $keyword) {
+                    if (strpos($sourceLower, $keyword) !== false) {
+                        $channel = $channelName;
+                        break 2;
+                    }
+                }
+            }
+            
+            if (!isset($channelData[$channel])) {
+                $channelData[$channel] = [
+                    'channel' => $channel,
+                    'clicks' => 0,
+                    'unique_visitors' => 0,
+                    'sources' => [],
+                    'avg_response_time' => 0,
+                    'avg_session_depth' => 0
+                ];
+            }
+            
+            $channelData[$channel]['clicks'] += $source->clicks;
+            $channelData[$channel]['unique_visitors'] += $source->unique_visitors;
+            $channelData[$channel]['sources'][] = [
+                'source' => $source->source,
+                'clicks' => $source->clicks,
+                'percentage' => round(($source->clicks / $totalClicks) * 100, 1),
+                'avg_response_time' => round($source->avg_response_time ?? 0, 3),
+                'avg_session_depth' => round($source->avg_session_depth ?? 1, 2)
+            ];
+        }
+
+        // Calcular métricas por canal
+        foreach ($channelData as &$channel) {
+            $channel['percentage'] = round(($channel['clicks'] / $totalClicks) * 100, 1);
+            $channel['avg_response_time'] = round(
+                array_sum(array_column($channel['sources'], 'avg_response_time')) / count($channel['sources']), 3
+            );
+            $channel['avg_session_depth'] = round(
+                array_sum(array_column($channel['sources'], 'avg_session_depth')) / count($channel['sources']), 2
+            );
+        }
+
+        // Ordenar por performance
+        uasort($channelData, function ($a, $b) {
+            return $b['clicks'] <=> $a['clicks'];
+        });
+
+        $topSource = $sourceData->first();
+        $sourceDiversity = count($sourceData); // Número de fontes diferentes
+
+        // Gerar recomendações baseadas nos dados
+        $recommendations = [];
+        
+        if (isset($channelData['social']) && $channelData['social']['percentage'] > 50) {
+            $recommendations[] = [
+                'type' => 'optimization',
+                'message' => 'Alto tráfego social. Considere diversificar com SEO e email marketing.',
+                'priority' => 'medium'
+            ];
+        }
+        
+        if (isset($channelData['direct']) && $channelData['direct']['percentage'] > 70) {
+            $recommendations[] = [
+                'type' => 'growth',
+                'message' => 'Tráfego muito direto. Explore campanhas em redes sociais para ampliar alcance.',
+                'priority' => 'high'
+            ];
+        }
+
+        if ($sourceDiversity < 3) {
+            $recommendations[] = [
+                'type' => 'diversification',
+                'message' => 'Baixa diversidade de fontes. Considere múltiplos canais para reduzir riscos.',
+                'priority' => 'high'
+            ];
+        }
+
+        return [
+            'sources' => array_values($sourceData->toArray()),
+            'channels' => array_values($channelData),
+            'top_source' => $topSource ? [
+                'source' => $topSource->source,
+                'clicks' => $topSource->clicks,
+                'percentage' => round(($topSource->clicks / $totalClicks) * 100, 1)
+            ] : null,
+            'source_diversity' => $sourceDiversity,
+            'total_clicks' => $totalClicks,
+            'recommendations' => $recommendations
+        ];
     }
 
     private function getLinkInfo(Link $link): array
@@ -1016,10 +1362,45 @@ class LinkAnalyticsService
         $hasClicks = Click::where('link_id', $linkId)->exists();
 
         if (!$hasClicks) {
-            return [];
+            return [
+                'insights' => [],
+                'summary' => [
+                    'total_insights' => 0,
+                    'high_priority' => 0,
+                    'actionable_insights' => 0,
+                    'avg_confidence' => 0
+                ],
+                'analytics_data' => [
+                    'retention' => $this->getReturnVisitorRate($linkId),
+                    'session_depth' => $this->getSessionDepthAnalysis($linkId),
+                    'traffic_sources' => $this->getTrafficSourceAnalysis($linkId)
+                ],
+                'generated_at' => now()->toISOString()
+            ];
         }
 
-        return $this->generateBusinessInsightsOptimized($linkId);
+        // Gerar insights principais
+        $insights = $this->generateBusinessInsightsOptimized($linkId);
+        
+        // Obter dados analíticos estruturados
+        $analyticsData = [
+            'retention' => $this->getReturnVisitorRate($linkId),
+            'session_depth' => $this->getSessionDepthAnalysis($linkId),
+            'traffic_sources' => $this->getTrafficSourceAnalysis($linkId)
+        ];
+
+        return [
+            'insights' => $insights,
+            'summary' => [
+                'total_insights' => count($insights),
+                'high_priority' => count(array_filter($insights, fn($i) => $i['priority'] === 'high')),
+                'actionable_insights' => count(array_filter($insights, fn($i) => $i['actionable'])),
+                'avg_confidence' => count($insights) > 0 ?
+                    round(array_sum(array_column($insights, 'confidence')) / count($insights), 2) : 0
+            ],
+            'analytics_data' => $analyticsData,
+            'generated_at' => now()->toISOString()
+        ];
     }
 
     /**
