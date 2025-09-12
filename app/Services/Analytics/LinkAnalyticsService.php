@@ -689,25 +689,25 @@ class LinkAnalyticsService
         }
 
         // === NOVOS INSIGHTS - ETAPA 3: INSIGHTS ENHANCEMENTS ===
-        
+
         // 6. Insight de retenção de visitantes
         $retentionData = $this->getReturnVisitorRate($linkId);
         if ($retentionData['total_visitors'] > 0) {
             $retentionRate = $retentionData['return_visitor_rate'];
             $benchmark = $retentionData['benchmark_comparison'];
-            
+
             $insights[] = [
                 'type' => 'retention',
                 'title' => 'Taxa de Retenção',
                 'description' => "Sua taxa de visitantes recorrentes é {$retentionRate}% ({$benchmark}). " .
-                    ($retentionRate >= 25 
-                        ? "Excelente! Seu conteúdo está gerando lealdade." 
+                    ($retentionRate >= 25
+                        ? "Excelente! Seu conteúdo está gerando lealdade."
                         : "Considere estratégias para aumentar o retorno de visitantes."),
                 'priority' => $retentionRate < 15 ? 'high' : ($retentionRate >= 25 ? 'low' : 'medium'),
                 'actionable' => $retentionRate < 25,
                 'confidence' => 0.85,
                 'impact_score' => $retentionRate < 15 ? 8 : 5,
-                'recommendation' => $retentionRate < 25 
+                'recommendation' => $retentionRate < 25
                     ? 'Implemente newsletters, notificações push ou conteúdo serializado.'
                     : 'Continue criando conteúdo de qualidade para manter a lealdade.',
                 'data_points' => $retentionData
@@ -720,20 +720,20 @@ class LinkAnalyticsService
             $avgDepth = $sessionData['avg_session_depth'];
             $quality = $sessionData['session_quality'];
             $powerUsers = $sessionData['power_users_percentage'];
-            
+
             $insights[] = [
                 'type' => 'engagement',
                 'title' => 'Engajamento por Sessão',
                 'description' => "Usuários clicam em média {$avgDepth} vezes por sessão ({$quality}). " .
                     "{$powerUsers}% são power users (5+ clicks). " .
-                    ($avgDepth >= 2.5 
-                        ? "Ótimo engajamento!" 
+                    ($avgDepth >= 2.5
+                        ? "Ótimo engajamento!"
                         : "Há potencial para aumentar o engajamento."),
                 'priority' => $avgDepth < 1.5 ? 'high' : ($avgDepth >= 2.5 ? 'low' : 'medium'),
                 'actionable' => $avgDepth < 2.5,
                 'confidence' => 0.9,
                 'impact_score' => $avgDepth < 1.5 ? 9 : 6,
-                'recommendation' => $avgDepth < 2.5 
+                'recommendation' => $avgDepth < 2.5
                     ? 'Adicione call-to-actions, links relacionados ou conteúdo interativo.'
                     : 'Mantenha a qualidade do conteúdo para sustentar o alto engajamento.',
                 'data_points' => $sessionData
@@ -746,11 +746,11 @@ class LinkAnalyticsService
             $topSource = $trafficData['top_source'];
             $diversity = $trafficData['source_diversity'];
             $recommendations = $trafficData['recommendations'];
-            
-            $diversityMessage = $diversity < 3 
-                ? "Baixa diversidade de fontes ({$diversity}). Risco de dependência." 
+
+            $diversityMessage = $diversity < 3
+                ? "Baixa diversidade de fontes ({$diversity}). Risco de dependência."
                 : "Boa diversidade de fontes ({$diversity}).";
-            
+
             $insights[] = [
                 'type' => 'traffic_source',
                 'title' => 'Análise de Fontes',
@@ -759,8 +759,8 @@ class LinkAnalyticsService
                 'actionable' => !empty($recommendations),
                 'confidence' => 0.8,
                 'impact_score' => $diversity < 3 ? 8 : 5,
-                'recommendation' => !empty($recommendations) 
-                    ? $recommendations[0]['message'] 
+                'recommendation' => !empty($recommendations)
+                    ? $recommendations[0]['message']
                     : 'Continue monitorando a performance das diferentes fontes.',
                 'data_points' => $trafficData
             ];
@@ -775,7 +775,7 @@ class LinkAnalyticsService
     private function getReturnVisitorRate(int $linkId): array
     {
         $totalClicks = Click::where('link_id', $linkId)->count();
-        
+
         if ($totalClicks === 0) {
             return [
                 'return_visitor_rate' => 0,
@@ -792,7 +792,7 @@ class LinkAnalyticsService
         $returnVisitors = Click::where('link_id', $linkId)
             ->where('is_return_visitor', true)
             ->count();
-        
+
         $newVisitors = $totalClicks - $returnVisitors;
         $returnVisitorRate = round(($returnVisitors / $totalClicks) * 100, 2);
         $newVisitorRate = round(($newVisitors / $totalClicks) * 100, 2);
@@ -858,16 +858,16 @@ class LinkAnalyticsService
         $weightedSum = $sessionData->sum(function ($item) {
             return $item->session_clicks * $item->users;
         });
-        
+
         $avgSessionDepth = round($weightedSum / $totalUsers, 2);
         $maxSessionDepth = $sessionData->max('session_clicks');
-        
+
         // Power users (sessões com 5+ clicks)
         $powerUsersCount = $sessionData->where('session_clicks', '>=', 5)->sum('users');
-        
+
         // Score de engajamento (0-100)
         $engagementScore = min(100, round($avgSessionDepth * 20, 1)); // 5 clicks = 100 score
-        
+
         // Qualidade da sessão
         $sessionQuality = 'low';
         if ($avgSessionDepth >= 4) {
@@ -929,7 +929,7 @@ class LinkAnalyticsService
         }
 
         $totalClicks = $sourceData->sum('clicks');
-        
+
         // Categorizar fontes em canais
         $channelMapping = [
             'social' => ['facebook', 'twitter', 'instagram', 'linkedin', 'tiktok', 'social'],
@@ -941,11 +941,11 @@ class LinkAnalyticsService
         ];
 
         $channelData = [];
-        
+
         foreach ($sourceData as $source) {
             $channel = 'other';
             $sourceLower = strtolower($source->source);
-            
+
             foreach ($channelMapping as $channelName => $keywords) {
                 foreach ($keywords as $keyword) {
                     if (strpos($sourceLower, $keyword) !== false) {
@@ -954,7 +954,7 @@ class LinkAnalyticsService
                     }
                 }
             }
-            
+
             if (!isset($channelData[$channel])) {
                 $channelData[$channel] = [
                     'channel' => $channel,
@@ -965,7 +965,7 @@ class LinkAnalyticsService
                     'avg_session_depth' => 0
                 ];
             }
-            
+
             $channelData[$channel]['clicks'] += $source->clicks;
             $channelData[$channel]['unique_visitors'] += $source->unique_visitors;
             $channelData[$channel]['sources'][] = [
@@ -998,7 +998,7 @@ class LinkAnalyticsService
 
         // Gerar recomendações baseadas nos dados
         $recommendations = [];
-        
+
         if (isset($channelData['social']) && $channelData['social']['percentage'] > 50) {
             $recommendations[] = [
                 'type' => 'optimization',
@@ -1006,7 +1006,7 @@ class LinkAnalyticsService
                 'priority' => 'medium'
             ];
         }
-        
+
         if (isset($channelData['direct']) && $channelData['direct']['percentage'] > 70) {
             $recommendations[] = [
                 'type' => 'growth',
@@ -1381,7 +1381,7 @@ class LinkAnalyticsService
 
         // Gerar insights principais
         $insights = $this->generateBusinessInsightsOptimized($linkId);
-        
+
         // Obter dados analíticos estruturados
         $analyticsData = [
             'retention' => $this->getReturnVisitorRate($linkId),
