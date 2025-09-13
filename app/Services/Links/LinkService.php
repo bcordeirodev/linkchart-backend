@@ -5,6 +5,7 @@ namespace App\Services\Links;
 use App\Contracts\Repositories\LinkRepositoryInterface;
 use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreateLinkDTO;
+use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
 use Illuminate\Database\Eloquent\Collection;
@@ -120,6 +121,35 @@ class LinkService implements LinkServiceInterface
         $this->linkRepository->incrementClicks($slug);
 
         return $link->original_url;
+    }
+
+    /**
+     * Cria um novo link público encurtado (sem usuário).
+     */
+    public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link
+    {
+        // Validação de negócio
+        if (!$linkDTO->isValidUrl()) {
+            throw new \InvalidArgumentException('URL inválida fornecida.');
+        }
+
+        if (!$linkDTO->hasValidData()) {
+            throw new \InvalidArgumentException('Dados insuficientes para criar o link.');
+        }
+
+        $data = $linkDTO->toArray();
+
+        // Gera slug único se não fornecido
+        if (empty($data['slug'])) {
+            $data['slug'] = $this->generateUniqueSlug();
+        } elseif ($this->linkRepository->slugExists($data['slug'])) {
+            throw new \InvalidArgumentException('Slug personalizado já está em uso.');
+        }
+
+        // Garante que user_id seja null para links públicos
+        $data['user_id'] = null;
+
+        return $this->linkRepository->create($data);
     }
 
     /**

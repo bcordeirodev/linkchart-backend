@@ -28,12 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
         ]);
 
-        // Aplicar middlewares globalmente para rotas API
-        $middleware->api([
-            // MetricsCollector removido - deve estar apenas na rota /r/{slug}
-        ]);
-
-        // CORS básico do Laravel apenas para API
+        // Aplicar CORS padrão do Laravel para todas as requisições API
         $middleware->api([
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);

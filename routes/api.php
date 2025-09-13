@@ -4,6 +4,7 @@ use App\Http\Controllers\Analytics\ChartController;
 use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Analytics\MetricsController;
 use App\Http\Controllers\Links\LinkController;
+use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\RedirectController;
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,19 @@ use Illuminate\Support\Facades\Route;
  */
 Route::middleware(['metrics.redirect'])
     ->get('/r/{slug}', [RedirectController::class, 'handle']);
+
+
+/**
+ * ==============================
+ * ROTAS PÚBLICAS DE ENCURTAMENTO
+ * ==============================
+ * Endpoints para encurtamento de URLs sem autenticação
+ */
+Route::prefix('public')->controller(PublicLinkController::class)->group(function () {
+    Route::post('/shorten', 'store');                           // ✅ NOVO: Encurtamento público
+    Route::get('/link/{slug}', 'showBySlug');                   // ✅ NOVO: Informações básicas do link
+    Route::get('/analytics/{slug}', 'basicAnalytics');          // ✅ NOVO: Analytics básicos públicos
+});
 
 /**
  * ==============================
