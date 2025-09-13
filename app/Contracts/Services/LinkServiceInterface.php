@@ -3,6 +3,7 @@
 namespace App\Contracts\Services;
 
 use App\DTOs\CreateLinkDTO;
+use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
 use Illuminate\Database\Eloquent\Collection;
@@ -62,6 +63,14 @@ interface LinkServiceInterface
      * @return string|null URL original ou null se não encontrado
      */
     public function processRedirect(string $slug): ?string;
+
+    /**
+     * Cria um novo link público encurtado (sem usuário).
+     *
+     * @param CreatePublicLinkDTO $linkDTO
+     * @return Link
+     */
+    public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link;
 
     /**
      * Gera um slug único para o link.
