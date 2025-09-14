@@ -27,7 +27,7 @@ class PublicLinkResource extends JsonResource
             'slug' => $this->slug,
             'title' => $this->title,
             'original_url' => $this->original_url,
-            'short_url' => config('app.url') . '/r/' . $this->slug,
+            'short_url' => $this->getShortedUrl(),
             'clicks' => $this->clicks,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at,
