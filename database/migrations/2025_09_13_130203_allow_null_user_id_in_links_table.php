@@ -12,8 +12,23 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('links', function (Blueprint $table) {
-            // Remove a constraint de foreign key
-            $table->dropForeign(['user_id']);
+            // Verificar se a foreign key existe antes de tentar remover
+            $foreignKeys = Schema::getConnection()
+                ->getDoctrineSchemaManager()
+                ->listTableForeignKeys('links');
+
+            $userIdForeignKeyExists = false;
+            foreach ($foreignKeys as $foreignKey) {
+                if (in_array('user_id', $foreignKey->getLocalColumns())) {
+                    $userIdForeignKeyExists = true;
+                    break;
+                }
+            }
+
+            // Remove a constraint de foreign key apenas se existir
+            if ($userIdForeignKeyExists) {
+                $table->dropForeign(['user_id']);
+            }
 
             // Modifica a coluna para permitir null
             $table->unsignedBigInteger('user_id')->nullable()->change();
