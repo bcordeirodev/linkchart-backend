@@ -113,14 +113,81 @@ class PublicLinkController extends Controller
                 return response()->json(['message' => 'Link não encontrado.'], 404);
             }
 
-            // Retorna apenas métricas básicas públicas
-            return response()->json([
+            $basicData = [
                 'total_clicks' => $link->clicks,
                 'created_at' => $link->created_at,
                 'is_active' => $link->is_active,
-                'short_url' => config('app.url') . '/r/' . $link->slug,
+                'short_url' => $link->getShortedUrl(),
                 'has_analytics' => $link->clicks > 0
-            ]);
+            ];
+
+            // Se há cliques, incluir dados básicos de gráficos
+            if ($link->clicks > 0) {
+                // Top 5 países
+                $topCountries = \App\Models\Click::where('link_id', $link->id)
+                    ->select('country', \DB::raw('count(*) as clicks'))
+                    ->groupBy('country')
+                    ->orderBy('clicks', 'desc')
+                    ->limit(5)
+                    ->get()
+                    ->map(function ($item) {
+                        return [
+                            'country' => $item->country,
+                            'clicks' => (int) $item->clicks
+                        ];
+                    });
+
+                // Distribuição por dispositivos
+                $deviceBreakdown = \App\Models\Click::where('link_id', $link->id)
+                    ->select('device', \DB::raw('count(*) as clicks'))
+                    ->groupBy('device')
+                    ->orderBy('clicks', 'desc')
+                    ->get()
+                    ->map(function ($item) {
+                        return [
+                            'device' => ucfirst($item->device),
+                            'clicks' => (int) $item->clicks
+                        ];
+                    });
+
+                // Cliques por hora do dia (últimos 7 dias)
+                $clicksByHour = \App\Models\Click::where('link_id', $link->id)
+                    ->where('created_at', '>=', now()->subDays(7))
+                    ->select(\DB::raw('EXTRACT(HOUR FROM created_at) as hour'), \DB::raw('count(*) as clicks'))
+                    ->groupBy('hour')
+                    ->orderBy('hour')
+                    ->get()
+                    ->map(function ($item) {
+                        return [
+                            'hour' => (int) $item->hour,
+                            'clicks' => (int) $item->clicks
+                        ];
+                    });
+
+                // Preencher horas faltantes com 0
+                $hourlyData = [];
+                for ($i = 0; $i < 24; $i++) {
+                    $hourData = $clicksByHour->firstWhere('hour', $i);
+                    $hourlyData[] = [
+                        'hour' => $i,
+                        'clicks' => $hourData ? $hourData['clicks'] : 0
+                    ];
+                }
+
+                $basicData['charts'] = [
+                    'geographic' => [
+                        'top_countries' => $topCountries
+                    ],
+                    'audience' => [
+                        'device_breakdown' => $deviceBreakdown
+                    ],
+                    'temporal' => [
+                        'clicks_by_hour' => $hourlyData
+                    ]
+                ];
+            }
+
+            return response()->json($basicData);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics básicos.',
