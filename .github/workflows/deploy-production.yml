@@ -332,11 +332,42 @@ jobs:
           sleep 15
 
           # ==========================================
-          # EXECUTAR MIGRAÇÕES (MOVIDO PARA CIMA)
+          # EXECUTAR MIGRAÇÕES (COM ERROR HANDLING ROBUSTO)
           # ==========================================
           echo "🗄️ Executando migrações de banco de dados..."
-          docker exec linkchartapi php /var/www/artisan migrate --force || { echo "❌ migrate falhou"; rollback; }
-          echo "✅ Migrações executadas com sucesso"
+
+          # Verificar status das migrations primeiro
+          echo "📋 Verificando status das migrations..."
+          docker exec linkchartapi php /var/www/artisan migrate:status || { echo "❌ migrate:status falhou"; rollback; }
+
+          # Executar migrations com retry logic
+          echo "🔄 Executando migrations..."
+          MIGRATION_SUCCESS=false
+          for attempt in {1..3}; do
+            echo "🔄 Tentativa de migration $attempt/3..."
+            if docker exec linkchartapi php /var/www/artisan migrate --force; then
+              echo "✅ Migrations executadas com sucesso na tentativa $attempt"
+              MIGRATION_SUCCESS=true
+              break
+            else
+              echo "⚠️ Migration falhou na tentativa $attempt"
+              if [ $attempt -lt 3 ]; then
+                echo "⏳ Aguardando 10s antes da próxima tentativa..."
+                sleep 10
+              fi
+            fi
+          done
+
+          if [ "$MIGRATION_SUCCESS" = false ]; then
+            echo "❌ Migrations falharam após 3 tentativas"
+            echo "📋 Verificando logs do Laravel..."
+            docker logs linkchartapi --tail 20
+            rollback
+          fi
+
+          # Verificar status final das migrations
+          echo "📋 Verificando status final das migrations..."
+          docker exec linkchartapi php /var/www/artisan migrate:status
 
           # ==========================================
           # SETUP DE DIRETÓRIOS E PERMISSÕES

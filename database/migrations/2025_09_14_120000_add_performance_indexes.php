@@ -14,39 +14,59 @@ return new class extends Migration
     {
         // Índices para tabela clicks (analytics)
         Schema::table('clicks', function (Blueprint $table) {
-            // Índice composto para queries de analytics por link
-            $table->index(['link_id', 'created_at'], 'idx_clicks_link_date');
+            // Verificar se índices já existem antes de criar
+            $indexes = Schema::getConnection()
+                ->getDoctrineSchemaManager()
+                ->listTableIndexes('clicks');
+
+            // Índice composto para queries de analytics por link (temporal)
+            if (!isset($indexes['idx_clicks_link_date'])) {
+                $table->index(['link_id', 'created_at'], 'idx_clicks_link_date');
+            }
 
             // Índice para queries geográficas
-            $table->index(['link_id', 'country', 'city'], 'idx_clicks_geo');
-
-            // Índice para queries temporais
-            $table->index(['link_id', 'created_at'], 'idx_clicks_temporal');
+            if (!isset($indexes['idx_clicks_geo'])) {
+                $table->index(['link_id', 'country', 'city'], 'idx_clicks_geo');
+            }
 
             // Índice para user agent analytics
-            $table->index(['link_id', 'user_agent'], 'idx_clicks_user_agent');
+            if (!isset($indexes['idx_clicks_user_agent'])) {
+                $table->index(['link_id', 'user_agent'], 'idx_clicks_user_agent');
+            }
 
             // Índice para referer analytics
-            $table->index(['link_id', 'referer'], 'idx_clicks_referer');
+            if (!isset($indexes['idx_clicks_referer'])) {
+                $table->index(['link_id', 'referer'], 'idx_clicks_referer');
+            }
         });
 
         // Índices para tabela links
         Schema::table('links', function (Blueprint $table) {
-            // Índice composto para queries do usuário
-            $table->index(['user_id', 'is_active', 'created_at'], 'idx_links_user_active');
+            $indexes = Schema::getConnection()
+                ->getDoctrineSchemaManager()
+                ->listTableIndexes('links');
 
-            // Nota: slug unique index já deve existir, pulando
+            // Índice composto para queries do usuário
+            if (!isset($indexes['idx_links_user_active'])) {
+                $table->index(['user_id', 'is_active', 'created_at'], 'idx_links_user_active');
+            }
 
             // Índice para queries de expiração
-            $table->index(['expires_at', 'is_active'], 'idx_links_expiration');
+            if (!isset($indexes['idx_links_expiration'])) {
+                $table->index(['expires_at', 'is_active'], 'idx_links_expiration');
+            }
         });
 
         // Índices para tabela users
         Schema::table('users', function (Blueprint $table) {
-            // Nota: email unique index já deve existir, pulando
+            $indexes = Schema::getConnection()
+                ->getDoctrineSchemaManager()
+                ->listTableIndexes('users');
 
             // Índice para queries de criação
-            $table->index('created_at', 'idx_users_created_at');
+            if (!isset($indexes['idx_users_created_at'])) {
+                $table->index('created_at', 'idx_users_created_at');
+            }
         });
 
         // Otimizações básicas - sem comandos problemáticos

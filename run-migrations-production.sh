@@ -33,7 +33,7 @@ ssh -o StrictHostKeyChecking=no root@$DEPLOY_HOST << 'ENDSSH'
 
     echo ""
     echo "✅ Verificando estrutura da tabela clicks..."
-    docker exec linkchartdb psql -U linkchartuser -d linkchartdb -c "\d clicks" | head -20
+    docker exec linkchartdb psql -U linkchartuser -d linkchartprod -c "\d clicks" | head -20
 
     echo ""
     echo "🧹 Limpando cache..."
