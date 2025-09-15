@@ -14,28 +14,28 @@ return new class extends Migration
     {
         // Versão simplificada sem Doctrine DBAL
         // Usar SQL direto para PostgreSQL
-        
+
         // 1. Remover constraint de foreign key se existir
         DB::statement('
-            DO $$ 
+            DO $$
             BEGIN
                 IF EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints 
-                    WHERE constraint_name LIKE \'%links_user_id_foreign%\' 
+                    SELECT 1 FROM information_schema.table_constraints
+                    WHERE constraint_name LIKE \'%links_user_id_foreign%\'
                     AND table_name = \'links\'
                 ) THEN
                     ALTER TABLE links DROP CONSTRAINT links_user_id_foreign;
                 END IF;
             END $$;
         ');
-        
+
         // 2. Alterar coluna para permitir NULL
         DB::statement('ALTER TABLE links ALTER COLUMN user_id DROP NOT NULL');
-        
+
         // 3. Recriar foreign key constraint
         DB::statement('
-            ALTER TABLE links 
-            ADD CONSTRAINT links_user_id_foreign 
+            ALTER TABLE links
+            ADD CONSTRAINT links_user_id_foreign
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ');
     }
@@ -47,25 +47,25 @@ return new class extends Migration
     {
         // Remover constraint
         DB::statement('
-            DO $$ 
+            DO $$
             BEGIN
                 IF EXISTS (
-                    SELECT 1 FROM information_schema.table_constraints 
-                    WHERE constraint_name = \'links_user_id_foreign\' 
+                    SELECT 1 FROM information_schema.table_constraints
+                    WHERE constraint_name = \'links_user_id_foreign\'
                     AND table_name = \'links\'
                 ) THEN
                     ALTER TABLE links DROP CONSTRAINT links_user_id_foreign;
                 END IF;
             END $$;
         ');
-        
+
         // Alterar coluna para NOT NULL (cuidado: pode falhar se houver dados NULL)
         DB::statement('ALTER TABLE links ALTER COLUMN user_id SET NOT NULL');
-        
+
         // Recriar foreign key
         DB::statement('
-            ALTER TABLE links 
-            ADD CONSTRAINT links_user_id_foreign 
+            ALTER TABLE links
+            ADD CONSTRAINT links_user_id_foreign
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         ');
     }
