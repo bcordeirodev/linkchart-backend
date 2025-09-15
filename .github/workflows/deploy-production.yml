@@ -331,43 +331,6 @@ jobs:
           # Aguardar PHP-FPM e Nginx estarem prontos
           sleep 15
 
-          # ==========================================
-          # EXECUTAR MIGRAÇÕES (COM ERROR HANDLING ROBUSTO)
-          # ==========================================
-          echo "🗄️ Executando migrações de banco de dados..."
-
-          # Verificar status das migrations primeiro
-          echo "📋 Verificando status das migrations..."
-          docker exec linkchartapi php /var/www/artisan migrate:status || { echo "❌ migrate:status falhou"; rollback; }
-
-          # Executar migrations com retry logic
-          echo "🔄 Executando migrations..."
-          MIGRATION_SUCCESS=false
-          for attempt in {1..3}; do
-            echo "🔄 Tentativa de migration $attempt/3..."
-            if docker exec linkchartapi php /var/www/artisan migrate --force; then
-              echo "✅ Migrations executadas com sucesso na tentativa $attempt"
-              MIGRATION_SUCCESS=true
-              break
-            else
-              echo "⚠️ Migration falhou na tentativa $attempt"
-              if [ $attempt -lt 3 ]; then
-                echo "⏳ Aguardando 10s antes da próxima tentativa..."
-                sleep 10
-              fi
-            fi
-          done
-
-          if [ "$MIGRATION_SUCCESS" = false ]; then
-            echo "❌ Migrations falharam após 3 tentativas"
-            echo "📋 Verificando logs do Laravel..."
-            docker logs linkchartapi --tail 20
-            rollback
-          fi
-
-          # Verificar status final das migrations
-          echo "📋 Verificando status final das migrations..."
-          docker exec linkchartapi php /var/www/artisan migrate:status
 
           # ==========================================
           # SETUP DE DIRETÓRIOS E PERMISSÕES
@@ -466,6 +429,59 @@ jobs:
 
           docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan view:cache || { echo "❌ view:cache falhou"; rollback; }
+
+          # ==========================================
+          # EXECUTAR MIGRAÇÕES (ORDEM CORRETA - APÓS CONFIGURAÇÃO COMPLETA)
+          # ==========================================
+          echo "🗄️ Executando migrações de banco de dados (APÓS configuração completa)..."
+
+          # Aguardar mais um pouco para garantir estabilidade total
+          sleep 10
+
+          # Verificar status das migrations primeiro
+          echo "📋 Verificando status das migrations..."
+          docker exec linkchartapi php /var/www/artisan migrate:status || { echo "❌ migrate:status falhou"; rollback; }
+
+          # Executar migrations com retry logic melhorado
+          echo "🔄 Executando migrations..."
+          MIGRATION_SUCCESS=false
+          for attempt in {1..5}; do
+            echo "🔄 Tentativa de migration $attempt/5..."
+
+            # Aguardar entre tentativas (exceto primeira)
+            if [ $attempt -gt 1 ]; then
+              wait_time=$((10 * attempt))
+              echo "⏳ Aguardando ${wait_time}s antes da tentativa $attempt..."
+              sleep $wait_time
+            fi
+
+            if docker exec linkchartapi php /var/www/artisan migrate --force; then
+              echo "✅ Migrations executadas com sucesso na tentativa $attempt"
+              MIGRATION_SUCCESS=true
+              break
+            else
+              echo "⚠️ Migration falhou na tentativa $attempt"
+              if [ $attempt -lt 5 ]; then
+                echo "🔄 Tentando novamente..."
+                # Mostrar logs para debug
+                echo "📋 Últimas linhas do log Laravel:"
+                docker logs linkchartapi --tail 10 2>/dev/null || echo "Não foi possível obter logs"
+              fi
+            fi
+          done
+
+          if [ "$MIGRATION_SUCCESS" = false ]; then
+            echo "❌ ERRO CRÍTICO: Migrations falharam após 5 tentativas"
+            echo "📋 Verificando logs do Laravel..."
+            docker logs linkchartapi --tail 30
+            rollback
+          fi
+
+          # Verificar status final das migrations
+          echo "📋 Verificando status final das migrations..."
+          docker exec linkchartapi php /var/www/artisan migrate:status
+
+          echo "🎉 MIGRATIONS EXECUTADAS COM SUCESSO!"
 
           # ==========================================
           # VERIFICAÇÕES DE INTEGRIDADE
