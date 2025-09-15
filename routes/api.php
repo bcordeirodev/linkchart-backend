@@ -22,6 +22,40 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['metrics.redirect'])
     ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
+// ROTA DE TESTE TEMPORÁRIA - REMOVER APÓS DEBUG
+Route::get('/test-redirect/{slug}', function ($slug) {
+    try {
+        $link = \App\Models\Link::where('slug', $slug)
+                              ->where('is_active', true)
+                              ->first();
+
+        if (!$link) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Link não encontrado',
+                'debug' => 'Link with slug ' . $slug . ' not found or inactive'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'redirect_url' => $link->original_url,
+            'title' => $link->title,
+            'slug' => $link->slug,
+            'debug' => 'Test endpoint working - no middleware or services'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Erro interno',
+            'debug' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ], 500);
+    }
+});
+
 
 /**
  * ==============================
