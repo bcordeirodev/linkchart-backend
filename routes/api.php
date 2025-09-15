@@ -19,8 +19,7 @@ use Illuminate\Support\Facades\Route;
  * - Retorna JSON com URL original para frontend redirecionar
  * - Middleware específico para coleta completa de dados
  */
-Route::middleware(['metrics.redirect'])
-    ->get('/r/{slug}', [RedirectController::class, 'handle']);
+Route::get('/r/{slug}', [RedirectController::class, 'handle']);
 
 /**
  * ==============================
