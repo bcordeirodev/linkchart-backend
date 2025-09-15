@@ -13,10 +13,10 @@ return new class extends Migration
     {
         // Índices para tabela clicks (analytics) - usando SQL direto
         $clicksIndexes = [
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clicks_link_date ON clicks (link_id, created_at)',
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clicks_geo ON clicks (link_id, country, city)',
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clicks_user_agent ON clicks (link_id, user_agent)',
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_clicks_referer ON clicks (link_id, referer)'
+            'CREATE INDEX IF NOT EXISTS idx_clicks_link_date ON clicks (link_id, created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_clicks_geo ON clicks (link_id, country, city)',
+            'CREATE INDEX IF NOT EXISTS idx_clicks_user_agent ON clicks (link_id, user_agent)',
+            'CREATE INDEX IF NOT EXISTS idx_clicks_referer ON clicks (link_id, referer)'
         ];
 
         foreach ($clicksIndexes as $sql) {
@@ -32,8 +32,8 @@ return new class extends Migration
 
         // Índices para tabela links - usando SQL direto
         $linksIndexes = [
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_links_user_active ON links (user_id, is_active, created_at)',
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_links_expiration ON links (expires_at, is_active)'
+            'CREATE INDEX IF NOT EXISTS idx_links_user_active ON links (user_id, is_active, created_at)',
+            'CREATE INDEX IF NOT EXISTS idx_links_expiration ON links (expires_at, is_active)'
         ];
 
         foreach ($linksIndexes as $sql) {
@@ -49,7 +49,7 @@ return new class extends Migration
 
         // Índices para tabela users - usando SQL direto
         $usersIndexes = [
-            'CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_created_at ON users (created_at)'
+            'CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at)'
         ];
 
         foreach ($usersIndexes as $sql) {
@@ -70,13 +70,13 @@ return new class extends Migration
     public function down()
     {
         $indexes = [
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_clicks_link_date',
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_clicks_geo',
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_clicks_user_agent',
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_clicks_referer',
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_links_user_active',
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_links_expiration',
-            'DROP INDEX CONCURRENTLY IF EXISTS idx_users_created_at'
+            'DROP INDEX IF EXISTS idx_clicks_link_date',
+            'DROP INDEX IF EXISTS idx_clicks_geo',
+            'DROP INDEX IF EXISTS idx_clicks_user_agent',
+            'DROP INDEX IF EXISTS idx_clicks_referer',
+            'DROP INDEX IF EXISTS idx_links_user_active',
+            'DROP INDEX IF EXISTS idx_links_expiration',
+            'DROP INDEX IF EXISTS idx_users_created_at'
         ];
 
         foreach ($indexes as $sql) {
