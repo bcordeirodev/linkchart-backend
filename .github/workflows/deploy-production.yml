@@ -484,6 +484,28 @@ jobs:
           echo "🎉 MIGRATIONS EXECUTADAS COM SUCESSO!"
 
           # ==========================================
+          # CORREÇÃO FINAL DE PERMISSÕES (APÓS MIGRATIONS)
+          # ==========================================
+          echo "🔧 Aplicando correção final de permissões nos logs..."
+
+          # Corrigir permissões dos logs que podem ter sido criados durante migrations
+          # COMANDO TESTADO E APROVADO PELO USUÁRIO:
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs || echo "⚠️ Aviso: chown logs falhou"
+          docker exec linkchartapi chmod -R 775 /var/www/storage/logs || echo "⚠️ Aviso: chmod logs falhou"
+          docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || echo "⚠️ Aviso: chmod arquivos log falhou"
+
+          # Testar se o sistema de logs funciona
+          echo "🧪 Testando sistema de logs após migrations..."
+          docker exec linkchartapi php -r "file_put_contents('/var/www/storage/logs/deploy-test.log', 'Deploy test: ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND);" || {
+            echo "❌ ERRO: Sistema de logs não funciona após migrations"
+            echo "🔧 Aplicando correção emergencial..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
+          }
+
+          echo "✅ Correção final de permissões concluída!"
+
+          # ==========================================
           # VERIFICAÇÕES DE INTEGRIDADE
           # ==========================================
           echo "🧪 Verificações de integridade..."

@@ -79,23 +79,18 @@ class RedirectController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // LOG DETALHADO PARA DEBUG
+            // Log do erro para debugging
             \Log::error('RedirectController Error', [
                 'slug' => $slug,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'line' => $e->getLine()
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'error' => 'Erro interno do servidor',
-                'message' => 'Erro: ' . $e->getMessage(),
-                'debug' => [
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]
+                'message' => 'Erro interno do servidor. Verifique os logs para mais detalhes.'
             ], 500);
         }
     }
