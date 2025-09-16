@@ -28,6 +28,14 @@ return [
         'key' => env('RESEND_KEY'),
     ],
 
+    'sendgrid' => [
+        'api_key' => env('SENDGRID_API_KEY'),
+        'from' => [
+            'email' => env('MAIL_FROM_ADDRESS', 'noreply@linkcharts.com.br'),
+            'name' => env('MAIL_FROM_NAME', 'Link Charts'),
+        ],
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

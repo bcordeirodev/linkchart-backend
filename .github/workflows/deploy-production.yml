@@ -235,6 +235,23 @@ jobs:
           cp .env.production .env
 
           # ==========================================
+          # CONFIGURAÇÃO DE SECRETS (SENDGRID)
+          # ==========================================
+          echo "🔐 Configurando secrets de produção..."
+          
+          # Substituir placeholder da API Key do SendGrid pela secret real
+          echo "📧 Configurando SendGrid API Key..."
+          sed -i 's/SENDGRID_API_KEY_PLACEHOLDER/${{ secrets.SENDGRID_API_KEY }}/g' .env
+          
+          # Verificar se a substituição foi bem-sucedida
+          if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env; then
+            echo "❌ ERRO: SendGrid API Key não foi substituída corretamente"
+            rollback
+          else
+            echo "✅ SendGrid API Key configurada com sucesso"
+          fi
+
+          # ==========================================
           # VALIDAÇÕES BÁSICAS
           # ==========================================
           echo "🔧 Validando configurações básicas..."
@@ -242,8 +259,25 @@ jobs:
           # Validações essenciais simplificadas
           grep -q "APP_ENV=production" .env || { echo "❌ APP_ENV incorreto"; rollback; }
           grep -q "DB_HOST=linkchartdb" .env || { echo "❌ DB_HOST incorreto"; rollback; }
+          
+          # Validar configuração do SendGrid
+          echo "📧 Validando configuração SendGrid..."
+          grep -q "MAIL_MAILER=smtp" .env || { echo "❌ MAIL_MAILER incorreto"; rollback; }
+          grep -q "MAIL_HOST=smtp.sendgrid.net" .env || { echo "❌ MAIL_HOST incorreto"; rollback; }
+          grep -q "MAIL_USERNAME=apikey" .env || { echo "❌ MAIL_USERNAME incorreto"; rollback; }
+          
+          # Verificar se a API Key do SendGrid foi configurada (deve começar com SG.)
+          if grep -q "^MAIL_PASSWORD=SG\." .env; then
+            echo "✅ SendGrid API Key configurada corretamente"
+          else
+            echo "❌ ERRO: SendGrid API Key não configurada ou inválida"
+            echo "🔍 Verificando conteúdo da MAIL_PASSWORD..."
+            grep "MAIL_PASSWORD=" .env | head -1
+            rollback
+          fi
+          
           chmod 644 .env
-          echo "✅ Configurações básicas validadas"
+          echo "✅ Configurações básicas e SendGrid validadas"
 
           # ==========================================
           # DEPLOYMENT COM ESTRATÉGIA DEV FUNCIONAL
@@ -462,6 +496,17 @@ jobs:
           docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'DB_OK';" 2>/dev/null | grep -q "DB_OK" || rollback
           docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok', 60); echo 'REDIS_OK';" 2>/dev/null | grep -q "REDIS_OK" || rollback
           echo "✅ Conexões básicas OK"
+
+          # Testar configuração de email SendGrid
+          echo "📧 Testando configuração SendGrid..."
+          EMAIL_TEST_RESULT=$(docker exec linkchartapi php /var/www/artisan email:test test@linkcharts.com.br --name="Deploy Test" 2>&1 | grep -E "(✅|❌)" | tail -1 || echo "TIMEOUT")
+          
+          if [[ "$EMAIL_TEST_RESULT" == *"✅"* ]]; then
+            echo "✅ Configuração SendGrid OK"
+          else
+            echo "⚠️ Configuração SendGrid com problemas: $EMAIL_TEST_RESULT"
+            echo "📋 Continuando deploy (email não é crítico para funcionamento básico)"
+          fi
 
           # ==========================================
           # HEALTH CHECK FINAL
