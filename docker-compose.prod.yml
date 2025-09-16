@@ -10,7 +10,7 @@ services:
     volumes:
       - ./storage/logs:/var/www/storage/logs
       - ./storage/app:/var/www/storage/app
-      - ./.env:/var/www/.env
+      - ./.env.production:/var/www/.env
     environment:
       - CONTAINER_ROLE=app
       - DB_HOST=linkchartdb
@@ -29,6 +29,10 @@ services:
     networks:
       - linkchartnet
       - linkcharts-network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 30s
@@ -51,6 +55,10 @@ services:
     networks:
       - linkchartnet
       - linkcharts-network
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U linkchartuser -d linkchartprod"]
       interval: 10s
