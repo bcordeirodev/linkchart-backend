@@ -367,7 +367,7 @@ jobs:
 
           # Verificar se www-data pode escrever no diretório de cache
           CACHE_WRITE_TEST=$(docker exec linkchartapi su -s /bin/sh www-data -c "touch /var/www/storage/framework/cache/data/geoip_test.tmp && rm /var/www/storage/framework/cache/data/geoip_test.tmp && echo 'SUCCESS' || echo 'FAILED'")
-          
+
           if [ "$CACHE_WRITE_TEST" != "SUCCESS" ]; then
             echo "⚠️ www-data não consegue escrever no cache, aplicando correção..."
             docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache/data
@@ -391,11 +391,11 @@ jobs:
           if [[ "$GEOIP_TEST_RESULT" == *"FAILED"* ]] || [ -z "$GEOIP_TEST_RESULT" ]; then
             echo "❌ ERRO: GeoIP não está funcionando - $GEOIP_TEST_RESULT"
             echo "🔧 Tentando correção emergencial de cache..."
-            
+
             # Correção emergencial: permissões mais abertas
             docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-            
+
             # Testar novamente
             GEOIP_TEST_RESULT_2=$(docker exec linkchartapi php /var/www/artisan tinker --execute="
               try {
@@ -406,7 +406,7 @@ jobs:
                 echo 'FAILED: ' . \$e->getMessage();
               }
             " 2>/dev/null | tail -1)
-            
+
             if [[ "$GEOIP_TEST_RESULT_2" == *"FAILED"* ]] || [ -z "$GEOIP_TEST_RESULT_2" ]; then
               echo "❌ ERRO CRÍTICO: GeoIP falhou mesmo após correção emergencial"
               echo "🔍 Debug: $GEOIP_TEST_RESULT_2"
