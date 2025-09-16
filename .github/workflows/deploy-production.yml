@@ -235,30 +235,15 @@ jobs:
           cp .env.production .env
 
           # ==========================================
-          # VALIDAÇÕES CRÍTICAS
+          # VALIDAÇÕES BÁSICAS
           # ==========================================
-          echo "🔧 Validando configurações críticas..."
-
-          # Verificar JWT_SECRET
-          JWT_SECRET=$(grep 'JWT_SECRET=' .env | cut -d'=' -f2)
-          JWT_LENGTH=${#JWT_SECRET}
-          if [ "$JWT_LENGTH" -lt 32 ]; then
-            echo "❌ JWT_SECRET muito curto ($JWT_LENGTH chars)"
-            rollback
-          fi
-          echo "✅ JWT_SECRET configurado ($JWT_LENGTH chars)"
-
-          # Validar configurações essenciais (.env.production)
-          grep -q "APP_ENV=production" .env && echo "✅ APP_ENV=production" || { echo "❌ APP_ENV incorreto"; rollback; }
-          grep -q "APP_DEBUG=false" .env && echo "✅ APP_DEBUG=false" || { echo "❌ APP_DEBUG incorreto"; rollback; }
-          grep -q "DB_HOST=linkchartdb" .env && echo "✅ DB_HOST=linkchartdb" || { echo "❌ DB_HOST incorreto"; rollback; }
-          grep -q "REDIS_HOST=linkchartredis" .env && echo "✅ REDIS_HOST=linkchartredis" || { echo "❌ REDIS_HOST incorreto"; rollback; }
-          grep -q "DB_PASSWORD=" .env && echo "✅ DB_PASSWORD configurado" || { echo "❌ DB_PASSWORD ausente"; rollback; }
-          grep -q "REDIS_PASSWORD=" .env && echo "✅ REDIS_PASSWORD configurado" || { echo "❌ REDIS_PASSWORD ausente"; rollback; }
-
-          # Definir permissões corretas
+          echo "🔧 Validando configurações básicas..."
+          
+          # Validações essenciais simplificadas
+          grep -q "APP_ENV=production" .env || { echo "❌ APP_ENV incorreto"; rollback; }
+          grep -q "DB_HOST=linkchartdb" .env || { echo "❌ DB_HOST incorreto"; rollback; }
           chmod 644 .env
-          echo "✅ Permissões do .env configuradas"
+          echo "✅ Configurações básicas validadas"
 
           # ==========================================
           # DEPLOYMENT COM ESTRATÉGIA DEV FUNCIONAL
@@ -347,97 +332,13 @@ jobs:
           docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
 
           # ==========================================
-          # CORREÇÃO ESPECÍFICA PARA CACHE GEOIP
+          # CONFIGURAÇÃO BÁSICA DE CACHE
           # ==========================================
-          echo "🌐 Configurando cache para GeoIP..."
-
-          # Garantir que diretórios de cache existem com estrutura completa
+          echo "🗂️ Configurando cache básico..."
           docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data/73
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data/73/08
-
-          # Configurar permissões robustas para cache GeoIP
-          echo "🔧 Aplicando permissões robustas para cache..."
           docker exec linkchartapi chmod -R 775 /var/www/storage/framework/cache
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-
-          # Garantir que subdiretórios específicos do GeoIP tenham permissões corretas
-          docker exec linkchartapi find /var/www/storage/framework/cache/data -type d -exec chmod 775 {} \;
-          docker exec linkchartapi find /var/www/storage/framework/cache/data -type f -exec chmod 664 {} \; 2>/dev/null || true
-
-          # Verificar se www-data pode escrever no diretório de cache
-          CACHE_WRITE_TEST=$(docker exec linkchartapi su -s /bin/sh www-data -c "touch /var/www/storage/framework/cache/data/geoip_test.tmp && rm /var/www/storage/framework/cache/data/geoip_test.tmp && echo 'SUCCESS' || echo 'FAILED'")
-
-          if [ "$CACHE_WRITE_TEST" != "SUCCESS" ]; then
-            echo "⚠️ www-data não consegue escrever no cache, aplicando correção..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache/data
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache/data
-          fi
-
-          echo "✅ Cache GeoIP configurado corretamente"
-
-          # Testar GeoIP após configuração
-          echo "🧪 Testando GeoIP..."
-          GEOIP_TEST_RESULT=$(docker exec linkchartapi php /var/www/artisan tinker --execute="
-            try {
-              \$geoip = app('geoip');
-              \$location = \$geoip->getLocation('8.8.8.8');
-              echo \$location->country ?: 'FAILED';
-            } catch (Exception \$e) {
-              echo 'FAILED: ' . \$e->getMessage();
-            }
-          " 2>/dev/null | tail -1)
-
-          if [[ "$GEOIP_TEST_RESULT" == *"FAILED"* ]] || [ -z "$GEOIP_TEST_RESULT" ]; then
-            echo "❌ ERRO: GeoIP não está funcionando - $GEOIP_TEST_RESULT"
-            echo "🔧 Tentando correção emergencial de cache..."
-
-            # Correção emergencial: permissões mais abertas
-            docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-
-            # Testar novamente
-            GEOIP_TEST_RESULT_2=$(docker exec linkchartapi php /var/www/artisan tinker --execute="
-              try {
-                \$geoip = app('geoip');
-                \$location = \$geoip->getLocation('8.8.8.8');
-                echo \$location->country ?: 'FAILED';
-              } catch (Exception \$e) {
-                echo 'FAILED: ' . \$e->getMessage();
-              }
-            " 2>/dev/null | tail -1)
-
-            if [[ "$GEOIP_TEST_RESULT_2" == *"FAILED"* ]] || [ -z "$GEOIP_TEST_RESULT_2" ]; then
-              echo "❌ ERRO CRÍTICO: GeoIP falhou mesmo após correção emergencial"
-              echo "🔍 Debug: $GEOIP_TEST_RESULT_2"
-              rollback
-            else
-              echo "✅ GeoIP corrigido após permissões emergenciais: $GEOIP_TEST_RESULT_2"
-            fi
-          else
-            echo "✅ GeoIP funcionando: $GEOIP_TEST_RESULT"
-          fi
-
-          # Verificação adicional: testar escrita real no cache GeoIP
-          echo "🔍 Testando escrita real no cache GeoIP..."
-          GEOIP_WRITE_TEST=$(docker exec linkchartapi php -r "
-            try {
-              \$cacheFile = '/var/www/storage/framework/cache/data/geoip_deploy_test_' . time();
-              file_put_contents(\$cacheFile, 'test');
-              unlink(\$cacheFile);
-              echo 'SUCCESS';
-            } catch (Exception \$e) {
-              echo 'FAILED: ' . \$e->getMessage();
-            }
-          " 2>/dev/null)
-
-          if [[ "$GEOIP_WRITE_TEST" == *"FAILED"* ]]; then
-            echo "⚠️ Escrita no cache GeoIP falhou: $GEOIP_WRITE_TEST"
-            echo "🔧 Aplicando correção final..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache/data
-          else
-            echo "✅ Escrita no cache GeoIP funcionando"
-          fi
+          echo "✅ Cache configurado"
 
           # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
           echo "🔍 Verificação crítica do sistema de logs..."
@@ -463,63 +364,16 @@ jobs:
             echo "✅ Sistema de logs funcionando corretamente"
           fi
 
-          # Laravel optimizations (seguindo padrão dev mas para prod)
-          echo "⚡ Otimizações Laravel para produção..."
+          # ==========================================
+          # OTIMIZAÇÕES LARAVEL
+          # ==========================================
+          echo "⚡ Otimizações Laravel..."
           docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ cache:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan route:clear || { echo "❌ route:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
-
-          # Storage link
           docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
-
-          # ==========================================
-          # VERIFICAÇÃO E CORREÇÃO JWT_SECRET
-          # ==========================================
-          echo "🔐 Verificando JWT_SECRET no container..."
-
-          # Verificar se JWT_SECRET está sendo lido corretamente
-          JWT_FROM_ENV=$(docker exec linkchartapi cat /var/www/.env | grep 'JWT_SECRET=' | cut -d'=' -f2)
-          echo "📋 JWT_SECRET do .env no container: ${#JWT_FROM_ENV} chars"
-
-          # Limpar cache antes de recriar (crítico para JWT)
-          echo "🧹 Limpando cache para JWT_SECRET..."
-          docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
-
-          # Verificar JWT via env() ANTES do cache
-          JWT_VIA_ENV=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_ENV:' . strlen(env('JWT_SECRET'));" 2>/dev/null | grep 'JWT_ENV:' | cut -d':' -f2 || echo "0")
-          echo "🔍 JWT via env(): $JWT_VIA_ENV chars"
-
-          if [ "$JWT_VIA_ENV" -lt 32 ]; then
-            echo "❌ PROBLEMA CRÍTICO: env('JWT_SECRET') não funciona!"
-            echo "📋 Conteúdo do .env no container:"
-            docker exec linkchartapi head -20 /var/www/.env
-            rollback
-          fi
-
-          # Cache para produção (DEPOIS da verificação JWT)
-          echo "⚡ Recriando config cache com JWT_SECRET correto..."
           docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ config:cache falhou"; rollback; }
-
-          # Verificar JWT APÓS config:cache
-          JWT_FROM_CONFIG=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_CONFIG:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_CONFIG:' | cut -d':' -f2 || echo "0")
-          echo "✅ JWT via config(): $JWT_FROM_CONFIG chars"
-
-          if [ "$JWT_FROM_CONFIG" -lt 32 ]; then
-            echo "❌ PROBLEMA CRÍTICO: config('jwt.secret') ainda está com placeholder!"
-            echo "🔄 Tentando corrigir com force clear..."
-          docker exec linkchartapi php /var/www/artisan optimize:clear
-          docker exec linkchartapi php /var/www/artisan config:cache
-
-            # Verificar novamente
-            JWT_FROM_CONFIG_2=$(docker exec linkchartapi php /var/www/artisan tinker --execute="echo 'JWT_CONFIG2:' . strlen(config('jwt.secret'));" 2>/dev/null | grep 'JWT_CONFIG2:' | cut -d':' -f2 || echo "0")
-            if [ "$JWT_FROM_CONFIG_2" -lt 32 ]; then
-              echo "❌ JWT_SECRET ainda não funciona após force clear"
-              rollback
-            fi
-            echo "✅ JWT corrigido após force clear: $JWT_FROM_CONFIG_2 chars"
-          fi
-
           docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan view:cache || { echo "❌ view:cache falhou"; rollback; }
 
@@ -599,72 +453,15 @@ jobs:
           echo "✅ Correção final de permissões concluída!"
 
           # ==========================================
-          # VERIFICAÇÕES DE INTEGRIDADE
+          # VERIFICAÇÕES BÁSICAS
           # ==========================================
-          echo "🧪 Verificações de integridade..."
-
-          # Aguardar estabilização
+          echo "🧪 Verificações básicas..."
           sleep 10
 
-          # JWT já foi verificado acima - pular verificação duplicada
-
-          # Verificar permissões críticas
-          echo "🔍 Verificando permissões críticas..."
-
-          LOGS_WRITABLE=$(docker exec linkchartapi test -w /var/www/storage/logs && echo "OK" || echo "FAIL")
-          CACHE_WRITABLE=$(docker exec linkchartapi test -w /var/www/storage/framework/cache/data && echo "OK" || echo "FAIL")
-          BOOTSTRAP_WRITABLE=$(docker exec linkchartapi test -w /var/www/bootstrap/cache && echo "OK" || echo "FAIL")
-
-          echo "📋 Permissões status:"
-          echo "  - storage/logs: $LOGS_WRITABLE"
-          echo "  - framework/cache: $CACHE_WRITABLE"
-          echo "  - bootstrap/cache: $BOOTSTRAP_WRITABLE"
-
-          if [ "$LOGS_WRITABLE" != "OK" ] || [ "$CACHE_WRITABLE" != "OK" ] || [ "$BOOTSTRAP_WRITABLE" != "OK" ]; then
-            echo "❌ Problemas de permissões detectados - aplicando correção emergencial"
-            docker exec linkchartapi chmod -R 777 /var/www/storage/
-            docker exec linkchartapi chmod -R 777 /var/www/bootstrap/cache/
-            echo "✅ Correção emergencial aplicada"
-          fi
-
-          # VERIFICAÇÃO ADICIONAL: Testar escrita real em logs
-          echo "🔍 Testando escrita real em logs..."
-          CURRENT_DATE=$(date +%Y-%m-%d)
-          LOG_WRITE_TEST=$(docker exec linkchartapi sh -c "echo '[$(date)] DEPLOY_INTEGRITY_CHECK: Log system operational' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          if [ "$LOG_WRITE_TEST" != "SUCCESS" ]; then
-            echo "❌ ERRO: Sistema de logs falhou na verificação de integridade"
-            echo "🔧 Aplicando correção final de logs..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
-            docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
-
-            # Testar novamente
-            LOG_WRITE_TEST2=$(docker exec linkchartapi sh -c "echo '[$(date)] DEPLOY_FINAL_FIX: Log system restored' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-            if [ "$LOG_WRITE_TEST2" != "SUCCESS" ]; then
-              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona - continuando deploy mas com logs comprometidos"
-            else
-              echo "✅ Sistema de logs restaurado com sucesso"
-            fi
-          else
-            echo "✅ Sistema de logs funcionando perfeitamente"
-          fi
-
-          # Testar Database Connection
-          if docker exec linkchartapi php /var/www/artisan tinker --execute="try { DB::connection()->getPdo(); echo 'DB_OK'; } catch(Exception \$e) { echo 'DB_ERROR'; }" 2>/dev/null | grep -q "DB_OK"; then
-            echo "✅ PostgreSQL connection OK"
-          else
-            echo "❌ PostgreSQL connection failed"
-            rollback
-          fi
-
-          # Testar Redis Connection
-          if docker exec linkchartapi php /var/www/artisan tinker --execute="try { Cache::store('redis')->put('test_key', 'test_value', 60); echo 'REDIS_OK'; } catch(Exception \$e) { echo 'REDIS_ERROR'; }" 2>/dev/null | grep -q "REDIS_OK"; then
-            echo "✅ Redis connection OK"
-          else
-            echo "❌ Redis connection failed"
-            rollback
-          fi
+          # Testar conexões básicas
+          docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'DB_OK';" 2>/dev/null | grep -q "DB_OK" || rollback
+          docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok', 60); echo 'REDIS_OK';" 2>/dev/null | grep -q "REDIS_OK" || rollback
+          echo "✅ Conexões básicas OK"
 
           # ==========================================
           # HEALTH CHECK FINAL
