@@ -251,7 +251,7 @@ jobs:
           if [ -n "$SENDGRID_API_KEY" ]; then
             # Usar uma abordagem mais segura para substituição
             echo "🔧 Substituindo placeholder por API Key real..."
-            sed -i "s|SENDGRID_API_KEY_PLACEHOLDER|\$SENDGRID_API_KEY|g" .env
+            sed -i "s|SENDGRID_API_KEY_PLACEHOLDER|$SENDGRID_API_KEY|g" .env
             echo "✅ SendGrid API Key substituída"
           else
             echo "❌ ERRO: SENDGRID_API_KEY não está definida"
