@@ -17,7 +17,7 @@ class LinkTrackingService
     public function registrarClique(Link $link, Request $request): void
     {
         $startTime = microtime(true);
-        $ip = $request->ip() ?: '127.0.0.1';
+        $ip = $this->getRealUserIP($request);
         $userAgent = $request->userAgent() ?: 'Unknown';
 
         // Resolve localização detalhada
@@ -391,5 +391,109 @@ class LinkTrackingService
                 'accept_language' => null,
             ];
         }
+    }
+
+    /**
+     * 🌐 CAPTURA IP REAL DO USUÁRIO
+     *
+     * PRIORIDADE DE CAPTURA:
+     * 1. real_ip query parameter (enviado pelo frontend para evitar CORS preflight)
+     * 2. X-Real-IP (enviado pelo frontend via header)
+     * 3. X-Forwarded-For (padrão de proxy)
+     * 4. CF-Connecting-IP (Cloudflare)
+     * 5. request->ip() (fallback)
+     *
+     * @param Request $request
+     * @return string
+     */
+    private function getRealUserIP(Request $request): string
+    {
+        // 1. PRIORIDADE MÁXIMA: real_ip query param (evita CORS preflight)
+        if ($realIP = $request->query('real_ip')) {
+            $cleanIP = trim($realIP);
+            if ($this->isValidIP($cleanIP)) {
+                Log::info('IP captured via real_ip query parameter', [
+                    'ip' => $cleanIP,
+                    'source' => 'query_param'
+                ]);
+                return $cleanIP;
+            }
+        }
+
+        // 2. X-Real-IP (enviado pelo nosso frontend via header)
+        if ($realIP = $request->header('X-Real-IP')) {
+            $cleanIP = trim($realIP);
+            if ($this->isValidIP($cleanIP)) {
+                Log::info('IP captured via X-Real-IP header', [
+                    'ip' => $cleanIP,
+                    'source' => 'X-Real-IP'
+                ]);
+                return $cleanIP;
+            }
+        }
+
+        // 2. X-Forwarded-For (padrão da indústria para proxies)
+        if ($forwardedFor = $request->header('X-Forwarded-For')) {
+            // X-Forwarded-For pode ter múltiplos IPs: "client, proxy1, proxy2"
+            $ips = array_map('trim', explode(',', $forwardedFor));
+            $clientIP = $ips[0]; // Primeiro IP é sempre o cliente original
+
+            if ($this->isValidIP($clientIP)) {
+                Log::info('IP captured via X-Forwarded-For header', [
+                    'ip' => $clientIP,
+                    'source' => 'X-Forwarded-For',
+                    'full_chain' => $forwardedFor
+                ]);
+                return $clientIP;
+            }
+        }
+
+        // 3. CF-Connecting-IP (Cloudflare)
+        if ($cfIP = $request->header('CF-Connecting-IP')) {
+            $cleanIP = trim($cfIP);
+            if ($this->isValidIP($cleanIP)) {
+                Log::info('IP captured via CF-Connecting-IP header', [
+                    'ip' => $cleanIP,
+                    'source' => 'Cloudflare'
+                ]);
+                return $cleanIP;
+            }
+        }
+
+        // 4. FALLBACK: IP da requisição (pode ser do proxy)
+        $fallbackIP = $request->ip() ?: '127.0.0.1';
+
+        Log::warning('Using fallback IP (may be proxy IP)', [
+            'ip' => $fallbackIP,
+            'source' => 'request->ip()',
+            'warning' => 'This might be proxy IP, not real user IP'
+        ]);
+
+        return $fallbackIP;
+    }
+
+    /**
+     * Valida se um IP é válido e não é privado/local
+     *
+     * @param string $ip
+     * @return bool
+     */
+    private function isValidIP(string $ip): bool
+    {
+        // Validação básica de formato
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+
+        // Rejeitar IPs privados/locais em produção
+        if (config('app.env') === 'production') {
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return true;
+            }
+            return false;
+        }
+
+        // Em desenvolvimento, aceitar qualquer IP válido
+        return true;
     }
 }
