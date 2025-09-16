@@ -46,9 +46,7 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
     Route::post('/google', 'googleLogin');
 
     // === RECUPERAÇÃO DE SENHA ===
-    Route::post('/forgot-password', 'sendPasswordResetLink');
-    Route::post('/reset-password', 'resetPassword');
-    Route::post('/verify-reset-token', 'verifyResetToken');
+    // Rotas removidas - funcionalidade de email desabilitada
 });
 
 /**
