@@ -37,6 +37,16 @@ Route::prefix('public')->controller(PublicLinkController::class)->group(function
 
 /**
  * ==============================
+ * TESTE PÚBLICO DE EMAIL (TEMPORÁRIO)
+ * ==============================
+ */
+Route::prefix('public/email-test')->controller(EmailTestController::class)->group(function () {
+    Route::get('/config', 'testConfiguration');                      // ✅ TESTE: Verificar configuração SendGrid
+    Route::post('/sendgrid-api', 'sendTestViaSendGridAPI');          // ✅ TESTE: Enviar via SendGrid API
+});
+
+/**
+ * ==============================
  * ROTAS DE AUTENTICAÇÃO
  * ==============================
  * Endpoints usados pelo front-end para autenticação de usuários
