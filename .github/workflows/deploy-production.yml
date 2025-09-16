@@ -142,6 +142,8 @@ jobs:
         fi
 
     - name: 🚀 Deploy to Production Server
+      env:
+        SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
       run: |
         echo "🔄 Conectando ao servidor com retry logic robusto..."
         max_attempts=5
@@ -176,7 +178,7 @@ jobs:
             -o UserKnownHostsFile=/dev/null \
             -o LogLevel=ERROR \
             -o TCPKeepAlive=yes \
-            root@${{ env.DEPLOY_HOST }} << 'ENDSSH'
+            root@${{ env.DEPLOY_HOST }} "SENDGRID_API_KEY='$SENDGRID_API_KEY'" << 'ENDSSH'
             set -e  # Exit on any error
             cd ${{ env.PROJECT_PATH }}
 
@@ -241,7 +243,13 @@ jobs:
           
           # Substituir placeholder da API Key do SendGrid pela secret real
           echo "📧 Configurando SendGrid API Key..."
-          sed -i 's/SENDGRID_API_KEY_PLACEHOLDER/${{ secrets.SENDGRID_API_KEY }}/g' .env
+          if [ -n "$SENDGRID_API_KEY" ]; then
+            sed -i "s/SENDGRID_API_KEY_PLACEHOLDER/$SENDGRID_API_KEY/g" .env
+            echo "✅ SendGrid API Key substituída"
+          else
+            echo "❌ ERRO: SENDGRID_API_KEY não está definida"
+            rollback
+          fi
           
           # Verificar se a substituição foi bem-sucedida
           if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env; then
