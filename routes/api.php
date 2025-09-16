@@ -7,6 +7,7 @@ use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\RedirectController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\EmailTestController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -112,5 +113,12 @@ Route::middleware(['api.auth:api'])->group(function () {
         Route::get('/audience', 'getGlobalAudienceData');       // ✅ USADO: useAudienceData (globalMode)
         Route::get('/insights', 'getGlobalInsightsData');       // ✅ USADO: useInsightsData (globalMode)
         Route::get('/performance', 'getGlobalPerformanceData'); // ✅ NOVO: useLinkPerformance hook
+    });
+
+    // === TESTE DE EMAIL (DESENVOLVIMENTO/DEBUG) ===
+    Route::prefix('email-test')->controller(EmailTestController::class)->group(function () {
+        Route::get('/config', 'testConfiguration');                      // ✅ NOVO: Verificar configuração de email
+        Route::post('/send', 'sendTest');                               // ✅ NOVO: Enviar email de teste
+        Route::post('/custom', 'sendCustom');                           // ✅ NOVO: Enviar email personalizado
     });
 });

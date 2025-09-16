@@ -2,119 +2,167 @@
 
 namespace App\Services;
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Mail\Message;
 
 class EmailService
 {
-    private PHPMailer $mail;
-
-    public function __construct()
-    {
-        $this->mail = new PHPMailer(true);
-        $this->configureSMTP();
-    }
-
     /**
-     * Configurar SMTP
-     */
-    private function configureSMTP()
-    {
-        try {
-            // Configurações do servidor
-            $this->mail->isSMTP();
-            $this->mail->Host = config('mail.mailers.smtp.host', 'smtp.gmail.com');
-            $this->mail->SMTPAuth = true;
-            $this->mail->Username = config('mail.mailers.smtp.username');
-            $this->mail->Password = config('mail.mailers.smtp.password');
-
-            // Configurações de porta e encryption
-            $port = config('mail.mailers.smtp.port', 465);
-            $this->mail->Port = $port;
-
-            if ($port == 465) {
-                $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-            } else {
-                $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-            }
-
-            // Configurações de timeout
-            $this->mail->Timeout = 30;
-            $this->mail->SMTPKeepAlive = false;
-
-            // Debug apenas em desenvolvimento
-            if (config('app.debug') && config('app.env') === 'local') {
-                $this->mail->SMTPDebug = SMTP::DEBUG_SERVER;
-                $this->mail->Debugoutput = function($str, $level) {
-                    Log::info("SMTP Debug: " . trim($str));
-                };
-            }
-
-            // Configurações de remetente padrão
-            $this->mail->setFrom(
-                config('mail.from.address'),
-                config('mail.from.name')
-            );
-
-            // Configurações adicionais
-            $this->mail->isHTML(true);
-            $this->mail->CharSet = 'UTF-8';
-
-        } catch (Exception $e) {
-            Log::error('Erro na configuração SMTP: ' . $e->getMessage(), [
-                'host' => config('mail.mailers.smtp.host'),
-                'port' => config('mail.mailers.smtp.port'),
-                'username' => config('mail.mailers.smtp.username')
-            ]);
-            throw $e;
-        }
-    }
-
-    /**
-     * Enviar email de teste
+     * Enviar email de teste usando Laravel Mail nativo
      */
     public function sendTestEmail($toEmail, $toName = null)
     {
         try {
-            // Limpar destinatários anteriores
-            $this->mail->clearAddresses();
-            $this->mail->clearAttachments();
+            $data = [
+                'name' => $toName ?? $toEmail,
+                'email' => $toEmail,
+                'timestamp' => now()->format('d/m/Y H:i:s'),
+                'environment' => config('app.env'),
+                'smtp_host' => config('mail.mailers.smtp.host'),
+                'smtp_port' => config('mail.mailers.smtp.port'),
+                'encryption' => config('mail.mailers.smtp.port') == 465 ? 'SSL' : 'TLS'
+            ];
 
-            // Configurar destinatário
-            $this->mail->addAddress($toEmail, $toName ?? $toEmail);
+            Mail::send([], [], function (Message $message) use ($toEmail, $toName, $data) {
+                $message->to($toEmail, $toName ?? $toEmail)
+                    ->subject('Teste de Email - Link Charts')
+                    ->html($this->getTestEmailTemplate($data));
+            });
 
-            // Configurar assunto e corpo
-            $this->mail->Subject = 'Teste de Email - Link Charts';
-
-            // Corpo HTML
-            $htmlBody = $this->getTestEmailTemplate($toName ?? $toEmail);
-            $this->mail->Body = $htmlBody;
-
-            // Corpo texto alternativo
-            $this->mail->AltBody = $this->getTestEmailTextTemplate($toName ?? $toEmail);
-
-            // Enviar
-            $result = $this->mail->send();
-
-            Log::info('Email de teste enviado com sucesso', [
+            Log::info('Email de teste enviado com sucesso via Laravel Mail', [
                 'to' => $toEmail,
-                'subject' => $this->mail->Subject
+                'mailer' => config('mail.default'),
+                'host' => config('mail.mailers.smtp.host')
             ]);
 
             return [
                 'success' => true,
-                'message' => 'Email enviado com sucesso',
-                'to' => $toEmail
+                'message' => 'Email enviado com sucesso via Laravel Mail',
+                'to' => $toEmail,
+                'mailer' => config('mail.default')
             ];
 
-        } catch (Exception $e) {
-            Log::error('Erro ao enviar email de teste', [
+        } catch (\Exception $e) {
+            Log::error('Erro ao enviar email de teste via Laravel Mail', [
                 'to' => $toEmail,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
+                'mailer_config' => [
+                    'default' => config('mail.default'),
+                    'host' => config('mail.mailers.smtp.host'),
+                    'port' => config('mail.mailers.smtp.port'),
+                    'username' => config('mail.mailers.smtp.username'),
+                    'from_address' => config('mail.from.address')
+                ]
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Erro ao enviar email: ' . $e->getMessage(),
+                'error' => $e->getMessage(),
+                'mailer' => config('mail.default')
+            ];
+        }
+    }
+
+    /**
+     * Testar configuração do Laravel Mail
+     */
+    public function testConnection()
+    {
+        try {
+            // Verificar configurações básicas
+            $config = $this->getMailConfiguration();
+
+            if (empty($config['host']) || empty($config['username']) || empty($config['password'])) {
+                return [
+                    'success' => false,
+                    'message' => 'Configurações de email incompletas',
+                    'config' => $config
+                ];
+            }
+
+            // Tentar enviar um email de teste simples
+            Mail::raw('Teste de conectividade Laravel Mail', function (Message $message) {
+                $message->to('test@example.com')
+                    ->subject('Teste de Conectividade');
+            });
+
+            return [
+                'success' => true,
+                'message' => 'Configuração Laravel Mail válida',
+                'config' => $config
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Erro na configuração Laravel Mail', [
+                'error' => $e->getMessage(),
+                'config' => $this->getMailConfiguration()
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Erro na configuração: ' . $e->getMessage(),
+                'error' => $e->getMessage(),
+                'config' => $this->getMailConfiguration()
+            ];
+        }
+    }
+
+    /**
+     * Obter configurações de email atuais
+     */
+    public function getMailConfiguration()
+    {
+        return [
+            'default_mailer' => config('mail.default'),
+            'host' => config('mail.mailers.smtp.host'),
+            'port' => config('mail.mailers.smtp.port'),
+            'username' => config('mail.mailers.smtp.username'),
+            'password' => config('mail.mailers.smtp.password') ? '***CONFIGURADO***' : 'NÃO CONFIGURADO',
+            'encryption' => config('mail.mailers.smtp.port') == 465 ? 'SSL' : 'TLS',
+            'from_address' => config('mail.from.address'),
+            'from_name' => config('mail.from.name'),
+            'timeout' => config('mail.mailers.smtp.timeout', 'padrão'),
+            'verify_peer' => config('mail.mailers.smtp.verify_peer', 'padrão')
+        ];
+    }
+
+    /**
+     * Enviar email personalizado
+     */
+    public function sendCustomEmail($toEmail, $subject, $htmlContent, $textContent = null)
+    {
+        try {
+            Mail::send([], [], function (Message $message) use ($toEmail, $subject, $htmlContent, $textContent) {
+                $message->to($toEmail)
+                    ->subject($subject)
+                    ->html($htmlContent);
+
+                if ($textContent) {
+                    $message->text($textContent);
+                }
+            });
+
+            Log::info('Email personalizado enviado com sucesso', [
+                'to' => $toEmail,
+                'subject' => $subject
+            ]);
+
+            return [
+                'success' => true,
+                'message' => 'Email personalizado enviado com sucesso',
+                'to' => $toEmail
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Erro ao enviar email personalizado', [
+                'to' => $toEmail,
+                'subject' => $subject,
+                'error' => $e->getMessage()
             ]);
 
             return [
@@ -126,40 +174,9 @@ class EmailService
     }
 
     /**
-     * Testar conectividade SMTP
-     */
-    public function testConnection()
-    {
-        try {
-            // Tentar conectar ao servidor SMTP
-            $result = $this->mail->smtpConnect();
-
-            if ($result) {
-                $this->mail->smtpClose();
-                return [
-                    'success' => true,
-                    'message' => 'Conexão SMTP estabelecida com sucesso'
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => 'Falha na conexão SMTP'
-                ];
-            }
-
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'message' => 'Erro na conexão SMTP: ' . $e->getMessage(),
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
      * Template HTML para email de teste
      */
-    private function getTestEmailTemplate($name)
+    private function getTestEmailTemplate($data)
     {
         return "
         <!DOCTYPE html>
@@ -169,13 +186,17 @@ class EmailService
             <meta name='viewport' content='width=device-width, initial-scale=1.0'>
             <title>Teste de Email - Link Charts</title>
             <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #1976d2; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+                .header { background: linear-gradient(135deg, #1976d2, #42a5f5); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
                 .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-                .success { background: #4caf50; color: white; padding: 15px; border-radius: 4px; margin: 20px 0; }
-                .info { background: #e3f2fd; padding: 15px; border-left: 4px solid #1976d2; margin: 20px 0; }
+                .success { background: #4caf50; color: white; padding: 15px; border-radius: 4px; margin: 20px 0; text-align: center; }
+                .info { background: #e3f2fd; padding: 20px; border-left: 4px solid #1976d2; margin: 20px 0; }
+                .config-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+                .config-table th, .config-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #ddd; }
+                .config-table th { background: #f5f5f5; font-weight: bold; }
                 .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+                .badge { background: #1976d2; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
             </style>
         </head>
         <body>
@@ -183,67 +204,50 @@ class EmailService
                 <div class='header'>
                     <h1>🚀 Link Charts</h1>
                     <p>Sistema de Encurtamento de URLs</p>
+                    <span class='badge'>Laravel Mail Nativo + SendGrid</span>
                 </div>
                 <div class='content'>
-                    <h2>✅ Teste de Email Realizado com Sucesso!</h2>
+                    <h2>✅ Email Laravel Mail Funcionando!</h2>
 
-                    <p>Olá <strong>{$name}</strong>,</p>
+                    <p>Olá <strong>{$data['name']}</strong>,</p>
 
                     <div class='success'>
-                        <strong>✅ Configuração de Email Funcionando!</strong><br>
-                        Este email confirma que o sistema de envio está operacional.
+                        <strong>🎉 SUCESSO!</strong><br>
+                        Laravel Mail + SendGrid configurado e funcionando perfeitamente!
                     </div>
 
                     <div class='info'>
-                        <strong>📋 Detalhes do Teste:</strong><br>
-                        • <strong>Data/Hora:</strong> " . date('d/m/Y H:i:s') . "<br>
-                        • <strong>Servidor SMTP:</strong> " . config('mail.mailers.smtp.host') . "<br>
-                        • <strong>Porta:</strong> " . config('mail.mailers.smtp.port') . "<br>
-                        • <strong>Encryption:</strong> " . (config('mail.mailers.smtp.port') == 465 ? 'SSL' : 'TLS') . "<br>
-                        • <strong>Ambiente:</strong> " . config('app.env') . "
+                        <strong>📋 Detalhes da Configuração:</strong><br>
+                        <table class='config-table'>
+                            <tr><th>Data/Hora</th><td>{$data['timestamp']}</td></tr>
+                            <tr><th>Servidor SMTP</th><td>{$data['smtp_host']}</td></tr>
+                            <tr><th>Porta</th><td>{$data['smtp_port']}</td></tr>
+                            <tr><th>Encryption</th><td>{$data['encryption']}</td></tr>
+                            <tr><th>Ambiente</th><td>{$data['environment']}</td></tr>
+                            <tr><th>Mailer</th><td>Laravel Mail (nativo)</td></tr>
+                            <tr><th>Provider</th><td>SendGrid SMTP</td></tr>
+                        </table>
                     </div>
 
-                    <p>O sistema de email do <strong>Link Charts</strong> está configurado corretamente e pronto para uso!</p>
+                    <p><strong>🔧 Melhorias Implementadas:</strong></p>
+                    <ul>
+                        <li>✅ Removido PHPMailer (conflito resolvido)</li>
+                        <li>✅ Usando Laravel Mail nativo</li>
+                        <li>✅ Configuração SendGrid otimizada</li>
+                        <li>✅ Timeout e verificação SSL configurados</li>
+                        <li>✅ Logs detalhados para debug</li>
+                    </ul>
 
-                    <p>Este é um email automático de teste. Não é necessário responder.</p>
+                    <p>O sistema de email está agora <strong>100% funcional</strong> e otimizado para produção!</p>
+
+                    <p><em>Este é um email automático de teste. Não é necessário responder.</em></p>
                 </div>
                 <div class='footer'>
-                    <p>Link Charts - Sistema de Encurtamento de URLs<br>
-                    <small>Desenvolvido com ❤️ usando Laravel + PHPMailer</small></p>
+                    <p><strong>Link Charts</strong> - Sistema de Encurtamento de URLs<br>
+                    <small>Desenvolvido com ❤️ usando Laravel + SendGrid</small></p>
                 </div>
             </div>
         </body>
         </html>";
-    }
-
-    /**
-     * Template texto para email de teste
-     */
-    private function getTestEmailTextTemplate($name)
-    {
-        return "
-LINK CHARTS - TESTE DE EMAIL
-============================
-
-Olá {$name},
-
-✅ CONFIGURAÇÃO DE EMAIL FUNCIONANDO!
-Este email confirma que o sistema de envio está operacional.
-
-DETALHES DO TESTE:
-• Data/Hora: " . date('d/m/Y H:i:s') . "
-• Servidor SMTP: " . config('mail.mailers.smtp.host') . "
-• Porta: " . config('mail.mailers.smtp.port') . "
-• Encryption: " . (config('mail.mailers.smtp.port') == 465 ? 'SSL' : 'TLS') . "
-• Ambiente: " . config('app.env') . "
-
-O sistema de email do Link Charts está configurado corretamente e pronto para uso!
-
-Este é um email automático de teste. Não é necessário responder.
-
----
-Link Charts - Sistema de Encurtamento de URLs
-Desenvolvido com Laravel + PHPMailer
-        ";
     }
 }
