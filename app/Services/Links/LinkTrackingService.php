@@ -148,25 +148,27 @@ class LinkTrackingService
         }
 
         try {
-            // Verifica se a função geoip existe antes de usar
-            if (function_exists('geoip')) {
-                $location = geoip($ip);
+            // Usar o serviço GeoIP do Laravel (torann/geoip)
+            $geoip = app('geoip');
+            $location = $geoip->getLocation($ip);
 
+            // Verificar se a localização foi encontrada (não é default)
+            if (!$location->default) {
                 return [
-                    'country' => $location->getAttribute('country'),
-                    'city' => $location->getAttribute('city'),
-                    'iso_code' => $location->getAttribute('iso_code'),
-                    'state' => $location->getAttribute('state'),
-                    'state_name' => $location->getAttribute('state_name'),
-                    'postal_code' => $location->getAttribute('postal_code'),
-                    'latitude' => $location->getAttribute('lat'),
-                    'longitude' => $location->getAttribute('lon'),
-                    'timezone' => $location->getAttribute('timezone'),
-                    'continent' => $location->getAttribute('continent'),
-                    'currency' => $location->getAttribute('currency'),
+                    'country' => $location->country,
+                    'city' => $location->city,
+                    'iso_code' => $location->iso_code,
+                    'state' => $location->state,
+                    'state_name' => $location->state_name,
+                    'postal_code' => $location->postal_code,
+                    'latitude' => $location->lat,
+                    'longitude' => $location->lon,
+                    'timezone' => $location->timezone,
+                    'continent' => $location->continent,
+                    'currency' => $location->currency,
                 ];
             } else {
-                Log::warning('GeoIP function not available');
+                Log::warning('GeoIP returned default location for IP: ' . $ip);
                 return $defaultData;
             }
         } catch (\Exception $e) {

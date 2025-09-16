@@ -256,19 +256,19 @@ class RedirectMetricsCollector
 
             Log::info('RedirectMetricsCollector: Attempting GeoIP lookup');
 
-            if (function_exists('geoip')) {
-                $location = geoip($ip);
-                $country = $location->getAttribute('country');
+            // Usar o serviço GeoIP do Laravel (torann/geoip)
+            $geoip = app('geoip');
+            $location = $geoip->getLocation($ip);
 
-                if ($country) {
-                    Log::info('RedirectMetricsCollector: Country found via GeoIP', ['country' => $country]);
-                    // Cache por 24 horas
-                    Cache::put($cacheKey, $country, 86400);
-                    return $country;
-                }
+            // Verificar se a localização foi encontrada (não é default)
+            if (!$location->default && $location->country) {
+                Log::info('RedirectMetricsCollector: Country found via GeoIP', ['country' => $location->country]);
+                // Cache por 24 horas
+                Cache::put($cacheKey, $location->country, 86400);
+                return $location->country;
             }
 
-            Log::info('RedirectMetricsCollector: No GeoIP function or no country found');
+            Log::info('RedirectMetricsCollector: GeoIP returned default location or no country found');
 
             // Cache null result por 1 hora para evitar lookups repetidos
             Cache::put($cacheKey, null, 3600);
