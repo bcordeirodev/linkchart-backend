@@ -351,10 +351,28 @@ jobs:
           # ==========================================
           echo "🌐 Configurando cache para GeoIP..."
 
-          # Garantir que diretórios de cache existem e têm permissões corretas
+          # Garantir que diretórios de cache existem com estrutura completa
           docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data/73
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data/73/08
+
+          # Configurar permissões robustas para cache GeoIP
+          echo "🔧 Aplicando permissões robustas para cache..."
           docker exec linkchartapi chmod -R 775 /var/www/storage/framework/cache
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
+
+          # Garantir que subdiretórios específicos do GeoIP tenham permissões corretas
+          docker exec linkchartapi find /var/www/storage/framework/cache/data -type d -exec chmod 775 {} \;
+          docker exec linkchartapi find /var/www/storage/framework/cache/data -type f -exec chmod 664 {} \; 2>/dev/null || true
+
+          # Verificar se www-data pode escrever no diretório de cache
+          CACHE_WRITE_TEST=$(docker exec linkchartapi su -s /bin/sh www-data -c "touch /var/www/storage/framework/cache/data/geoip_test.tmp && rm /var/www/storage/framework/cache/data/geoip_test.tmp && echo 'SUCCESS' || echo 'FAILED'")
+          
+          if [ "$CACHE_WRITE_TEST" != "SUCCESS" ]; then
+            echo "⚠️ www-data não consegue escrever no cache, aplicando correção..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache/data
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache/data
+          fi
 
           echo "✅ Cache GeoIP configurado corretamente"
 
@@ -366,17 +384,59 @@ jobs:
               \$location = \$geoip->getLocation('8.8.8.8');
               echo \$location->country ?: 'FAILED';
             } catch (Exception \$e) {
-              echo 'FAILED';
+              echo 'FAILED: ' . \$e->getMessage();
             }
           " 2>/dev/null | tail -1)
 
-          if [ "$GEOIP_TEST_RESULT" = "FAILED" ] || [ -z "$GEOIP_TEST_RESULT" ]; then
-            echo "❌ ERRO: GeoIP não está funcionando"
+          if [[ "$GEOIP_TEST_RESULT" == *"FAILED"* ]] || [ -z "$GEOIP_TEST_RESULT" ]; then
+            echo "❌ ERRO: GeoIP não está funcionando - $GEOIP_TEST_RESULT"
             echo "🔧 Tentando correção emergencial de cache..."
+            
+            # Correção emergencial: permissões mais abertas
             docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
-            rollback
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
+            
+            # Testar novamente
+            GEOIP_TEST_RESULT_2=$(docker exec linkchartapi php /var/www/artisan tinker --execute="
+              try {
+                \$geoip = app('geoip');
+                \$location = \$geoip->getLocation('8.8.8.8');
+                echo \$location->country ?: 'FAILED';
+              } catch (Exception \$e) {
+                echo 'FAILED: ' . \$e->getMessage();
+              }
+            " 2>/dev/null | tail -1)
+            
+            if [[ "$GEOIP_TEST_RESULT_2" == *"FAILED"* ]] || [ -z "$GEOIP_TEST_RESULT_2" ]; then
+              echo "❌ ERRO CRÍTICO: GeoIP falhou mesmo após correção emergencial"
+              echo "🔍 Debug: $GEOIP_TEST_RESULT_2"
+              rollback
+            else
+              echo "✅ GeoIP corrigido após permissões emergenciais: $GEOIP_TEST_RESULT_2"
+            fi
           else
             echo "✅ GeoIP funcionando: $GEOIP_TEST_RESULT"
+          fi
+
+          # Verificação adicional: testar escrita real no cache GeoIP
+          echo "🔍 Testando escrita real no cache GeoIP..."
+          GEOIP_WRITE_TEST=$(docker exec linkchartapi php -r "
+            try {
+              \$cacheFile = '/var/www/storage/framework/cache/data/geoip_deploy_test_' . time();
+              file_put_contents(\$cacheFile, 'test');
+              unlink(\$cacheFile);
+              echo 'SUCCESS';
+            } catch (Exception \$e) {
+              echo 'FAILED: ' . \$e->getMessage();
+            }
+          " 2>/dev/null)
+
+          if [[ "$GEOIP_WRITE_TEST" == *"FAILED"* ]]; then
+            echo "⚠️ Escrita no cache GeoIP falhou: $GEOIP_WRITE_TEST"
+            echo "🔧 Aplicando correção final..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache/data
+          else
+            echo "✅ Escrita no cache GeoIP funcionando"
           fi
 
           # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
