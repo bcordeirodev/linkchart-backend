@@ -23,6 +23,10 @@ services:
       - redis
     networks:
       - linkchartnet
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     environment:
       - CONTAINER_ROLE=app
       - DB_HOST=database
