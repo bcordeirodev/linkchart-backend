@@ -41,9 +41,14 @@ Route::prefix('public')->controller(PublicLinkController::class)->group(function
  * Endpoints usados pelo front-end para autenticação de usuários
  */
 Route::prefix('auth')->controller(AuthController::class)->group(function () {
-    Route::post('/login', 'login');              // ✅ USADO: AuthService.signIn()
-    Route::post('/register', 'register');        // ✅ USADO: AuthService.signUp()
-    Route::post('/google', 'googleLogin');       // ✅ USADO: Login social
+    Route::post('/login', 'login');
+    Route::post('/register', 'register');
+    Route::post('/google', 'googleLogin');
+
+    // === RECUPERAÇÃO DE SENHA ===
+    Route::post('/forgot-password', 'sendPasswordResetLink');
+    Route::post('/reset-password', 'resetPassword');
+    Route::post('/verify-reset-token', 'verifyResetToken');
 });
 
 /**
