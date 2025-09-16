@@ -241,23 +241,23 @@ jobs:
           # CONFIGURAÇÃO DE SECRETS (SENDGRID)
           # ==========================================
           echo "🔐 Configurando secrets de produção..."
-          
+
           # Debug: verificar se a variável chegou
           echo "🔍 Debug: SENDGRID_API_KEY length: \${#SENDGRID_API_KEY}"
           echo "🔍 Debug: SENDGRID_API_KEY prefix: \${SENDGRID_API_KEY:0:10}..."
-          
+
           # Substituir placeholder da API Key do SendGrid pela secret real
           echo "📧 Configurando SendGrid API Key..."
           if [ -n "$SENDGRID_API_KEY" ]; then
-            # Escapar caracteres especiais no sed
-            ESCAPED_KEY=\$(echo "$SENDGRID_API_KEY" | sed 's/[[\.*^$()+?{|]/\\&/g')
-            sed -i "s/SENDGRID_API_KEY_PLACEHOLDER/\$ESCAPED_KEY/g" .env
+            # Usar uma abordagem mais segura para substituição
+            echo "🔧 Substituindo placeholder por API Key real..."
+            sed -i "s|SENDGRID_API_KEY_PLACEHOLDER|\$SENDGRID_API_KEY|g" .env
             echo "✅ SendGrid API Key substituída"
           else
             echo "❌ ERRO: SENDGRID_API_KEY não está definida"
             rollback
           fi
-          
+
           # Verificar se a substituição foi bem-sucedida
           if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env; then
             echo "❌ ERRO: SendGrid API Key não foi substituída corretamente"
