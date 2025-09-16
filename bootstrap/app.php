@@ -22,15 +22,26 @@ return Application::configure(basePath: dirname(__DIR__))
         }
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // 🌐 MIDDLEWARE GLOBAL: TrustProxies e CORS devem ser os primeiros
+        $middleware->web([
+            \App\Http\Middleware\TrustProxies::class,
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+
+        $middleware->api([
+            \App\Http\Middleware\TrustProxies::class,
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+
+        // 🔧 CORS GLOBAL: Aplicar a todas as requisições para resolver problemas de desenvolvimento
+        $middleware->use([
+            \Illuminate\Http\Middleware\HandleCors::class,
+        ]);
+
         $middleware->alias([
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
-        ]);
-
-        // Aplicar CORS padrão do Laravel para todas as requisições API
-        $middleware->api([
-            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
         // NOTA: Rota /r/* configurada em web.php com middlewares específicos
