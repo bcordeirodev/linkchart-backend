@@ -60,11 +60,17 @@ chmod -R 775 bootstrap/cache/
 chmod -R 777 storage/logs/
 chmod 666 storage/logs/*.log 2>/dev/null || true
 
-# Permissões específicas para cache (CRÍTICO: 777 + ownership correto)
+# Permissões específicas para cache (CRÍTICO: 777 + ownership correto + setgid)
 chmod -R 777 storage/framework/cache/
 chmod -R 777 storage/framework/sessions/
 chmod -R 777 storage/framework/views/
 chmod -R 777 storage/framework/testing/
+
+# CORREÇÃO CRÍTICA: Configurar setgid para herança de grupo em subdiretórios
+echo "🔧 Configurando herança de permissões para subdiretórios..."
+find storage/framework/cache -type d -exec chmod g+s {} \;
+find storage/framework/sessions -type d -exec chmod g+s {} \;
+find storage/framework/views -type d -exec chmod g+s {} \;
 
 # Permissões para storage/app
 chmod -R 775 storage/app/

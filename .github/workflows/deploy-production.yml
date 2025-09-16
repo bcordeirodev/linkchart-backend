@@ -238,7 +238,7 @@ jobs:
           # VALIDAÇÕES BÁSICAS
           # ==========================================
           echo "🔧 Validando configurações básicas..."
-          
+
           # Validações essenciais simplificadas
           grep -q "APP_ENV=production" .env || { echo "❌ APP_ENV incorreto"; rollback; }
           grep -q "DB_HOST=linkchartdb" .env || { echo "❌ DB_HOST incorreto"; rollback; }
@@ -350,7 +350,7 @@ jobs:
             echo "🔧 Aplicando correção emergencial de logs..."
             docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
-            docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
+            docker exec linkchartapi chmod -R /var/www/storage/logs/*.log 2>/dev/null || true
 
             # Testar novamente
             LOG_TEST_RESULT2=$(docker exec linkchartapi sh -c "echo 'DEPLOY_EMERGENCY_FIX_TEST' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
