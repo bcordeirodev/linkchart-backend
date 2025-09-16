@@ -110,9 +110,9 @@ Route::middleware(['api.auth:api'])->group(function () {
         Route::get('/heatmap', 'getGlobalHeatmapData');         // ✅ USADO: useHeatmapData (globalMode)
         Route::get('/geographic', 'getGlobalGeographicData');   // ✅ USADO: useGeographicData (globalMode)
         Route::get('/temporal', 'getGlobalTemporalData');       // ✅ USADO: useTemporalData (globalMode)
-        Route::get('/audience', 'getGlobalAudienceData');       // ✅ USADO: useAudienceData (globalMode)
         Route::get('/insights', 'getGlobalInsightsData');       // ✅ USADO: useInsightsData (globalMode)
         Route::get('/performance', 'getGlobalPerformanceData'); // ✅ NOVO: useLinkPerformance hook
+        Route::get('/audience', 'getGlobalAudienceData');       // ✅ USADO: useAudienceData (globalMode)
     });
 
     // === TESTE DE EMAIL (DESENVOLVIMENTO/DEBUG) ===
