@@ -178,7 +178,8 @@ jobs:
             -o UserKnownHostsFile=/dev/null \
             -o LogLevel=ERROR \
             -o TCPKeepAlive=yes \
-            root@${{ env.DEPLOY_HOST }} "SENDGRID_API_KEY='$SENDGRID_API_KEY'" << 'ENDSSH'
+            root@${{ env.DEPLOY_HOST }} << ENDSSH
+            export SENDGRID_API_KEY='$SENDGRID_API_KEY'
             set -e  # Exit on any error
             cd ${{ env.PROJECT_PATH }}
 
@@ -241,10 +242,16 @@ jobs:
           # ==========================================
           echo "🔐 Configurando secrets de produção..."
           
+          # Debug: verificar se a variável chegou
+          echo "🔍 Debug: SENDGRID_API_KEY length: \${#SENDGRID_API_KEY}"
+          echo "🔍 Debug: SENDGRID_API_KEY prefix: \${SENDGRID_API_KEY:0:10}..."
+          
           # Substituir placeholder da API Key do SendGrid pela secret real
           echo "📧 Configurando SendGrid API Key..."
           if [ -n "$SENDGRID_API_KEY" ]; then
-            sed -i "s/SENDGRID_API_KEY_PLACEHOLDER/$SENDGRID_API_KEY/g" .env
+            # Escapar caracteres especiais no sed
+            ESCAPED_KEY=\$(echo "$SENDGRID_API_KEY" | sed 's/[[\.*^$()+?{|]/\\&/g')
+            sed -i "s/SENDGRID_API_KEY_PLACEHOLDER/\$ESCAPED_KEY/g" .env
             echo "✅ SendGrid API Key substituída"
           else
             echo "❌ ERRO: SENDGRID_API_KEY não está definida"
@@ -254,9 +261,12 @@ jobs:
           # Verificar se a substituição foi bem-sucedida
           if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env; then
             echo "❌ ERRO: SendGrid API Key não foi substituída corretamente"
+            echo "🔍 Debug: Conteúdo atual da MAIL_PASSWORD:"
+            grep "MAIL_PASSWORD=" .env
             rollback
           else
             echo "✅ SendGrid API Key configurada com sucesso"
+            echo "🔍 Verificação: MAIL_PASSWORD configurada corretamente"
           fi
 
           # ==========================================
@@ -267,13 +277,13 @@ jobs:
           # Validações essenciais simplificadas
           grep -q "APP_ENV=production" .env || { echo "❌ APP_ENV incorreto"; rollback; }
           grep -q "DB_HOST=linkchartdb" .env || { echo "❌ DB_HOST incorreto"; rollback; }
-          
+
           # Validar configuração do SendGrid
           echo "📧 Validando configuração SendGrid..."
           grep -q "MAIL_MAILER=smtp" .env || { echo "❌ MAIL_MAILER incorreto"; rollback; }
           grep -q "MAIL_HOST=smtp.sendgrid.net" .env || { echo "❌ MAIL_HOST incorreto"; rollback; }
           grep -q "MAIL_USERNAME=apikey" .env || { echo "❌ MAIL_USERNAME incorreto"; rollback; }
-          
+
           # Verificar se a API Key do SendGrid foi configurada (deve começar com SG.)
           if grep -q "^MAIL_PASSWORD=SG\." .env; then
             echo "✅ SendGrid API Key configurada corretamente"
@@ -283,7 +293,7 @@ jobs:
             grep "MAIL_PASSWORD=" .env | head -1
             rollback
           fi
-          
+
           chmod 644 .env
           echo "✅ Configurações básicas e SendGrid validadas"
 
@@ -508,7 +518,7 @@ jobs:
           # Testar configuração de email SendGrid
           echo "📧 Testando configuração SendGrid..."
           EMAIL_TEST_RESULT=$(docker exec linkchartapi php /var/www/artisan email:test test@linkcharts.com.br --name="Deploy Test" 2>&1 | grep -E "(✅|❌)" | tail -1 || echo "TIMEOUT")
-          
+
           if [[ "$EMAIL_TEST_RESULT" == *"✅"* ]]; then
             echo "✅ Configuração SendGrid OK"
           else
