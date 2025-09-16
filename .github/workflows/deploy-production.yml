@@ -346,6 +346,39 @@ jobs:
           # Executar configuração completa (diretórios + permissões)
           docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
 
+          # ==========================================
+          # CORREÇÃO ESPECÍFICA PARA CACHE GEOIP
+          # ==========================================
+          echo "🌐 Configurando cache para GeoIP..."
+
+          # Garantir que diretórios de cache existem e têm permissões corretas
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
+          docker exec linkchartapi chmod -R 775 /var/www/storage/framework/cache
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
+
+          echo "✅ Cache GeoIP configurado corretamente"
+
+          # Testar GeoIP após configuração
+          echo "🧪 Testando GeoIP..."
+          GEOIP_TEST_RESULT=$(docker exec linkchartapi php /var/www/artisan tinker --execute="
+            try {
+              \$geoip = app('geoip');
+              \$location = \$geoip->getLocation('8.8.8.8');
+              echo \$location->country ?: 'FAILED';
+            } catch (Exception \$e) {
+              echo 'FAILED';
+            }
+          " 2>/dev/null | tail -1)
+
+          if [ "$GEOIP_TEST_RESULT" = "FAILED" ] || [ -z "$GEOIP_TEST_RESULT" ]; then
+            echo "❌ ERRO: GeoIP não está funcionando"
+            echo "🔧 Tentando correção emergencial de cache..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
+            rollback
+          else
+            echo "✅ GeoIP funcionando: $GEOIP_TEST_RESULT"
+          fi
+
           # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
           echo "🔍 Verificação crítica do sistema de logs..."
           CURRENT_DATE=$(date +%Y-%m-%d)
