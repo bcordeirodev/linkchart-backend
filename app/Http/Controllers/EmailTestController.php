@@ -23,15 +23,22 @@ class EmailTestController extends Controller
     public function testConfiguration(): JsonResponse
     {
         try {
-            $config = $this->emailService->getMailConfiguration();
-            $connectionTest = $this->emailService->testConnection();
+            // Testar tanto SMTP quanto SendGrid API
+            $smtpConfig = $this->emailService->getMailConfiguration();
+            $smtpConnectionTest = $this->emailService->testConnection();
+            
+            $sendGridConfig = $this->emailService->getSendGridConfiguration();
+            $sendGridTest = $this->emailService->testSendGridAPI();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Configuração de email verificada',
                 'data' => [
-                    'configuration' => $config,
-                    'connection_test' => $connectionTest,
+                    'smtp_configuration' => $smtpConfig,
+                    'smtp_connection_test' => $smtpConnectionTest,
+                    'sendgrid_configuration' => $sendGridConfig,
+                    'sendgrid_api_test' => $sendGridTest,
+                    'recommended_method' => $sendGridTest['success'] ? 'SendGrid API' : 'SMTP',
                     'timestamp' => now()->toISOString()
                 ]
             ]);
@@ -64,20 +71,41 @@ class EmailTestController extends Controller
         }
 
         try {
-            $result = $this->emailService->sendTestEmail(
+            // Tentar primeiro SendGrid API, depois SMTP como fallback
+            $sendGridResult = $this->emailService->sendTestEmailViaSendGridAPI(
+                $request->email,
+                $request->name
+            );
+
+            if ($sendGridResult['success']) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $sendGridResult['message'],
+                    'data' => [
+                        'to' => $sendGridResult['to'] ?? null,
+                        'method' => $sendGridResult['method'] ?? 'SendGrid API',
+                        'status_code' => $sendGridResult['status_code'] ?? null,
+                        'timestamp' => now()->toISOString()
+                    ]
+                ]);
+            }
+
+            // Fallback para SMTP se SendGrid API falhar
+            $smtpResult = $this->emailService->sendTestEmail(
                 $request->email,
                 $request->name
             );
 
             return response()->json([
-                'success' => $result['success'],
-                'message' => $result['message'],
+                'success' => $smtpResult['success'],
+                'message' => $smtpResult['message'] . ' (Fallback SMTP)',
                 'data' => [
-                    'to' => $result['to'] ?? null,
-                    'mailer' => $result['mailer'] ?? null,
+                    'to' => $smtpResult['to'] ?? null,
+                    'method' => 'SMTP (Fallback)',
+                    'sendgrid_error' => $sendGridResult['message'],
                     'timestamp' => now()->toISOString()
                 ]
-            ], $result['success'] ? 200 : 500);
+            ], $smtpResult['success'] ? 200 : 500);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -129,6 +157,50 @@ class EmailTestController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno ao enviar email personalizado',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Enviar email de teste usando SendGrid API especificamente
+     */
+    public function sendTestViaSendGridAPI(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'name' => 'nullable|string|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dados inválidos',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $result = $this->emailService->sendTestEmailViaSendGridAPI(
+                $request->email,
+                $request->name
+            );
+
+            return response()->json([
+                'success' => $result['success'],
+                'message' => $result['message'],
+                'data' => [
+                    'to' => $result['to'] ?? null,
+                    'method' => $result['method'] ?? 'SendGrid API',
+                    'status_code' => $result['status_code'] ?? null,
+                    'timestamp' => now()->toISOString()
+                ]
+            ], $result['success'] ? 200 : 500);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao enviar email via SendGrid API',
                 'error' => $e->getMessage()
             ], 500);
         }

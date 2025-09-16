@@ -118,7 +118,8 @@ Route::middleware(['api.auth:api'])->group(function () {
     // === TESTE DE EMAIL (DESENVOLVIMENTO/DEBUG) ===
     Route::prefix('email-test')->controller(EmailTestController::class)->group(function () {
         Route::get('/config', 'testConfiguration');                      // ✅ NOVO: Verificar configuração de email
-        Route::post('/send', 'sendTest');                               // ✅ NOVO: Enviar email de teste
+        Route::post('/send', 'sendTest');                               // ✅ NOVO: Enviar email de teste (SendGrid API + SMTP fallback)
+        Route::post('/sendgrid-api', 'sendTestViaSendGridAPI');          // ✅ NOVO: Enviar email via SendGrid API especificamente
         Route::post('/custom', 'sendCustom');                           // ✅ NOVO: Enviar email personalizado
     });
 });
