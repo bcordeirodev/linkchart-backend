@@ -148,7 +148,7 @@ class LinkTrackingService
         }
 
         try {
-            // Usar o serviço GeoIP do Laravel (torann/geoip)
+            // Usar o serviço GeoIP do Laravel
             $geoip = app('geoip');
             $location = $geoip->getLocation($ip);
 
@@ -159,8 +159,8 @@ class LinkTrackingService
                     'city' => $location->city,
                     'iso_code' => $location->iso_code,
                     'state' => $location->state,
-                    'state_name' => $location->state_name,
                     'postal_code' => $location->postal_code,
+                    'state_name' => $location->state_name,
                     'latitude' => $location->lat,
                     'longitude' => $location->lon,
                     'timezone' => $location->timezone,
