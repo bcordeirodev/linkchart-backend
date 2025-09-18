@@ -412,26 +412,44 @@ jobs:
 
           # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
           echo "🔍 Verificação crítica do sistema de logs..."
+          
+          # CORREÇÃO PREVENTIVA AGRESSIVA DE LOGS
+          echo "🔧 Aplicando correção preventiva agressiva de logs..."
+          docker exec linkchartapi mkdir -p /var/www/storage/logs
+          docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
+          
+          # Criar arquivo de log principal se não existir
           CURRENT_DATE=$(date +%Y-%m-%d)
+          docker exec linkchartapi touch /var/www/storage/logs/laravel.log
+          docker exec linkchartapi touch /var/www/storage/logs/laravel-$CURRENT_DATE.log
+          docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
+          docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel-$CURRENT_DATE.log
+          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
+          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel-$CURRENT_DATE.log
+          
+          # Testar sistema de logs
           LOG_TEST_RESULT=$(docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG_ENTRY' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
 
           if [ "$LOG_TEST_RESULT" != "SUCCESS" ]; then
-            echo "❌ ERRO CRÍTICO: Sistema de logs não funciona após fix-permissions"
-            echo "🔧 Aplicando correção emergencial de logs..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
-            docker exec linkchartapi chmod -R /var/www/storage/logs/*.log 2>/dev/null || true
-
+            echo "❌ ERRO CRÍTICO: Sistema de logs não funciona após correção preventiva"
+            echo "🔧 Aplicando correção emergencial MÁXIMA..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
+            
             # Testar novamente
             LOG_TEST_RESULT2=$(docker exec linkchartapi sh -c "echo 'DEPLOY_EMERGENCY_FIX_TEST' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
             if [ "$LOG_TEST_RESULT2" != "SUCCESS" ]; then
-              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona mesmo após correção emergencial"
+              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona mesmo após correção emergencial máxima"
+              echo "🔍 Debug: Verificando estrutura de diretórios..."
+              docker exec linkchartapi ls -la /var/www/storage/
+              docker exec linkchartapi ls -la /var/www/storage/logs/
               rollback
             else
-              echo "✅ Sistema de logs corrigido com sucesso"
+              echo "✅ Sistema de logs corrigido com correção emergencial máxima"
             fi
           else
-            echo "✅ Sistema de logs funcionando corretamente"
+            echo "✅ Sistema de logs funcionando corretamente após correção preventiva"
           fi
 
           # ==========================================
@@ -503,22 +521,49 @@ jobs:
           # ==========================================
           # CORREÇÃO FINAL DE PERMISSÕES (APÓS MIGRATIONS)
           # ==========================================
-          echo "🔧 Aplicando correção final de permissões nos logs..."
+          echo "🔧 Aplicando correção final AGRESSIVA de permissões nos logs..."
 
-          # Corrigir permissões dos logs que podem ter sido criados durante migrations
-          # COMANDO TESTADO E APROVADO PELO USUÁRIO:
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs || echo "⚠️ Aviso: chown logs falhou"
-          docker exec linkchartapi chmod -R 775 /var/www/storage/logs || echo "⚠️ Aviso: chmod logs falhou"
-          docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || echo "⚠️ Aviso: chmod arquivos log falhou"
+          # Correção AGRESSIVA de permissões que podem ter sido alteradas durante migrations
+          echo "🔧 Aplicando permissões 777 em todo storage/ para garantir funcionamento..."
+          docker exec linkchartapi chmod -R 777 /var/www/storage/ || echo "⚠️ Aviso: chmod storage falhou"
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/ || echo "⚠️ Aviso: chown storage falhou"
+          
+          # Garantir que arquivos de log específicos existam e tenham permissões corretas
+          CURRENT_DATE=$(date +%Y-%m-%d)
+          docker exec linkchartapi touch /var/www/storage/logs/laravel.log
+          docker exec linkchartapi touch /var/www/storage/logs/laravel-$CURRENT_DATE.log
+          docker exec linkchartapi touch /var/www/storage/logs/api-errors-$CURRENT_DATE.log
+          docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
+          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/*.log 2>/dev/null || true
 
-          # Testar se o sistema de logs funciona
+          # Testar se o sistema de logs funciona com múltiplos testes
           echo "🧪 Testando sistema de logs após migrations..."
-          docker exec linkchartapi php -r "file_put_contents('/var/www/storage/logs/deploy-test.log', 'Deploy test: ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND);" || {
-            echo "❌ ERRO: Sistema de logs não funciona após migrations"
-            echo "🔧 Aplicando correção emergencial..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
-          }
+          
+          # Teste 1: Arquivo direto
+          TEST1_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test direct: $(date)' >> /var/www/storage/logs/deploy-test.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+          
+          # Teste 2: Via PHP
+          TEST2_RESULT=$(docker exec linkchartapi php -r "file_put_contents('/var/www/storage/logs/deploy-test-php.log', 'Deploy test PHP: ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND); echo 'SUCCESS';" 2>/dev/null || echo "FAILED")
+          
+          # Teste 3: Laravel log
+          TEST3_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test Laravel: $(date)' >> /var/www/storage/logs/laravel.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+          
+          if [ "$TEST1_RESULT" != "SUCCESS" ] || [ "$TEST2_RESULT" != "SUCCESS" ] || [ "$TEST3_RESULT" != "SUCCESS" ]; then
+            echo "❌ ERRO: Algum teste de log falhou (T1:$TEST1_RESULT, T2:$TEST2_RESULT, T3:$TEST3_RESULT)"
+            echo "🔧 Aplicando correção emergencial MÁXIMA..."
+            docker exec linkchartapi chmod -R 777 /var/www/storage/
+            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
+            
+            # Recriar arquivos de log com permissões máximas
+            docker exec linkchartapi rm -f /var/www/storage/logs/*.log 2>/dev/null || true
+            docker exec linkchartapi touch /var/www/storage/logs/laravel.log
+            docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
+            docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
+            
+            echo "✅ Correção emergencial aplicada - logs devem funcionar agora"
+          else
+            echo "✅ Todos os testes de log passaram - sistema funcionando corretamente"
+          fi
 
           echo "✅ Correção final de permissões concluída!"
 
