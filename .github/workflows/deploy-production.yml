@@ -38,584 +38,178 @@ jobs:
         echo "Host 134.209.33.182" >> ~/.ssh/config
         echo "    StrictHostKeyChecking no" >> ~/.ssh/config
         echo "    UserKnownHostsFile /dev/null" >> ~/.ssh/config
-        echo "    ServerAliveInterval 60" >> ~/.ssh/config
-        echo "    ServerAliveCountMax 3" >> ~/.ssh/config
-        echo "    ConnectTimeout 30" >> ~/.ssh/config
-        echo "    ConnectionAttempts 3" >> ~/.ssh/config
-
-    - name: 🏥 Verificar Conectividade do Servidor
-      run: |
-        echo "🔍 Verificando conectividade SSH do servidor..."
-
-        # Teste múltiplas portas para verificar conectividade
-        echo "🔌 Testando conectividade em múltiplas portas..."
-
-        # Teste porta SSH 22
-        SSH_PORT_OK=false
-        if timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null; then
-          echo "✅ Porta SSH 22 acessível"
-          SSH_PORT_OK=true
-        else
-          echo "⚠️ Porta SSH 22 não acessível via netcat"
-        fi
-
-        # Teste porta HTTP 80 (alternativa)
-        HTTP_PORT_OK=false
-        if timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 80 2>/dev/null; then
-          echo "✅ Porta HTTP 80 acessível"
-          HTTP_PORT_OK=true
-        else
-          echo "⚠️ Porta HTTP 80 não acessível via netcat"
-        fi
-
-        # Teste HTTP endpoint (se disponível)
-        HTTP_OK=false
-        if timeout 15 curl -s --max-time 10 --connect-timeout 5 -o /dev/null http://${{ env.DEPLOY_HOST }}/health 2>/dev/null; then
-          echo "✅ HTTP endpoint /health acessível"
-          HTTP_OK=true
-        elif timeout 15 curl -s --max-time 10 --connect-timeout 5 -o /dev/null http://${{ env.DEPLOY_HOST }}/ 2>/dev/null; then
-          echo "✅ HTTP endpoint / acessível"
-          HTTP_OK=true
-        else
-          echo "⚠️ HTTP endpoints não acessíveis"
-        fi
-
-        # Avaliar conectividade geral
-        if [ "$SSH_PORT_OK" = false ] && [ "$HTTP_PORT_OK" = false ] && [ "$HTTP_OK" = false ]; then
-          echo "❌ Nenhuma forma de conectividade detectada"
-          echo "🔧 Possíveis causas:"
-          echo "  1. Firewall bloqueando GitHub Actions IPs"
-          echo "  2. Servidor completamente offline"
-          echo "  3. Rate limiting agressivo"
-          echo "  4. Problemas de rede temporários"
-          exit 1
-        else
-          echo "✅ Pelo menos uma forma de conectividade detectada"
-          if [ "$SSH_PORT_OK" = true ]; then
-            echo "📡 SSH disponível - deploy pode prosseguir"
-          else
-            echo "⚠️ SSH via netcat falhou, mas tentaremos SSH direto"
-          fi
-        fi
-
-        # Aguardar um pouco para evitar rate limiting
-        echo "⏳ Aguardando para evitar rate limiting SSH..."
-        sleep 5
-
-        # Teste SSH com retry e configurações otimizadas
-        SSH_SUCCESS=false
-        for attempt in {1..3}; do
-          echo "🔄 Tentativa SSH de conectividade $attempt/3..."
-
-          if timeout 15 ssh \
-            -o ConnectTimeout=10 \
-            -o ServerAliveInterval=5 \
-            -o ServerAliveCountMax=2 \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR \
-            root@${{ env.DEPLOY_HOST }} "echo 'SSH Test OK'" >/dev/null 2>&1; then
-            echo "✅ SSH conectividade OK na tentativa $attempt"
-            SSH_SUCCESS=true
-            break
-          else
-            echo "⚠️ SSH falhou na tentativa $attempt"
-            if [ $attempt -lt 3 ]; then
-              echo "⏳ Aguardando 10s antes da próxima tentativa..."
-              sleep 10
-            fi
-          fi
-        done
-
-        if [ "$SSH_SUCCESS" = false ]; then
-          echo "❌ SSH connection test failed após 3 tentativas"
-          echo "🔧 Possíveis causas:"
-          echo "  1. Rate limiting SSH devido a ataques brute force"
-          echo "  2. GitHub Actions IPs bloqueados no firewall"
-          echo "  3. Servidor sobrecarregado"
-          echo "  4. Problema de rede temporário"
-          echo "  5. SSH daemon com problemas"
-          echo ""
-          echo "💡 O deploy tentará continuar com retry logic mais robusto..."
-          # Não falhar aqui, deixar o deploy tentar com sua própria lógica
-        fi
 
     - name: 🚀 Deploy to Production Server
       env:
         SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
       run: |
-        echo "🔄 Conectando ao servidor com retry logic robusto..."
-        max_attempts=5
-        delay=15
-
-        # Teste rápido de conectividade antes de tentar deploy
-        echo "🔌 Verificação final de conectividade..."
-        if ! timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null; then
-          echo "⚠️ Porta SSH não responde, mas continuando com retry logic..."
-        fi
+        echo "🔄 Conectando ao servidor..."
+        max_attempts=3
+        delay=10
 
         for attempt in $(seq 1 $max_attempts); do
           echo "🔄 Tentativa SSH $attempt/$max_attempts..."
-
-          # Aguardar progressivamente mais entre tentativas para evitar rate limiting
+          
           if [ $attempt -gt 1 ]; then
-            wait_time=$((delay * attempt))
-            echo "⏳ Aguardando ${wait_time}s para evitar rate limiting..."
-            sleep $wait_time
-
-            # Testar conectividade novamente antes de tentar SSH
-            echo "🔌 Re-testando conectividade..."
-            timeout 5 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null || echo "⚠️ Porta SSH ainda não responde"
+            sleep $delay
           fi
 
-          if ssh \
-            -o ConnectTimeout=15 \
-            -o ServerAliveInterval=30 \
-            -o ServerAliveCountMax=3 \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR \
-            -o TCPKeepAlive=yes \
-            root@${{ env.DEPLOY_HOST }} << ENDSSH
+          if ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=no root@${{ env.DEPLOY_HOST }} << 'ENDSSH'
             export SENDGRID_API_KEY="$SENDGRID_API_KEY"
-            set -e  # Exit on any error
+            set -e
             cd ${{ env.PROJECT_PATH }}
 
-          # ==========================================
-          # FUNÇÃO DE ROLLBACK ROBUSTA
-          # ==========================================
+          # Função de rollback
           rollback() {
-            echo "🔄 EXECUTANDO ROLLBACK DE EMERGÊNCIA..."
-
-            # Parar containers atuais
+            echo "🔄 EXECUTANDO ROLLBACK..."
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
-
-            # Restaurar backup mais recente
             BACKUP_FILE=$(ls -t .env.backup.* 2>/dev/null | head -1)
             if [ -n "$BACKUP_FILE" ]; then
-              echo "📦 Restaurando backup: $BACKUP_FILE"
               cp "$BACKUP_FILE" .env
             else
-              echo "📋 Usando .env.production como fallback (JWT_SECRET já incluído)"
               cp .env.production .env
             fi
-
-            # Tentar subir versão anterior
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
-
-            echo "❌ ROLLBACK CONCLUÍDO - Verifique o sistema manualmente"
             exit 1
           }
 
-          # ==========================================
-          # LIMPEZA E PREPARAÇÃO
-          # ==========================================
-          echo "🧹 Preparando ambiente de produção..."
-
-          # Limpar backups antigos (manter 7 mais recentes)
+          # Preparação
+          echo "🧹 Preparando ambiente..."
           ls -t .env.backup.* 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
-
-          # Pull das mudanças mais recentes
-          echo "⬇️ Baixando código atualizado..."
-          git fetch origin
-          git reset --hard origin/main
-
-          # Backup do .env atual
+          git fetch origin && git reset --hard origin/main
+          
           if [ -f .env ]; then
-            echo "💾 Backup do .env atual..."
             cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
           fi
 
-          # ==========================================
-          # CONFIGURAÇÃO DE SECRETS (SENDGRID) - ANTES DO BUILD
-          # ==========================================
-          echo "🔐 Configurando secrets ANTES do build..."
-
-          # Debug: verificar se a variável chegou
-          echo "🔍 Debug: SENDGRID_API_KEY length: \${#SENDGRID_API_KEY}"
-          echo "🔍 Debug: SENDGRID_API_KEY prefix: \${SENDGRID_API_KEY:0:10}..."
-          echo "🔍 Debug: SENDGRID_API_KEY está definida: \$([ -n \"\$SENDGRID_API_KEY\" ] && echo 'SIM' || echo 'NÃO')"
-          echo "🔍 Debug: SENDGRID_API_KEY valor completo: '$SENDGRID_API_KEY'"
-          echo "🔍 Debug: Verificando se começa com SG.: \$(echo \"\$SENDGRID_API_KEY\" | grep -q '^SG\\.' && echo 'SIM' || echo 'NÃO')"
-
-          # CORREÇÃO: Modificar .env.production ANTES do build
-          echo "📧 Configurando SendGrid API Key no .env.production ANTES do build..."
-          
-          # Mostrar estado inicial do .env.production
-          echo "🔍 Estado inicial do .env.production:"
-          grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env.production | head -2
-          
+          # Configurar SendGrid ANTES do build
+          echo "📧 Configurando SendGrid no .env.production..."
           if [ -n "$SENDGRID_API_KEY" ]; then
-            echo "🔧 Aplicando SendGrid API Key diretamente ao .env.production..."
-            echo "🔧 API Key recebida: \${SENDGRID_API_KEY:0:15}... (primeiros 15 chars)"
-            
-            # Remover linhas existentes de SendGrid do .env.production
             sed -i '/^SENDGRID_API_KEY=/d' .env.production
             sed -i '/^MAIL_PASSWORD=/d' .env.production
-            
-            # Adicionar as configurações corretas diretamente ao .env.production
             echo "SENDGRID_API_KEY=$SENDGRID_API_KEY" >> .env.production
             echo "MAIL_PASSWORD=$SENDGRID_API_KEY" >> .env.production
-            
-            echo "✅ SendGrid API Key adicionada diretamente ao .env.production"
-            echo "🔍 Verificando configuração final no .env.production:"
-            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env.production | tail -2
+            echo "✅ SendGrid configurado"
           else
-            echo "❌ ERRO: SENDGRID_API_KEY não está definida"
+            echo "❌ ERRO: SENDGRID_API_KEY não definida"
             rollback
           fi
 
-          # ==========================================
-          # CONFIGURAÇÃO DO AMBIENTE PRODUCTION
-          # ==========================================
-          echo "📋 Configurando ambiente de produção..."
-
-          # Usar .env.production como base (agora com secrets configuradas)
-          echo "📋 Copiando .env.production para .env (JWT_SECRET + SendGrid já incluídos)..."
+          # Copiar .env.production para .env
           cp .env.production .env
 
-          # Verificar se a configuração foi bem-sucedida
-          if grep -q "^SENDGRID_API_KEY=SG\." .env && grep -q "^MAIL_PASSWORD=SG\." .env; then
-            echo "✅ SendGrid API Key configurada com sucesso"
-            echo "🔍 Verificação: Ambas as variáveis configuradas corretamente"
-          else
-            echo "❌ ERRO: SendGrid API Key não foi configurada corretamente"
-            echo "🔍 Debug: Conteúdo atual das variáveis SendGrid:"
-            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env
-            rollback
-          fi
-
-          # ==========================================
-          # VALIDAÇÕES BÁSICAS
-          # ==========================================
-          echo "🔧 Validando configurações básicas..."
-
-          # Validações essenciais simplificadas
+          # Validações básicas
           grep -q "APP_ENV=production" .env || { echo "❌ APP_ENV incorreto"; rollback; }
-          grep -q "DB_HOST=linkchartdb" .env || { echo "❌ DB_HOST incorreto"; rollback; }
-
-          # Validar configuração do SendGrid
-          echo "📧 Validando configuração SendGrid..."
-          grep -q "MAIL_MAILER=smtp" .env || { echo "❌ MAIL_MAILER incorreto"; rollback; }
-          grep -q "MAIL_HOST=smtp.sendgrid.net" .env || { echo "❌ MAIL_HOST incorreto"; rollback; }
-          grep -q "MAIL_USERNAME=apikey" .env || { echo "❌ MAIL_USERNAME incorreto"; rollback; }
-
-          # Verificar se a API Key do SendGrid foi configurada (deve começar com SG.)
-          if grep -q "^MAIL_PASSWORD=SG\." .env; then
-            echo "✅ SendGrid API Key configurada corretamente"
-          else
-            echo "❌ ERRO: SendGrid API Key não configurada ou inválida"
-            echo "🔍 Verificando conteúdo da MAIL_PASSWORD..."
-            grep "MAIL_PASSWORD=" .env | head -1
-            rollback
-          fi
-
+          grep -q "^MAIL_PASSWORD=SG\." .env || { echo "❌ SendGrid não configurada"; rollback; }
           chmod 644 .env
-          echo "✅ Configurações básicas e SendGrid validadas"
 
-          # ==========================================
-          # DEPLOYMENT COM ESTRATÉGIA DEV FUNCIONAL
-          # ==========================================
-          echo "🛑 Parando containers atuais..."
+          # Deploy
+          echo "🛑 Parando containers..."
           docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
 
-          # Limpeza opcional de imagens (baseado no dev)
           if [ "${{ inputs.force_rebuild }}" = "true" ]; then
-            echo "🧹 Forçando rebuild completo..."
-            docker system prune -f
-            docker image prune -a -f
-          else
-            echo "🧹 Limpeza básica..."
-            docker image prune -f
-          fi
-
-          # Build seguindo o padrão que funciona em dev
-          echo "🏗️ Building aplicação..."
-          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            docker system prune -f && docker image prune -a -f
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --no-cache --parallel
           else
+            docker image prune -f
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --parallel
           fi
 
-          # Iniciar serviços (igual ao dev)
-          echo "🚀 Iniciando serviços de produção..."
+          echo "🚀 Iniciando serviços..."
           docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
 
-          # ==========================================
-          # AGUARDAR HEALTH CHECKS (BASEADO NO DEV)
-          # ==========================================
-          echo "⏳ Aguardando serviços ficarem healthy..."
+          # Health checks
+          echo "⏳ Aguardando serviços..."
+          timeout 120 bash -c 'until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T database pg_isready -U linkchartuser -d linkchartprod >/dev/null 2>&1; do sleep 5; done' || rollback
+          timeout 120 bash -c 'until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T redis redis-cli -a CHANGE_ME_REDIS_PASSWORD ping >/dev/null 2>&1; do sleep 5; done' || rollback
+          timeout 180 bash -c 'until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -q "linkchartapi.*Up"; do sleep 10; done' || rollback
 
-          # PostgreSQL Health Check
-          echo "🗄️ Aguardando PostgreSQL..."
-          timeout 120 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T database pg_isready -U linkchartuser -d linkchartprod >/dev/null 2>&1; do
-              echo "⏳ PostgreSQL iniciando..."
-              sleep 5
-            done
-          ' || { echo "❌ PostgreSQL timeout"; rollback; }
-          echo "✅ PostgreSQL healthy"
-
-          # Redis Health Check
-          echo "⚡ Aguardando Redis..."
-          timeout 120 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T redis redis-cli -a CHANGE_ME_REDIS_PASSWORD ping >/dev/null 2>&1; do
-              echo "⏳ Redis iniciando..."
-              sleep 5
-            done
-          ' || { echo "❌ Redis timeout"; rollback; }
-          echo "✅ Redis healthy"
-
-          # Laravel Application Health Check (similar ao dev)
-          echo "🐘 Aguardando Laravel Application..."
-          timeout 180 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -q "linkchartapi.*Up"; do
-              echo "⏳ Laravel iniciando..."
-              sleep 10
-            done
-          ' || { echo "❌ Laravel timeout"; rollback; }
-          echo "✅ Laravel Application running"
-
-          # ==========================================
-          # CONFIGURAÇÃO LARAVEL (IGUAL AO DEV)
-          # ==========================================
-          echo "⚙️ Configurando Laravel (baseado no padrão dev)..."
-
-          # Aguardar PHP-FPM e Nginx estarem prontos
           sleep 15
 
-
-          # ==========================================
-          # SETUP DE DIRETÓRIOS E PERMISSÕES
-          # ==========================================
-          echo "🔧 Configurando diretórios e permissões..."
-
-          # Copiar script de permissões (faz tudo: diretórios + ownership + permissões)
+          # Configurar permissões e diretórios
+          echo "🔧 Configurando permissões..."
           docker cp docker/scripts/fix-permissions.sh linkchartapi:/var/www/fix-permissions.sh
-
-          # Tornar script executável
           docker exec linkchartapi chmod +x /var/www/fix-permissions.sh
+          docker exec linkchartapi /var/www/fix-permissions.sh || rollback
 
-          # Executar configuração completa (diretórios + permissões)
-          docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
-
-          # ==========================================
-          # CONFIGURAÇÃO BÁSICA DE CACHE
-          # ==========================================
-          echo "🗂️ Configurando cache básico..."
+          # Configurar cache
           docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
           docker exec linkchartapi chmod -R 775 /var/www/storage/framework/cache
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-          echo "✅ Cache configurado"
 
-          # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
-          echo "🔍 Verificação crítica do sistema de logs..."
-
-          # CORREÇÃO PREVENTIVA AGRESSIVA DE LOGS
-          echo "🔧 Aplicando correção preventiva agressiva de logs..."
+          # Configurar logs
+          echo "🔧 Configurando logs..."
           docker exec linkchartapi mkdir -p /var/www/storage/logs
           docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
-
-          # Criar arquivo de log principal se não existir
-          CURRENT_DATE=$(date +%Y-%m-%d)
           docker exec linkchartapi touch /var/www/storage/logs/laravel.log
-          docker exec linkchartapi touch /var/www/storage/logs/laravel-$CURRENT_DATE.log
           docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
-          docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel-$CURRENT_DATE.log
           docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
-          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel-$CURRENT_DATE.log
 
-          # Testar sistema de logs
-          LOG_TEST_RESULT=$(docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG_ENTRY' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          if [ "$LOG_TEST_RESULT" != "SUCCESS" ]; then
-            echo "❌ ERRO CRÍTICO: Sistema de logs não funciona após correção preventiva"
-            echo "🔧 Aplicando correção emergencial MÁXIMA..."
+          # Testar logs
+          LOG_TEST=$(docker exec linkchartapi sh -c "echo 'Deploy test' >> /var/www/storage/logs/laravel.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
+          if [ "$LOG_TEST" != "SUCCESS" ]; then
             docker exec linkchartapi chmod -R 777 /var/www/storage/
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-
-            # Testar novamente
-            LOG_TEST_RESULT2=$(docker exec linkchartapi sh -c "echo 'DEPLOY_EMERGENCY_FIX_TEST' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-            if [ "$LOG_TEST_RESULT2" != "SUCCESS" ]; then
-              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona mesmo após correção emergencial máxima"
-              echo "🔍 Debug: Verificando estrutura de diretórios..."
-              docker exec linkchartapi ls -la /var/www/storage/
-              docker exec linkchartapi ls -la /var/www/storage/logs/
-              rollback
-            else
-              echo "✅ Sistema de logs corrigido com correção emergencial máxima"
-            fi
-          else
-            echo "✅ Sistema de logs funcionando corretamente após correção preventiva"
           fi
 
-          # ==========================================
-          # OTIMIZAÇÕES LARAVEL
-          # ==========================================
+          # Otimizações Laravel
           echo "⚡ Otimizações Laravel..."
-          docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ cache:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan route:clear || { echo "❌ route:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ config:cache falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan view:cache || { echo "❌ view:cache falhou"; rollback; }
+          docker exec linkchartapi php /var/www/artisan config:clear || rollback
+          docker exec linkchartapi php /var/www/artisan cache:clear || rollback
+          docker exec linkchartapi php /var/www/artisan route:clear || rollback
+          docker exec linkchartapi php /var/www/artisan view:clear || rollback
+          docker exec linkchartapi php /var/www/artisan storage:link || rollback
+          docker exec linkchartapi php /var/www/artisan config:cache || rollback
+          docker exec linkchartapi php /var/www/artisan route:cache || rollback
+          docker exec linkchartapi php /var/www/artisan view:cache || rollback
 
-          # ==========================================
-          # EXECUTAR MIGRAÇÕES (ORDEM CORRETA - APÓS CONFIGURAÇÃO COMPLETA)
-          # ==========================================
-          echo "🗄️ Executando migrações de banco de dados (APÓS configuração completa)..."
-
-          # Aguardar mais um pouco para garantir estabilidade total
+          # Migrations
+          echo "🗄️ Executando migrations..."
           sleep 10
-
-          # Verificar status das migrations primeiro
-          echo "📋 Verificando status das migrations..."
-          docker exec linkchartapi php /var/www/artisan migrate:status || { echo "❌ migrate:status falhou"; rollback; }
-
-          # Executar migrations com retry logic melhorado
-          echo "🔄 Executando migrations..."
+          docker exec linkchartapi php /var/www/artisan migrate:status || rollback
+          
           MIGRATION_SUCCESS=false
-          for attempt in {1..5}; do
-            echo "🔄 Tentativa de migration $attempt/5..."
-
-            # Aguardar entre tentativas (exceto primeira)
-            if [ $attempt -gt 1 ]; then
-              wait_time=$((10 * attempt))
-              echo "⏳ Aguardando ${wait_time}s antes da tentativa $attempt..."
-              sleep $wait_time
-            fi
-
+          for attempt in {1..3}; do
             if docker exec linkchartapi php /var/www/artisan migrate --force; then
-              echo "✅ Migrations executadas com sucesso na tentativa $attempt"
               MIGRATION_SUCCESS=true
               break
             else
-              echo "⚠️ Migration falhou na tentativa $attempt"
-              if [ $attempt -lt 5 ]; then
-                echo "🔄 Tentando novamente..."
-                # Mostrar logs para debug
-                echo "📋 Últimas linhas do log Laravel:"
-                docker logs linkchartapi --tail 10 2>/dev/null || echo "Não foi possível obter logs"
-              fi
+              [ $attempt -lt 3 ] && sleep 10
             fi
           done
+          
+          [ "$MIGRATION_SUCCESS" = false ] && rollback
 
-          if [ "$MIGRATION_SUCCESS" = false ]; then
-            echo "❌ ERRO CRÍTICO: Migrations falharam após 5 tentativas"
-            echo "📋 Verificando logs do Laravel..."
-            docker logs linkchartapi --tail 30
-            rollback
-          fi
-
-          # Verificar status final das migrations
-          echo "📋 Verificando status final das migrations..."
-          docker exec linkchartapi php /var/www/artisan migrate:status
-
-          echo "🎉 MIGRATIONS EXECUTADAS COM SUCESSO!"
-
-          # ==========================================
-          # CORREÇÃO FINAL DE PERMISSÕES (APÓS MIGRATIONS)
-          # ==========================================
-          echo "🔧 Aplicando correção final AGRESSIVA de permissões nos logs..."
-
-          # Correção AGRESSIVA de permissões que podem ter sido alteradas durante migrations
-          echo "🔧 Aplicando permissões 777 em todo storage/ para garantir funcionamento..."
-          docker exec linkchartapi chmod -R 777 /var/www/storage/ || echo "⚠️ Aviso: chmod storage falhou"
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/ || echo "⚠️ Aviso: chown storage falhou"
-
-          # Garantir que arquivos de log específicos existam e tenham permissões corretas
-          CURRENT_DATE=$(date +%Y-%m-%d)
+          # Correção final de permissões
+          echo "🔧 Correção final de permissões..."
+          docker exec linkchartapi chmod -R 777 /var/www/storage/ || true
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/ || true
           docker exec linkchartapi touch /var/www/storage/logs/laravel.log
-          docker exec linkchartapi touch /var/www/storage/logs/laravel-$CURRENT_DATE.log
-          docker exec linkchartapi touch /var/www/storage/logs/api-errors-$CURRENT_DATE.log
-          docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
-          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/*.log 2>/dev/null || true
+          docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
+          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
 
-          # Testar se o sistema de logs funciona com múltiplos testes
-          echo "🧪 Testando sistema de logs após migrations..."
-
-          # Teste 1: Arquivo direto
-          TEST1_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test direct: $(date)' >> /var/www/storage/logs/deploy-test.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          # Teste 2: Via PHP
-          TEST2_RESULT=$(docker exec linkchartapi php -r "file_put_contents('/var/www/storage/logs/deploy-test-php.log', 'Deploy test PHP: ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND); echo 'SUCCESS';" 2>/dev/null || echo "FAILED")
-
-          # Teste 3: Laravel log
-          TEST3_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test Laravel: $(date)' >> /var/www/storage/logs/laravel.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          if [ "$TEST1_RESULT" != "SUCCESS" ] || [ "$TEST2_RESULT" != "SUCCESS" ] || [ "$TEST3_RESULT" != "SUCCESS" ]; then
-            echo "❌ ERRO: Algum teste de log falhou (T1:$TEST1_RESULT, T2:$TEST2_RESULT, T3:$TEST3_RESULT)"
-            echo "🔧 Aplicando correção emergencial MÁXIMA..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-
-            # Recriar arquivos de log com permissões máximas
-            docker exec linkchartapi rm -f /var/www/storage/logs/*.log 2>/dev/null || true
-            docker exec linkchartapi touch /var/www/storage/logs/laravel.log
-            docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
-            docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
-
-            echo "✅ Correção emergencial aplicada - logs devem funcionar agora"
-          else
-            echo "✅ Todos os testes de log passaram - sistema funcionando corretamente"
-          fi
-
-          echo "✅ Correção final de permissões concluída!"
-
-          # ==========================================
-          # VERIFICAÇÕES BÁSICAS
-          # ==========================================
+          # Verificações básicas
           echo "🧪 Verificações básicas..."
           sleep 10
-
-          # Testar conexões básicas
           docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'DB_OK';" 2>/dev/null | grep -q "DB_OK" || rollback
           docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok', 60); echo 'REDIS_OK';" 2>/dev/null | grep -q "REDIS_OK" || rollback
-          echo "✅ Conexões básicas OK"
 
-          # Testar configuração de email SendGrid
-          echo "📧 Testando configuração SendGrid..."
-          EMAIL_TEST_RESULT=$(docker exec linkchartapi php /var/www/artisan email:test test@linkcharts.com.br --name="Deploy Test" 2>&1 | grep -E "(✅|❌)" | tail -1 || echo "TIMEOUT")
-
-          if [[ "$EMAIL_TEST_RESULT" == *"✅"* ]]; then
-            echo "✅ Configuração SendGrid OK"
-          else
-            echo "⚠️ Configuração SendGrid com problemas: $EMAIL_TEST_RESULT"
-            echo "📋 Continuando deploy (email não é crítico para funcionamento básico)"
-          fi
-
-          # ==========================================
-          # HEALTH CHECK FINAL
-          # ==========================================
-          echo "🏥 Health check final da aplicação..."
+          # Health check final
+          echo "🏥 Health check final..."
           sleep 15
-
-          # Tentar health check múltiplas vezes
-          for i in {1..5}; do
+          for i in {1..3}; do
             if curl -f -s --max-time 15 http://localhost:8000/health >/dev/null 2>&1; then
-              echo "✅ Health check passou na tentativa $i"
+              echo "✅ Health check passou"
               break
             else
-              echo "⚠️ Health check falhou na tentativa $i"
-              if [ $i -eq 5 ]; then
-                echo "❌ Health check falhou após 5 tentativas"
-                # Mostrar logs para debug
-                echo "📋 Logs do container para debug:"
-                docker logs linkchartapi --tail 50
-                rollback
-              fi
+              [ $i -eq 3 ] && rollback
               sleep 20
             fi
           done
 
-            echo "🎉 DEPLOYMENT DE PRODUÇÃO CONCLUÍDO COM SUCESSO!"
-            echo "📊 Containers ativos:"
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
+          echo "🎉 DEPLOYMENT CONCLUÍDO COM SUCESSO!"
+          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
         ENDSSH
           then
             echo "✅ SSH connection successful on attempt $attempt"
@@ -624,25 +218,16 @@ jobs:
             echo "❌ SSH failed on attempt $attempt"
             if [ $attempt -eq $max_attempts ]; then
               echo "💥 SSH failed after $max_attempts attempts"
-              echo "🔧 Troubleshooting steps:"
-              echo "  1. SSH rate limiting due to brute force attacks"
-              echo "  2. Check server status: ssh root@${{ env.DEPLOY_HOST }}"
-              echo "  3. Check SSH logs: journalctl -u ssh -n 20"
-              echo "  4. Restart SSH if needed: systemctl restart sshd"
               exit 1
             fi
-            echo "⏳ SSH attempt failed, will retry with increased delay..."
           fi
         done
 
-    - name: 🔍 Verificação Final de Produção
+    - name: 🔍 Verificação Final
       run: |
-        echo "🔍 Verificação final completa..."
-
-        # Aguardar estabilização total
+        echo "🔍 Verificação final..."
         sleep 20
 
-        # Health Check Principal
         if curl -f -k -s --max-time 15 https://api.linkcharts.com.br/health; then
           echo "✅ Health check principal OK"
         else
@@ -650,93 +235,23 @@ jobs:
           exit 1
         fi
 
-        # Teste API - deve retornar 401 (não autenticado)
         API_RESPONSE=$(curl -s -k -o /dev/null -w "%{http_code}" --max-time 15 https://api.linkcharts.com.br/api/links)
         case $API_RESPONSE in
-          401)
-            echo "✅ API protegida OK (401 - auth required)"
-            ;;
-          200|422)
-            echo "⚠️ API respondeu $API_RESPONSE (verificar se esperado)"
-            ;;
-          *)
-            echo "❌ API resposta inesperada: $API_RESPONSE"
-            exit 1
-            ;;
+          401) echo "✅ API protegida OK (401 - auth required)" ;;
+          200|422) echo "⚠️ API respondeu $API_RESPONSE" ;;
+          *) echo "❌ API resposta inesperada: $API_RESPONSE"; exit 1 ;;
         esac
 
-        # Verificar health endpoint detalhado
-        HEALTH_FULL=$(curl -s -k --max-time 15 https://api.linkcharts.com.br/health)
-        if [[ "$HEALTH_FULL" == *"OK"* ]] || [[ "$HEALTH_FULL" == *"healthy"* ]]; then
-          echo "✅ Health endpoint detalhado OK"
-          echo "📋 Health response: $HEALTH_FULL"
-        else
-          echo "⚠️ Health endpoint response: $HEALTH_FULL"
-        fi
-
-        echo "🎉 VERIFICAÇÃO DE PRODUÇÃO CONCLUÍDA!"
-
-    - name: 📊 Monitoramento Pós-Deploy
-      if: success()
-      run: |
-        echo "📊 Monitoramento pós-deployment..."
-
-        ssh -o StrictHostKeyChecking=no root@${{ env.DEPLOY_HOST }} << 'ENDSSH'
-          cd ${{ env.PROJECT_PATH }}
-
-          echo "📋 Status final dos containers:"
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
-
-          echo ""
-          echo "📈 Estatísticas de recursos:"
-          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
-
-          echo ""
-          echo "📝 Últimas 10 linhas do log da aplicação:"
-          docker logs linkchartapi --tail 10
-
-          echo ""
-          echo "🔍 Verificação final de configuração:"
-          docker exec linkchartapi php /var/www/artisan --version
-          docker exec linkchartapi php /var/www/artisan env | grep -E "APP_ENV|APP_DEBUG|DB_CONNECTION|REDIS_CLIENT" || true
-        ENDSSH
+        echo "🎉 VERIFICAÇÃO CONCLUÍDA!"
 
     - name: 📢 Notificação de Status
       if: always()
       run: |
         if [ "${{ job.status }}" == "success" ]; then
           echo "🚀 PRODUÇÃO DEPLOYED COM SUCESSO!"
-          echo ""
-          echo "📊 Serviços Ativos:"
-          echo "  ✅ Laravel API Application (PHP 8.2 + FPM)"
-          echo "  ✅ PostgreSQL Database 15 (com health checks)"
-          echo "  ✅ Redis Cache 7 (com auth)"
-          echo "  ✅ Nginx Reverse Proxy"
-          echo "  ✅ Supervisor Process Manager"
-          echo "  ✅ JWT Authentication"
-          echo "  ✅ CORS Configurado"
-          echo ""
-          echo "🌐 URLs de Produção:"
-          echo "  🏠 Application: https://api.linkcharts.com.br"
-          echo "  🏥 Health Check: https://api.linkcharts.com.br/health"
-          echo "  📡 API Base: https://api.linkcharts.com.br/api"
-          echo "  🔐 Auth: https://api.linkcharts.com.br/api/auth/login"
-          echo ""
+          echo "🌐 URLs: https://api.linkcharts.com.br"
           echo "⏱️ Deploy concluído em: $(date)"
-          echo "🔧 Baseado na estrutura dev funcional + .env.production"
         else
-          echo "💥 FALHA NO DEPLOYMENT DE PRODUÇÃO!"
-          echo ""
-          echo "❌ Status: ${{ job.status }}"
-          echo "🔍 Logs acima contêm detalhes do erro"
+          echo "💥 FALHA NO DEPLOYMENT!"
           echo "🔄 Rollback automático executado"
-          echo ""
-          echo "📞 Ações Necessárias:"
-          echo "  1. ssh root@${{ env.DEPLOY_HOST }}"
-          echo "  2. cd ${{ env.PROJECT_PATH }}"
-          echo "  3. docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps"
-          echo "  4. docker logs linkchartapi"
-          echo "  5. Verificar .env.backup.* para versões anteriores"
-          echo ""
-          echo "💡 Rollback executado - sistema deve estar na versão anterior"
         fi
