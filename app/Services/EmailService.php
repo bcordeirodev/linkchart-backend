@@ -18,7 +18,7 @@ class EmailService
     {
         try {
             $apiKey = config('services.sendgrid.api_key');
-            
+
             if (empty($apiKey) || $apiKey === 'SENDGRID_API_KEY_PLACEHOLDER') {
                 throw new \Exception('SendGrid API Key não configurada');
             }
@@ -38,7 +38,7 @@ class EmailService
             // Configurar assunto e conteúdo
             $email->setSubject($subject);
             $email->addContent("text/html", $htmlContent);
-            
+
             if ($textContent) {
                 $email->addContent("text/plain", $textContent);
             }
@@ -106,7 +106,7 @@ class EmailService
     {
         try {
             $apiKey = config('services.sendgrid.api_key');
-            
+
             if (empty($apiKey) || $apiKey === 'SENDGRID_API_KEY_PLACEHOLDER') {
                 return [
                     'success' => false,
@@ -117,7 +117,7 @@ class EmailService
 
             // Teste básico da API
             $sendgrid = new SendGrid($apiKey);
-            
+
             return [
                 'success' => true,
                 'message' => 'SendGrid API configurada corretamente',

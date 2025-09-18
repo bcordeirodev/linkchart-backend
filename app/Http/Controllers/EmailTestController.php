@@ -26,7 +26,7 @@ class EmailTestController extends Controller
             // Testar tanto SMTP quanto SendGrid API
             $smtpConfig = $this->emailService->getMailConfiguration();
             $smtpConnectionTest = $this->emailService->testConnection();
-            
+
             $sendGridConfig = $this->emailService->getSendGridConfiguration();
             $sendGridTest = $this->emailService->testSendGridAPI();
 

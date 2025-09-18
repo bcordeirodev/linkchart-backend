@@ -56,8 +56,10 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
     Route::post('/register', 'register');
     Route::post('/google', 'googleLogin');
 
-    // === RECUPERAÇÃO DE SENHA ===
-    // Rotas removidas - funcionalidade de email desabilitada
+    // === VERIFICAÇÃO DE EMAIL ===
+    Route::post('/verify-email', 'verifyEmail');
+    Route::post('/forgot-password', 'forgotPassword');
+    Route::post('/reset-password', 'resetPassword');
 });
 
 /**
@@ -72,6 +74,10 @@ Route::middleware(['api.auth:api'])->group(function () {
     Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
     Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
     Route::post('/logout', [AuthController::class, 'logout']);           // ✅ USADO: AuthService.signOut()
+
+    // === VERIFICAÇÃO DE EMAIL (AUTENTICADO) ===
+    Route::get('/email-verification-status', [AuthController::class, 'checkEmailVerificationStatus']); // ✅ NOVO: Status de verificação
+    Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail']);      // ✅ NOVO: Reenviar email
 
     // === ANALYTICS LEGADOS ===
     Route::get('/analytics', [ChartController::class, 'index']);         // ✅ USADO: useDashboardData hook
