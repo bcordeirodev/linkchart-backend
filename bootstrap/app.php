@@ -40,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
+            'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
             'metrics.collector' => \App\Http\Middleware\MetricsCollector::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
         ]);
