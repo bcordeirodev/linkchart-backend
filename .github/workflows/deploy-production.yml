@@ -43,16 +43,7 @@ jobs:
         echo "    ConnectTimeout 30" >> ~/.ssh/config
         echo "    ConnectionAttempts 3" >> ~/.ssh/config
 
-    - name: 📧 Configurar SendGrid no .env.production
-      run: |
-        echo "🔧 Atualizando .env.production com SendGrid API Key..."
-        # Remover linhas existentes
-        sed -i '/^SENDGRID_API_KEY=/d' .env.production
-        sed -i '/^MAIL_PASSWORD=/d' .env.production
-        # Adicionar API Key real
-        echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
-        echo "MAIL_PASSWORD=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
-        echo "✅ SendGrid configurado no .env.production"
+    # REMOVIDO: Configuração SendGrid movida para dentro do SSH (após git pull)
 
     - name: 🏥 Verificar Conectividade do Servidor
       run: |
@@ -230,6 +221,32 @@ jobs:
           git fetch origin
           git reset --hard origin/main
 
+          # ==========================================
+          # CONFIGURAR SENDGRID NO .ENV.PRODUCTION (APÓS GIT PULL)
+          # ==========================================
+          echo "📧 Configurando SendGrid no .env.production (após git pull)..."
+          
+          # Remover linhas existentes do SendGrid
+          sed -i '/^SENDGRID_API_KEY=/d' .env.production
+          sed -i '/^MAIL_PASSWORD=/d' .env.production
+          
+          # Adicionar API Key real do GitHub Secrets
+          echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
+          echo "MAIL_PASSWORD=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
+          
+          # Debug: Verificar se foi aplicado corretamente
+          echo "🔍 Verificando se SendGrid foi aplicado no .env.production:"
+          if grep -q "^SENDGRID_API_KEY=" .env.production && ! grep -q "PLACEHOLDER" .env.production; then
+            echo "✅ SendGrid configurado no .env.production com API Key real"
+            # Mostrar primeiros caracteres para confirmar (sem expor a key completa)
+            echo "📋 Primeiros caracteres da API Key: $(grep '^SENDGRID_API_KEY=' .env.production | cut -d'=' -f2 | cut -c1-10)..."
+          else
+            echo "❌ ERRO: SendGrid não foi configurado corretamente no .env.production"
+            echo "🔍 Conteúdo atual:"
+            grep -E "(SENDGRID|MAIL_PASSWORD)" .env.production || echo "Nenhuma variável encontrada"
+            exit 1
+          fi
+
           # Backup do .env atual
           if [ -f .env ]; then
             echo "💾 Backup do .env atual..."
@@ -241,16 +258,29 @@ jobs:
           # ==========================================
           echo "📋 Configurando ambiente de produção..."
 
-          # Usar .env.production como base (seguindo padrão dev)
-          echo "📋 Copiando .env.production para .env (JWT_SECRET já incluído)..."
+          # Usar .env.production como base (agora com SendGrid configurado)
+          echo "📋 Copiando .env.production para .env (JWT_SECRET + SendGrid incluídos)..."
           cp .env.production .env
 
           echo "📧 Verificando SendGrid no .env..."
-          if ! grep -q "^SENDGRID_API_KEY=SG\." .env || ! grep -q "^MAIL_PASSWORD=SG\." .env; then
-            echo "❌ ERRO: SendGrid não configurada no .env"
+          
+          # Verificar se as variáveis existem (não necessariamente começando com SG.)
+          if ! grep -q "^SENDGRID_API_KEY=" .env || ! grep -q "^MAIL_PASSWORD=" .env; then
+            echo "❌ ERRO: Variáveis SendGrid não encontradas no .env"
+            echo "🔍 Conteúdo atual do .env relacionado ao SendGrid:"
+            grep -E "(SENDGRID|MAIL_PASSWORD)" .env || echo "Nenhuma variável encontrada"
             rollback
           fi
-          echo "✅ SendGrid configurado corretamente"
+          
+          # Verificar se não são placeholders
+          if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env || grep -q "MAIL_PASSWORD.*PLACEHOLDER" .env; then
+            echo "❌ ERRO: SendGrid ainda contém placeholders"
+            echo "🔍 Conteúdo atual:"
+            grep -E "(SENDGRID|MAIL_PASSWORD)" .env
+            rollback
+          fi
+          
+          echo "✅ SendGrid configurado corretamente (sem placeholders)"
 
           # ==========================================
           # VALIDAÇÕES BÁSICAS
