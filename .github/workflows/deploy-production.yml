@@ -249,45 +249,42 @@ jobs:
           echo "🔍 Debug: SENDGRID_API_KEY valor completo: '$SENDGRID_API_KEY'"
           echo "🔍 Debug: Verificando se começa com SG.: \$(echo \"\$SENDGRID_API_KEY\" | grep -q '^SG\\.' && echo 'SIM' || echo 'NÃO')"
 
-          # Substituir placeholder da API Key do SendGrid pela secret real
-          echo "📧 Configurando SendGrid API Key..."
+          # NOVA ABORDAGEM: Adicionar diretamente ao .env
+          echo "📧 Configurando SendGrid API Key - NOVA ABORDAGEM..."
 
           # Mostrar estado inicial do .env
           echo "🔍 Estado inicial do .env:"
           grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | head -2
 
           if [ -n "$SENDGRID_API_KEY" ]; then
-            # Usar uma abordagem mais segura para substituição
-            echo "🔧 Substituindo placeholder por API Key real..."
+            echo "🔧 Aplicando SendGrid API Key diretamente ao .env..."
             echo "🔧 API Key recebida: \${SENDGRID_API_KEY:0:15}... (primeiros 15 chars)"
 
-            # Escapar caracteres especiais na API Key
-            ESCAPED_API_KEY=\$(printf '%s\n' "$SENDGRID_API_KEY" | sed 's/[[\.*^$()+?{|]/\\\\&/g')
-            echo "🔧 API Key após escape: \${ESCAPED_API_KEY:0:15}... (primeiros 15 chars)"
+            # Remover linhas existentes de SendGrid
+            sed -i '/^SENDGRID_API_KEY=/d' .env
+            sed -i '/^MAIL_PASSWORD=/d' .env
 
-            # Substituir nos dois lugares
-            sed -i "s|SENDGRID_API_KEY_PLACEHOLDER|\$ESCAPED_API_KEY|g" .env
+            # Adicionar as configurações corretas diretamente
+            echo "SENDGRID_API_KEY=$SENDGRID_API_KEY" >> .env
+            echo "MAIL_PASSWORD=$SENDGRID_API_KEY" >> .env
 
-            echo "✅ SendGrid API Key substituída"
-            echo "🔍 Verificando substituição..."
-            echo "🔍 Conteúdo do .env após substituição:"
-            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | head -2
-            echo "🔍 Verificando se ainda há placeholders:"
-            grep -c "SENDGRID_API_KEY_PLACEHOLDER" .env || echo "0 placeholders encontrados"
+            echo "✅ SendGrid API Key adicionada diretamente ao .env"
+            echo "🔍 Verificando configuração final:"
+            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | tail -2
           else
             echo "❌ ERRO: SENDGRID_API_KEY não está definida"
             rollback
           fi
 
-          # Verificar se a substituição foi bem-sucedida
-          if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env; then
-            echo "❌ ERRO: SendGrid API Key não foi substituída corretamente"
-            echo "🔍 Debug: Conteúdo atual da MAIL_PASSWORD:"
-            grep "MAIL_PASSWORD=" .env
-            rollback
-          else
+          # Verificar se a configuração foi bem-sucedida
+          if grep -q "^SENDGRID_API_KEY=SG\." .env && grep -q "^MAIL_PASSWORD=SG\." .env; then
             echo "✅ SendGrid API Key configurada com sucesso"
-            echo "🔍 Verificação: MAIL_PASSWORD configurada corretamente"
+            echo "🔍 Verificação: Ambas as variáveis configuradas corretamente"
+          else
+            echo "❌ ERRO: SendGrid API Key não foi configurada corretamente"
+            echo "🔍 Debug: Conteúdo atual das variáveis SendGrid:"
+            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env
+            rollback
           fi
 
           # ==========================================
