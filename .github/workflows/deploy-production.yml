@@ -229,18 +229,9 @@ jobs:
           fi
 
           # ==========================================
-          # CONFIGURAÇÃO DO AMBIENTE PRODUCTION
+          # CONFIGURAÇÃO DE SECRETS (SENDGRID) - ANTES DO BUILD
           # ==========================================
-          echo "📋 Configurando ambiente de produção..."
-
-          # Usar .env.production como base (seguindo padrão dev)
-          echo "📋 Copiando .env.production para .env (JWT_SECRET já incluído)..."
-          cp .env.production .env
-
-          # ==========================================
-          # CONFIGURAÇÃO DE SECRETS (SENDGRID)
-          # ==========================================
-          echo "🔐 Configurando secrets de produção..."
+          echo "🔐 Configurando secrets ANTES do build..."
 
           # Debug: verificar se a variável chegou
           echo "🔍 Debug: SENDGRID_API_KEY length: \${#SENDGRID_API_KEY}"
@@ -249,32 +240,41 @@ jobs:
           echo "🔍 Debug: SENDGRID_API_KEY valor completo: '$SENDGRID_API_KEY'"
           echo "🔍 Debug: Verificando se começa com SG.: \$(echo \"\$SENDGRID_API_KEY\" | grep -q '^SG\\.' && echo 'SIM' || echo 'NÃO')"
 
-          # NOVA ABORDAGEM: Adicionar diretamente ao .env
-          echo "📧 Configurando SendGrid API Key - NOVA ABORDAGEM..."
-
-          # Mostrar estado inicial do .env
-          echo "🔍 Estado inicial do .env:"
-          grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | head -2
-
+          # CORREÇÃO: Modificar .env.production ANTES do build
+          echo "📧 Configurando SendGrid API Key no .env.production ANTES do build..."
+          
+          # Mostrar estado inicial do .env.production
+          echo "🔍 Estado inicial do .env.production:"
+          grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env.production | head -2
+          
           if [ -n "$SENDGRID_API_KEY" ]; then
-            echo "🔧 Aplicando SendGrid API Key diretamente ao .env..."
+            echo "🔧 Aplicando SendGrid API Key diretamente ao .env.production..."
             echo "🔧 API Key recebida: \${SENDGRID_API_KEY:0:15}... (primeiros 15 chars)"
-
-            # Remover linhas existentes de SendGrid
-            sed -i '/^SENDGRID_API_KEY=/d' .env
-            sed -i '/^MAIL_PASSWORD=/d' .env
-
-            # Adicionar as configurações corretas diretamente
-            echo "SENDGRID_API_KEY=$SENDGRID_API_KEY" >> .env
-            echo "MAIL_PASSWORD=$SENDGRID_API_KEY" >> .env
-
-            echo "✅ SendGrid API Key adicionada diretamente ao .env"
-            echo "🔍 Verificando configuração final:"
-            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | tail -2
+            
+            # Remover linhas existentes de SendGrid do .env.production
+            sed -i '/^SENDGRID_API_KEY=/d' .env.production
+            sed -i '/^MAIL_PASSWORD=/d' .env.production
+            
+            # Adicionar as configurações corretas diretamente ao .env.production
+            echo "SENDGRID_API_KEY=$SENDGRID_API_KEY" >> .env.production
+            echo "MAIL_PASSWORD=$SENDGRID_API_KEY" >> .env.production
+            
+            echo "✅ SendGrid API Key adicionada diretamente ao .env.production"
+            echo "🔍 Verificando configuração final no .env.production:"
+            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env.production | tail -2
           else
             echo "❌ ERRO: SENDGRID_API_KEY não está definida"
             rollback
           fi
+
+          # ==========================================
+          # CONFIGURAÇÃO DO AMBIENTE PRODUCTION
+          # ==========================================
+          echo "📋 Configurando ambiente de produção..."
+
+          # Usar .env.production como base (agora com secrets configuradas)
+          echo "📋 Copiando .env.production para .env (JWT_SECRET + SendGrid já incluídos)..."
+          cp .env.production .env
 
           # Verificar se a configuração foi bem-sucedida
           if grep -q "^SENDGRID_API_KEY=SG\." .env && grep -q "^MAIL_PASSWORD=SG\." .env; then
@@ -412,13 +412,13 @@ jobs:
 
           # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
           echo "🔍 Verificação crítica do sistema de logs..."
-          
+
           # CORREÇÃO PREVENTIVA AGRESSIVA DE LOGS
           echo "🔧 Aplicando correção preventiva agressiva de logs..."
           docker exec linkchartapi mkdir -p /var/www/storage/logs
           docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
-          
+
           # Criar arquivo de log principal se não existir
           CURRENT_DATE=$(date +%Y-%m-%d)
           docker exec linkchartapi touch /var/www/storage/logs/laravel.log
@@ -427,7 +427,7 @@ jobs:
           docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel-$CURRENT_DATE.log
           docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
           docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel-$CURRENT_DATE.log
-          
+
           # Testar sistema de logs
           LOG_TEST_RESULT=$(docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG_ENTRY' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
 
@@ -436,7 +436,7 @@ jobs:
             echo "🔧 Aplicando correção emergencial MÁXIMA..."
             docker exec linkchartapi chmod -R 777 /var/www/storage/
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-            
+
             # Testar novamente
             LOG_TEST_RESULT2=$(docker exec linkchartapi sh -c "echo 'DEPLOY_EMERGENCY_FIX_TEST' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
             if [ "$LOG_TEST_RESULT2" != "SUCCESS" ]; then
@@ -527,7 +527,7 @@ jobs:
           echo "🔧 Aplicando permissões 777 em todo storage/ para garantir funcionamento..."
           docker exec linkchartapi chmod -R 777 /var/www/storage/ || echo "⚠️ Aviso: chmod storage falhou"
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/ || echo "⚠️ Aviso: chown storage falhou"
-          
+
           # Garantir que arquivos de log específicos existam e tenham permissões corretas
           CURRENT_DATE=$(date +%Y-%m-%d)
           docker exec linkchartapi touch /var/www/storage/logs/laravel.log
@@ -538,28 +538,28 @@ jobs:
 
           # Testar se o sistema de logs funciona com múltiplos testes
           echo "🧪 Testando sistema de logs após migrations..."
-          
+
           # Teste 1: Arquivo direto
           TEST1_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test direct: $(date)' >> /var/www/storage/logs/deploy-test.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-          
+
           # Teste 2: Via PHP
           TEST2_RESULT=$(docker exec linkchartapi php -r "file_put_contents('/var/www/storage/logs/deploy-test-php.log', 'Deploy test PHP: ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND); echo 'SUCCESS';" 2>/dev/null || echo "FAILED")
-          
+
           # Teste 3: Laravel log
           TEST3_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test Laravel: $(date)' >> /var/www/storage/logs/laravel.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-          
+
           if [ "$TEST1_RESULT" != "SUCCESS" ] || [ "$TEST2_RESULT" != "SUCCESS" ] || [ "$TEST3_RESULT" != "SUCCESS" ]; then
             echo "❌ ERRO: Algum teste de log falhou (T1:$TEST1_RESULT, T2:$TEST2_RESULT, T3:$TEST3_RESULT)"
             echo "🔧 Aplicando correção emergencial MÁXIMA..."
             docker exec linkchartapi chmod -R 777 /var/www/storage/
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-            
+
             # Recriar arquivos de log com permissões máximas
             docker exec linkchartapi rm -f /var/www/storage/logs/*.log 2>/dev/null || true
             docker exec linkchartapi touch /var/www/storage/logs/laravel.log
             docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
             docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
-            
+
             echo "✅ Correção emergencial aplicada - logs devem funcionar agora"
           else
             echo "✅ Todos os testes de log passaram - sistema funcionando corretamente"
