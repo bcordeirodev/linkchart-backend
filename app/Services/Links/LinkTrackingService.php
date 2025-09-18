@@ -159,13 +159,13 @@ class LinkTrackingService
                     'city' => $location->city,
                     'iso_code' => $location->iso_code,
                     'state' => $location->state,
-                    'postal_code' => $location->postal_code,
+                    'postal_code' => $location->postal_code,,
+                    'continent' => $location->continent,
+                    'currency' => $location->currency,
                     'state_name' => $location->state_name,
                     'latitude' => $location->lat,
                     'longitude' => $location->lon,
-                    'timezone' => $location->timezone,
-                    'continent' => $location->continent,
-                    'currency' => $location->currency,
+                    'timezone' => $location->timezone
                 ];
             } else {
                 Log::warning('GeoIP returned default location for IP: ' . $ip);
