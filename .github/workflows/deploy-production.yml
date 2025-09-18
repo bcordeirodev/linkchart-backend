@@ -179,7 +179,7 @@ jobs:
             -o LogLevel=ERROR \
             -o TCPKeepAlive=yes \
             root@${{ env.DEPLOY_HOST }} << ENDSSH
-            export SENDGRID_API_KEY='$SENDGRID_API_KEY'
+            export SENDGRID_API_KEY="$SENDGRID_API_KEY"
             set -e  # Exit on any error
             cd ${{ env.PROJECT_PATH }}
 
@@ -245,14 +245,23 @@ jobs:
           # Debug: verificar se a variável chegou
           echo "🔍 Debug: SENDGRID_API_KEY length: \${#SENDGRID_API_KEY}"
           echo "🔍 Debug: SENDGRID_API_KEY prefix: \${SENDGRID_API_KEY:0:10}..."
+          echo "🔍 Debug: SENDGRID_API_KEY está definida: \$([ -n \"\$SENDGRID_API_KEY\" ] && echo 'SIM' || echo 'NÃO')"
 
           # Substituir placeholder da API Key do SendGrid pela secret real
           echo "📧 Configurando SendGrid API Key..."
           if [ -n "$SENDGRID_API_KEY" ]; then
             # Usar uma abordagem mais segura para substituição
             echo "🔧 Substituindo placeholder por API Key real..."
-            sed -i "s|SENDGRID_API_KEY_PLACEHOLDER|$SENDGRID_API_KEY|g" .env
+            
+            # Escapar caracteres especiais na API Key
+            ESCAPED_API_KEY=\$(printf '%s\n' "$SENDGRID_API_KEY" | sed 's/[[\.*^$()+?{|]/\\\\&/g')
+            
+            # Substituir nos dois lugares
+            sed -i "s|SENDGRID_API_KEY_PLACEHOLDER|\$ESCAPED_API_KEY|g" .env
+            
             echo "✅ SendGrid API Key substituída"
+            echo "🔍 Verificando substituição..."
+            grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | head -2
           else
             echo "❌ ERRO: SENDGRID_API_KEY não está definida"
             rollback
