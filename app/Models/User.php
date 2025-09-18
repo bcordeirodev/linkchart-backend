@@ -22,6 +22,8 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
+        'email_verified',
+        'email_verification_sent_at',
     ];
 
     /**
@@ -63,6 +65,8 @@ class User extends Authenticatable implements JWTSubject
     {
         return [
             'email_verified_at' => 'datetime',
+            'email_verification_sent_at' => 'datetime',
+            'email_verified' => 'boolean',
             'password' => 'hashed',
         ];
     }
@@ -70,5 +74,55 @@ class User extends Authenticatable implements JWTSubject
     public function links()
     {
         return $this->hasMany(Link::class);
+    }
+
+    /**
+     * Verificar se o email foi verificado
+     */
+    public function hasVerifiedEmail(): bool
+    {
+        return $this->email_verified && $this->email_verified_at !== null;
+    }
+
+    /**
+     * Marcar email como verificado
+     */
+    public function markEmailAsVerified(): void
+    {
+        $this->update([
+            'email_verified' => true,
+            'email_verified_at' => now()
+        ]);
+    }
+
+    /**
+     * Verificar se pode reenviar email de verificação (rate limiting)
+     */
+    public function canResendVerificationEmail(): bool
+    {
+        if (!$this->email_verification_sent_at) {
+            return true;
+        }
+
+        // Permitir reenvio após 2 minutos
+        return $this->email_verification_sent_at->addMinutes(2)->isPast();
+    }
+
+    /**
+     * Marcar que email de verificação foi enviado
+     */
+    public function markVerificationEmailSent(): void
+    {
+        $this->update([
+            'email_verification_sent_at' => now()
+        ]);
+    }
+
+    /**
+     * Relacionamento com tokens de verificação
+     */
+    public function emailVerificationTokens()
+    {
+        return $this->hasMany(EmailVerificationToken::class, 'email', 'email');
     }
 }

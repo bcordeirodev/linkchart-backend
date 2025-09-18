@@ -6,12 +6,20 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-// Imports relacionados ao email removidos
 use Tymon\JWTAuth\Facades\JWTAuth;
 use App\Models\User;
+use App\Models\EmailVerificationToken;
+use App\Services\EmailVerificationService;
 
 class AuthController extends Controller
 {
+    private EmailVerificationService $emailVerificationService;
+
+    public function __construct(EmailVerificationService $emailVerificationService)
+    {
+        $this->emailVerificationService = $emailVerificationService;
+    }
+
     /**
      * Registrar um novo usuário
      */
@@ -36,15 +44,25 @@ class AuthController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
+                'email_verified' => false, // Novo usuário não verificado
             ]);
 
+            // Enviar email de verificação
+            $emailResult = $this->emailVerificationService->sendVerificationEmail($user, $request);
+
+            // Gerar token JWT mesmo sem verificação (usuário pode usar o sistema)
             $token = JWTAuth::fromUser($user);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Usuário registrado com sucesso',
+                'message' => 'Usuário registrado com sucesso! Verifique seu email para ativar sua conta.',
                 'user' => $user,
-                'token' => $token
+                'token' => $token,
+                'email_verification' => [
+                    'sent' => $emailResult['success'],
+                    'message' => $emailResult['message'],
+                    'email' => $user->email
+                ]
             ], 201);
 
         } catch (\Exception $e) {
@@ -274,6 +292,202 @@ class AuthController extends Controller
         }
     }
 
-    // Funcionalidades de recuperação de senha removidas
-    // TODO: Implementar sistema de email quando necessário
+    /**
+     * Verificar email usando token
+     */
+    public function verifyEmail(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'token' => 'required|string|size:64'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Token inválido',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $result = $this->emailVerificationService->verifyEmail($request->token);
+
+            return response()->json($result, $result['success'] ? 200 : 400);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Email Verification Error', [
+                'token' => $request->token,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao verificar email',
+                'error_id' => uniqid('verify_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Reenviar email de verificação
+     */
+    public function resendVerificationEmail(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não autenticado'
+                ], 401);
+            }
+
+            if ($user->hasVerifiedEmail()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email já foi verificado',
+                    'type' => 'already_verified'
+                ], 400);
+            }
+
+            $result = $this->emailVerificationService->sendVerificationEmail($user, $request);
+
+            return response()->json($result, $result['success'] ? 200 : 400);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Resend Verification Email Error', [
+                'user_id' => auth()->id(),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao reenviar email de verificação',
+                'error_id' => uniqid('resend_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Solicitar recuperação de senha
+     */
+    public function forgotPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|max:255'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Email inválido',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $result = $this->emailVerificationService->sendPasswordResetEmail(
+                $request->email,
+                $request
+            );
+
+            return response()->json($result, 200); // Sempre 200 por segurança
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Forgot Password Error', [
+                'email' => $request->email,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao processar solicitação',
+                'error_id' => uniqid('forgot_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Redefinir senha usando token
+     */
+    public function resetPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'token' => 'required|string|size:64',
+                'password' => 'required|string|min:6|confirmed'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Dados inválidos',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $result = $this->emailVerificationService->resetPassword(
+                $request->token,
+                $request->password
+            );
+
+            return response()->json($result, $result['success'] ? 200 : 400);
+
+        } catch (\Exception $e) {
+            \Log::channel('api_errors')->error('Reset Password Error', [
+                'token' => $request->token,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro interno ao redefinir senha',
+                'error_id' => uniqid('reset_')
+            ], 500);
+        }
+    }
+
+    /**
+     * Verificar status de verificação do email
+     */
+    public function checkEmailVerificationStatus()
+    {
+        try {
+            $user = auth()->user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Usuário não autenticado'
+                ], 401);
+            }
+
+            return response()->json([
+                'success' => true,
+                'email_verified' => $user->hasVerifiedEmail(),
+                'email' => $user->email,
+                'can_resend' => !$user->hasVerifiedEmail() && $user->canResendVerificationEmail(),
+                'last_sent' => $user->email_verification_sent_at?->toISOString()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erro ao verificar status'
+            ], 500);
+        }
+    }
 }
