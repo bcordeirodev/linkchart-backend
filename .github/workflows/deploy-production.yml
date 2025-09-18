@@ -251,16 +251,16 @@ jobs:
 
           # Substituir placeholder da API Key do SendGrid pela secret real
           echo "📧 Configurando SendGrid API Key..."
-          
+
           # Mostrar estado inicial do .env
           echo "🔍 Estado inicial do .env:"
           grep -E "SENDGRID_API_KEY=|MAIL_PASSWORD=" .env | head -2
-          
+
           if [ -n "$SENDGRID_API_KEY" ]; then
             # Usar uma abordagem mais segura para substituição
             echo "🔧 Substituindo placeholder por API Key real..."
             echo "🔧 API Key recebida: \${SENDGRID_API_KEY:0:15}... (primeiros 15 chars)"
-            
+
             # Escapar caracteres especiais na API Key
             ESCAPED_API_KEY=\$(printf '%s\n' "$SENDGRID_API_KEY" | sed 's/[[\.*^$()+?{|]/\\\\&/g')
             echo "🔧 API Key após escape: \${ESCAPED_API_KEY:0:15}... (primeiros 15 chars)"
