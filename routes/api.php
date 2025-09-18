@@ -69,15 +69,25 @@ Route::prefix('auth')->controller(AuthController::class)->group(function () {
  * Todas as rotas abaixo requerem autenticação via JWT
  */
 Route::middleware(['api.auth:api'])->group(function () {
-    // === AUTENTICAÇÃO E PERFIL ===
+    // === AUTENTICAÇÃO E PERFIL (SEM VERIFICAÇÃO DE EMAIL) ===
     Route::get('/me', [AuthController::class, 'me']);                    // ✅ USADO: AuthService.getMe()
-    Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
-    Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
     Route::post('/logout', [AuthController::class, 'logout']);           // ✅ USADO: AuthService.signOut()
 
     // === VERIFICAÇÃO DE EMAIL (AUTENTICADO) ===
     Route::get('/email-verification-status', [AuthController::class, 'checkEmailVerificationStatus']); // ✅ NOVO: Status de verificação
     Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail']);      // ✅ NOVO: Reenviar email
+});
+
+/**
+ * ==============================
+ * ROTAS QUE REQUEREM EMAIL VERIFICADO
+ * ==============================
+ * Todas as rotas abaixo requerem autenticação via JWT E email verificado
+ */
+Route::middleware(['api.auth:api', 'verified'])->group(function () {
+    // === PERFIL (REQUER EMAIL VERIFICADO) ===
+    Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
+    Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
 
     // === ANALYTICS LEGADOS ===
     Route::get('/analytics', [ChartController::class, 'index']);         // ✅ USADO: useDashboardData hook
