@@ -13,9 +13,9 @@ class LinkUtm extends Model
     protected $fillable = [
         'click_id',
         'utm_source',
+        'utm_content',
         'utm_campaign',
         'utm_term',
-        'utm_content',
         'utm_medium',
     ];
 
