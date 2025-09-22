@@ -232,33 +232,56 @@ class MetricsCollector
     }
 
     /**
-     * Verifica se o Cache está disponível
+     * Verifica se o Cache está disponível com fallback inteligente
      */
     private function isCacheAvailable(): bool
     {
         try {
-            // SAFE: Usar env() direto para evitar problema de container resolution
+            // Priorizar Redis se disponível
             $cacheDriver = env('CACHE_DRIVER', 'file');
-            if ($cacheDriver === 'file') {
-                $cachePath = env('CACHE_PATH', storage_path('framework/cache/data'));
-                if (!is_dir($cachePath)) {
-                    // Tentar criar o diretório
-                    if (!mkdir($cachePath, 0755, true) && !is_dir($cachePath)) {
-                        Log::info('Cache directory does not exist and could not be created: ' . $cachePath);
-                        return false;
-                    }
-                }
-                if (!is_writable($cachePath)) {
-                    Log::info('Cache directory is not writable: ' . $cachePath);
-                    return false;
+
+            if ($cacheDriver === 'redis') {
+                // Testar Redis primeiro
+                try {
+                    Cache::store('redis')->put('cache_test_redis_' . uniqid(), 'test', 1);
+                    return true;
+                } catch (\Exception $redisError) {
+                    Log::warning('Redis cache not available, falling back to file cache: ' . $redisError->getMessage());
+                    $cacheDriver = 'file'; // Fallback para file
                 }
             }
 
-            // Testar operação de cache
+            if ($cacheDriver === 'file') {
+                $cachePath = env('CACHE_PATH', storage_path('framework/cache/data'));
+
+                // Verificar se diretório existe e é gravável
+                if (!is_dir($cachePath)) {
+                    // Tentar criar com permissões corretas
+                    if (!mkdir($cachePath, 0777, true) && !is_dir($cachePath)) {
+                        Log::warning('Cache directory could not be created: ' . $cachePath);
+                        return false;
+                    }
+                    // Garantir ownership correto após criação
+                    @chown($cachePath, 'www-data');
+                    @chgrp($cachePath, 'www-data');
+                }
+
+                if (!is_writable($cachePath)) {
+                    Log::warning('Cache directory not writable: ' . $cachePath);
+                    // Tentar corrigir permissões
+                    @chmod($cachePath, 0777);
+                    if (!is_writable($cachePath)) {
+                        return false;
+                    }
+                }
+            }
+
+            // Testar operação de cache final
             Cache::put('cache_test_' . uniqid(), 'test', 1);
             return true;
+
         } catch (\Exception $e) {
-            Log::info('Cache not available: ' . $e->getMessage());
+            Log::warning('Cache completely unavailable: ' . $e->getMessage());
             return false;
         }
     }
