@@ -225,15 +225,15 @@ jobs:
           # CONFIGURAR SENDGRID NO .ENV.PRODUCTION (APÓS GIT PULL)
           # ==========================================
           echo "📧 Configurando SendGrid no .env.production (após git pull)..."
-          
+
           # Remover linhas existentes do SendGrid
           sed -i '/^SENDGRID_API_KEY=/d' .env.production
           sed -i '/^MAIL_PASSWORD=/d' .env.production
-          
+
           # Adicionar API Key real do GitHub Secrets
           echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
           echo "MAIL_PASSWORD=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
-          
+
           # Debug: Verificar se foi aplicado corretamente
           echo "🔍 Verificando se SendGrid foi aplicado no .env.production:"
           if grep -q "^SENDGRID_API_KEY=" .env.production && ! grep -q "PLACEHOLDER" .env.production; then
@@ -263,7 +263,7 @@ jobs:
           cp .env.production .env
 
           echo "📧 Verificando SendGrid no .env..."
-          
+
           # Verificar se as variáveis existem (não necessariamente começando com SG.)
           if ! grep -q "^SENDGRID_API_KEY=" .env || ! grep -q "^MAIL_PASSWORD=" .env; then
             echo "❌ ERRO: Variáveis SendGrid não encontradas no .env"
@@ -271,7 +271,7 @@ jobs:
             grep -E "(SENDGRID|MAIL_PASSWORD)" .env || echo "Nenhuma variável encontrada"
             rollback
           fi
-          
+
           # Verificar se não são placeholders
           if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env || grep -q "MAIL_PASSWORD.*PLACEHOLDER" .env; then
             echo "❌ ERRO: SendGrid ainda contém placeholders"
@@ -279,7 +279,7 @@ jobs:
             grep -E "(SENDGRID|MAIL_PASSWORD)" .env
             rollback
           fi
-          
+
           echo "✅ SendGrid configurado corretamente (sem placeholders)"
 
           # ==========================================
@@ -397,13 +397,9 @@ jobs:
           docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
 
           # ==========================================
-          # CONFIGURAÇÃO BÁSICA DE CACHE
+          # CONFIGURAÇÃO BÁSICA DE CACHE (MOVIDO PARA APÓS cache:clear)
           # ==========================================
-          echo "🗂️ Configurando cache básico..."
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
-          docker exec linkchartapi chmod -R 775 /var/www/storage/framework/cache
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-          echo "✅ Cache configurado"
+          echo "🗂️ Configuração de cache será feita após cache:clear para evitar conflitos..."
 
           # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
           echo "🔍 Verificação crítica do sistema de logs..."
@@ -455,6 +451,24 @@ jobs:
           docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ cache:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan route:clear || { echo "❌ route:clear falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
+
+          # ==========================================
+          # CONFIGURAÇÃO COMPLETA DE CACHE (APÓS cache:clear)
+          # ==========================================
+          echo "🗂️ Configurando cache com permissões completas após cache:clear..."
+
+          # Criar diretórios básicos de cache
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/sessions
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/views
+
+          # Aplicar permissões 777 para permitir criação dinâmica de subdiretórios (GeoIP)
+          docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
+
+          echo "✅ Cache configurado com permissões completas (Laravel criará subdiretórios automaticamente)"
+
+          # Continuar com otimizações Laravel
           docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ config:cache falhou"; rollback; }
           docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
