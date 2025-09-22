@@ -351,6 +351,10 @@ jobs:
           docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
           docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
 
+          # Verificar se permissões foram aplicadas corretamente
+          echo "🔍 Verificando permissões do cache..."
+          docker exec linkchartapi ls -la /var/www/storage/framework/cache/data/
+
           echo "✅ Cache configurado com permissões completas (Laravel criará subdiretórios automaticamente)"
 
           # Continuar com otimizações Laravel
