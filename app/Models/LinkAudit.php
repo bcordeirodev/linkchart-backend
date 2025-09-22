@@ -17,9 +17,9 @@ class LinkAudit extends Model
         'user_id',
         'action',
         'old_values',
-        'user_agent',
         'new_values',
         'ip_address',
+        'user_agent',
     ];
 
     protected $casts = [
