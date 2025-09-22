@@ -300,33 +300,15 @@ jobs:
           # ==========================================
           echo "🗂️ Configuração de cache será feita após cache:clear para evitar conflitos..."
 
-          # VERIFICAÇÃO CRÍTICA: Garantir que sistema de logs funciona ANTES de continuar
-          echo "🔍 Verificação crítica do sistema de logs..."
+          # ==========================================
+          # PREPARAÇÃO INICIAL MÍNIMA
+          # ==========================================
+          echo "🔧 Preparação inicial do sistema de logs..."
 
-          # CORREÇÃO PREVENTIVA AGRESSIVA DE LOGS
-          echo "🔧 Aplicando correção preventiva agressiva de logs..."
+          # Apenas garantir que o diretório básico existe
           docker exec linkchartapi mkdir -p /var/www/storage/logs
-          docker exec linkchartapi chmod -R 777 /var/www/storage/logs/
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/logs/
 
-          # Criar arquivo de log principal se não existir
-          CURRENT_DATE=$(date +%Y-%m-%d)
-          docker exec linkchartapi touch /var/www/storage/logs/laravel.log
-          docker exec linkchartapi touch /var/www/storage/logs/laravel-$CURRENT_DATE.log
-          docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
-          docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel-$CURRENT_DATE.log
-          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
-          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel-$CURRENT_DATE.log
-
-          # Teste simples do sistema de logs
-          if docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log" 2>/dev/null; then
-            echo "✅ Sistema de logs funcionando"
-          else
-            echo "⚠️ Problema com logs, aplicando correção..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-            echo "✅ Correção de logs aplicada"
-          fi
+          echo "✅ Preparação inicial concluída - permissões completas serão aplicadas após cache:clear"
 
           # ==========================================
           # OTIMIZAÇÕES LARAVEL
@@ -338,24 +320,14 @@ jobs:
           docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
 
           # ==========================================
-          # CONFIGURAÇÃO COMPLETA DE CACHE (APÓS cache:clear)
+          # EXECUÇÃO DO SCRIPT OTIMIZADO DE PERMISSÕES
           # ==========================================
-          echo "🗂️ Configurando cache com permissões completas após cache:clear..."
+          echo "🔧 Executando script otimizado de permissões (pós cache:clear)..."
 
-          # Criar diretórios básicos de cache
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/sessions
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/views
+          # Executar o script otimizado que faz tudo de uma vez
+          docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Script de permissões falhou"; rollback; }
 
-          # Aplicar permissões 777 para permitir criação dinâmica de subdiretórios (GeoIP)
-          docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-
-          # Verificar se permissões foram aplicadas corretamente
-          echo "🔍 Verificando permissões do cache..."
-          docker exec linkchartapi ls -la /var/www/storage/framework/cache/data/
-
-          echo "✅ Cache configurado com permissões completas (Laravel criará subdiretórios automaticamente)"
+          echo "✅ Permissões aplicadas via script otimizado"
 
           # Continuar com otimizações Laravel
           docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
@@ -392,35 +364,17 @@ jobs:
           echo "🎉 MIGRATIONS EXECUTADAS COM SUCESSO!"
 
           # ==========================================
-          # CORREÇÃO FINAL DE PERMISSÕES (APÓS MIGRATIONS)
+          # VERIFICAÇÃO PÓS-MIGRATIONS (SEM REDUNDÂNCIAS)
           # ==========================================
-          echo "🔧 Aplicando correção final AGRESSIVA de permissões nos logs..."
+          echo "🧪 Verificando sistema após migrations..."
 
-          # Correção AGRESSIVA de permissões que podem ter sido alteradas durante migrations
-          echo "🔧 Aplicando permissões 777 em todo storage/ para garantir funcionamento..."
-          docker exec linkchartapi chmod -R 777 /var/www/storage/ || echo "⚠️ Aviso: chmod storage falhou"
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/ || echo "⚠️ Aviso: chown storage falhou"
-
-          # Garantir que arquivos de log específicos existam e tenham permissões corretas
+          # Simples verificação de que o sistema está funcionando
           CURRENT_DATE=$(date +%Y-%m-%d)
-          docker exec linkchartapi touch /var/www/storage/logs/laravel.log
-          docker exec linkchartapi touch /var/www/storage/logs/laravel-$CURRENT_DATE.log
-          docker exec linkchartapi touch /var/www/storage/logs/api-errors-$CURRENT_DATE.log
-          docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
-          docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/*.log 2>/dev/null || true
-
-          # Verificação simples de logs após migrations
-          echo "🧪 Verificando logs após migrations..."
-          if docker exec linkchartapi sh -c "echo 'Deploy success: $(date)' >> /var/www/storage/logs/laravel.log" 2>/dev/null; then
-            echo "✅ Sistema de logs funcionando após migrations"
+          if docker exec linkchartapi sh -c "echo '[$(date)] Deploy success after migrations' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log" 2>/dev/null; then
+            echo "✅ Sistema funcionando corretamente após migrations"
           else
-            echo "⚠️ Reaplicando permissões de logs..."
-            docker exec linkchartapi chmod -R 777 /var/www/storage/
-            docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-            echo "✅ Permissões de logs corrigidas"
+            echo "⚠️ Sistema com problemas após migrations - mas continuando"
           fi
-
-          echo "✅ Correção final de permissões concluída!"
 
           # ==========================================
           # VERIFICAÇÕES BÁSICAS
@@ -467,23 +421,20 @@ jobs:
           done
 
           # ==========================================
-          # CORREÇÃO FINAL DEFINITIVA DE PERMISSÕES (ÚLTIMO PASSO)
+          # VERIFICAÇÃO FINAL DO SISTEMA DE CACHE
           # ==========================================
-          echo "🔧 APLICANDO CORREÇÃO FINAL DE PERMISSÕES PARA GEOIP (ÚLTIMO PASSO)..."
+          echo "🔍 Verificação final do sistema de cache para GeoIP..."
 
-          # Garantir que diretório de cache existe
-          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
+          # Simples verificação de que o cache está funcionando
+          if docker exec linkchartapi ls -la /var/www/storage/framework/cache/data/ >/dev/null 2>&1; then
+            echo "✅ Sistema de cache pronto para GeoIP"
 
-          # Aplicar permissões 777 DEFINITIVAS para GeoIP
-          docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
-          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
-
-          # Verificar permissões finais
-          echo "🔍 Verificação final de permissões do cache:"
-          docker exec linkchartapi ls -la /var/www/storage/framework/cache/data/
-          docker exec linkchartapi stat /var/www/storage/framework/cache/data/ | grep Access
-
-          echo "✅ CORREÇÃO FINAL DE PERMISSÕES APLICADA - GEOIP DEVE FUNCIONAR!"
+            # Mostrar estatísticas dos subdiretórios pré-criados
+            SUBDIRS_COUNT=$(docker exec linkchartapi find /var/www/storage/framework/cache/data -type d | wc -l)
+            echo "📊 Subdiretórios de cache disponíveis: $SUBDIRS_COUNT"
+          else
+            echo "⚠️ Sistema de cache com problemas - mas deploy continuando"
+          fi
 
             echo "🎉 DEPLOYMENT DE PRODUÇÃO CONCLUÍDO COM SUCESSO!"
             echo "📊 Containers ativos:"
