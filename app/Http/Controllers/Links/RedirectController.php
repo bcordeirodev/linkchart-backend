@@ -108,8 +108,8 @@ class RedirectController extends Controller
     {
         $metricsContext = [
             'slug' => $slug,
-            'link_id' => $link->id,
             'ip' => $request->ip(),
+            'link_id' => $link->id,
             'user_agent' => $request->userAgent(),
             'referer' => $request->headers->get('referer'),
             'timestamp' => now()->toISOString(),
