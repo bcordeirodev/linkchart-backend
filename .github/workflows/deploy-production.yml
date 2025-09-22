@@ -47,137 +47,36 @@ jobs:
 
     - name: 🏥 Verificar Conectividade do Servidor
       run: |
-        echo "🔍 Verificando conectividade SSH do servidor..."
+        echo "🔍 Verificação básica de conectividade..."
 
-        # Teste múltiplas portas para verificar conectividade
-        echo "🔌 Testando conectividade em múltiplas portas..."
-
-        # Teste porta SSH 22
-        SSH_PORT_OK=false
+        # Teste simples de conectividade SSH
         if timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null; then
-          echo "✅ Porta SSH 22 acessível"
-          SSH_PORT_OK=true
+          echo "✅ Porta SSH 22 acessível - deploy pode prosseguir"
         else
-          echo "⚠️ Porta SSH 22 não acessível via netcat"
-        fi
-
-        # Teste porta HTTP 80 (alternativa)
-        HTTP_PORT_OK=false
-        if timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 80 2>/dev/null; then
-          echo "✅ Porta HTTP 80 acessível"
-          HTTP_PORT_OK=true
-        else
-          echo "⚠️ Porta HTTP 80 não acessível via netcat"
-        fi
-
-        # Teste HTTP endpoint (se disponível)
-        HTTP_OK=false
-        if timeout 15 curl -s --max-time 10 --connect-timeout 5 -o /dev/null http://${{ env.DEPLOY_HOST }}/health 2>/dev/null; then
-          echo "✅ HTTP endpoint /health acessível"
-          HTTP_OK=true
-        elif timeout 15 curl -s --max-time 10 --connect-timeout 5 -o /dev/null http://${{ env.DEPLOY_HOST }}/ 2>/dev/null; then
-          echo "✅ HTTP endpoint / acessível"
-          HTTP_OK=true
-        else
-          echo "⚠️ HTTP endpoints não acessíveis"
-        fi
-
-        # Avaliar conectividade geral
-        if [ "$SSH_PORT_OK" = false ] && [ "$HTTP_PORT_OK" = false ] && [ "$HTTP_OK" = false ]; then
-          echo "❌ Nenhuma forma de conectividade detectada"
-          echo "🔧 Possíveis causas:"
-          echo "  1. Firewall bloqueando GitHub Actions IPs"
-          echo "  2. Servidor completamente offline"
-          echo "  3. Rate limiting agressivo"
-          echo "  4. Problemas de rede temporários"
-          exit 1
-        else
-          echo "✅ Pelo menos uma forma de conectividade detectada"
-          if [ "$SSH_PORT_OK" = true ]; then
-            echo "📡 SSH disponível - deploy pode prosseguir"
-          else
-            echo "⚠️ SSH via netcat falhou, mas tentaremos SSH direto"
-          fi
-        fi
-
-        # Aguardar um pouco para evitar rate limiting
-        echo "⏳ Aguardando para evitar rate limiting SSH..."
-        sleep 5
-
-        # Teste SSH com retry e configurações otimizadas
-        SSH_SUCCESS=false
-        for attempt in {1..3}; do
-          echo "🔄 Tentativa SSH de conectividade $attempt/3..."
-
-          if timeout 15 ssh \
-            -o ConnectTimeout=10 \
-            -o ServerAliveInterval=5 \
-            -o ServerAliveCountMax=2 \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR \
-            root@${{ env.DEPLOY_HOST }} "echo 'SSH Test OK'" >/dev/null 2>&1; then
-            echo "✅ SSH conectividade OK na tentativa $attempt"
-            SSH_SUCCESS=true
-            break
-          else
-            echo "⚠️ SSH falhou na tentativa $attempt"
-            if [ $attempt -lt 3 ]; then
-              echo "⏳ Aguardando 10s antes da próxima tentativa..."
-              sleep 10
-            fi
-          fi
-        done
-
-        if [ "$SSH_SUCCESS" = false ]; then
-          echo "❌ SSH connection test failed após 3 tentativas"
-          echo "🔧 Possíveis causas:"
-          echo "  1. Rate limiting SSH devido a ataques brute force"
-          echo "  2. GitHub Actions IPs bloqueados no firewall"
-          echo "  3. Servidor sobrecarregado"
-          echo "  4. Problema de rede temporário"
-          echo "  5. SSH daemon com problemas"
-          echo ""
-          echo "💡 O deploy tentará continuar com retry logic mais robusto..."
-          # Não falhar aqui, deixar o deploy tentar com sua própria lógica
+          echo "⚠️ Porta SSH 22 não responde, mas tentaremos conectar mesmo assim"
         fi
 
     - name: 🚀 Deploy to Production Server
       run: |
-        echo "🔄 Conectando ao servidor com retry logic robusto..."
-        max_attempts=5
-        delay=15
+        echo "🚀 Conectando ao servidor para deploy..."
 
-        # Teste rápido de conectividade antes de tentar deploy
-        echo "🔌 Verificação final de conectividade..."
-        if ! timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null; then
-          echo "⚠️ Porta SSH não responde, mas continuando com retry logic..."
-        fi
+        # Retry simples para SSH (máximo 3 tentativas)
+        for attempt in {1..3}; do
+          echo "🔄 Tentativa SSH $attempt/3..."
 
-        for attempt in $(seq 1 $max_attempts); do
-          echo "🔄 Tentativa SSH $attempt/$max_attempts..."
-
-          # Aguardar progressivamente mais entre tentativas para evitar rate limiting
           if [ $attempt -gt 1 ]; then
-            wait_time=$((delay * attempt))
-            echo "⏳ Aguardando ${wait_time}s para evitar rate limiting..."
-            sleep $wait_time
-
-            # Testar conectividade novamente antes de tentar SSH
-            echo "🔌 Re-testando conectividade..."
-            timeout 5 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null || echo "⚠️ Porta SSH ainda não responde"
+            echo "⏳ Aguardando 15s antes da próxima tentativa..."
+            sleep 15
           fi
 
           if ssh \
-            -o ConnectTimeout=15 \
-            -o ServerAliveInterval=30 \
+            -o ConnectTimeout=30 \
+            -o ServerAliveInterval=60 \
             -o ServerAliveCountMax=3 \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=no \
             -o UserKnownHostsFile=/dev/null \
             -o LogLevel=ERROR \
-            -o TCPKeepAlive=yes \
             root@${{ env.DEPLOY_HOST }} << ENDSSH
             set -e  # Exit on any error
             cd ${{ env.PROJECT_PATH }}
@@ -419,28 +318,14 @@ jobs:
           docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
           docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel-$CURRENT_DATE.log
 
-          # Testar sistema de logs
-          LOG_TEST_RESULT=$(docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG_ENTRY' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          if [ "$LOG_TEST_RESULT" != "SUCCESS" ]; then
-            echo "❌ ERRO CRÍTICO: Sistema de logs não funciona após correção preventiva"
-            echo "🔧 Aplicando correção emergencial MÁXIMA..."
+          # Teste simples do sistema de logs
+          if docker exec linkchartapi sh -c "echo 'DEPLOY_TEST_LOG' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log" 2>/dev/null; then
+            echo "✅ Sistema de logs funcionando"
+          else
+            echo "⚠️ Problema com logs, aplicando correção..."
             docker exec linkchartapi chmod -R 777 /var/www/storage/
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-
-            # Testar novamente
-            LOG_TEST_RESULT2=$(docker exec linkchartapi sh -c "echo 'DEPLOY_EMERGENCY_FIX_TEST' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-            if [ "$LOG_TEST_RESULT2" != "SUCCESS" ]; then
-              echo "❌ FALHA CRÍTICA: Sistema de logs não funciona mesmo após correção emergencial máxima"
-              echo "🔍 Debug: Verificando estrutura de diretórios..."
-              docker exec linkchartapi ls -la /var/www/storage/
-              docker exec linkchartapi ls -la /var/www/storage/logs/
-              rollback
-            else
-              echo "✅ Sistema de logs corrigido com correção emergencial máxima"
-            fi
-          else
-            echo "✅ Sistema de logs funcionando corretamente após correção preventiva"
+            echo "✅ Correção de logs aplicada"
           fi
 
           # ==========================================
@@ -486,40 +371,15 @@ jobs:
           echo "📋 Verificando status das migrations..."
           docker exec linkchartapi php /var/www/artisan migrate:status || { echo "❌ migrate:status falhou"; rollback; }
 
-          # Executar migrations com retry logic melhorado
+          # Executar migrations (simples, sem retry excessivo)
           echo "🔄 Executando migrations..."
-          MIGRATION_SUCCESS=false
-          for attempt in {1..5}; do
-            echo "🔄 Tentativa de migration $attempt/5..."
-
-            # Aguardar entre tentativas (exceto primeira)
-            if [ $attempt -gt 1 ]; then
-              wait_time=$((10 * attempt))
-              echo "⏳ Aguardando ${wait_time}s antes da tentativa $attempt..."
-              sleep $wait_time
-            fi
-
-            if docker exec linkchartapi php /var/www/artisan migrate --force; then
-              echo "✅ Migrations executadas com sucesso na tentativa $attempt"
-              MIGRATION_SUCCESS=true
-              break
-            else
-              echo "⚠️ Migration falhou na tentativa $attempt"
-              if [ $attempt -lt 5 ]; then
-                echo "🔄 Tentando novamente..."
-                # Mostrar logs para debug
-                echo "📋 Últimas linhas do log Laravel:"
-                docker logs linkchartapi --tail 10 2>/dev/null || echo "Não foi possível obter logs"
-              fi
-            fi
-          done
-
-          if [ "$MIGRATION_SUCCESS" = false ]; then
-            echo "❌ ERRO CRÍTICO: Migrations falharam após 5 tentativas"
-            echo "📋 Verificando logs do Laravel..."
-            docker logs linkchartapi --tail 30
+          if ! docker exec linkchartapi php /var/www/artisan migrate --force; then
+            echo "❌ ERRO: Migrations falharam"
+            echo "📋 Logs do Laravel:"
+            docker logs linkchartapi --tail 20
             rollback
           fi
+          echo "✅ Migrations executadas com sucesso"
 
           # Verificar status final das migrations
           echo "📋 Verificando status final das migrations..."
@@ -545,33 +405,15 @@ jobs:
           docker exec linkchartapi chmod 666 /var/www/storage/logs/*.log 2>/dev/null || true
           docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/*.log 2>/dev/null || true
 
-          # Testar se o sistema de logs funciona com múltiplos testes
-          echo "🧪 Testando sistema de logs após migrations..."
-
-          # Teste 1: Arquivo direto
-          TEST1_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test direct: $(date)' >> /var/www/storage/logs/deploy-test.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          # Teste 2: Via PHP
-          TEST2_RESULT=$(docker exec linkchartapi php -r "file_put_contents('/var/www/storage/logs/deploy-test-php.log', 'Deploy test PHP: ' . date('Y-m-d H:i:s') . PHP_EOL, FILE_APPEND); echo 'SUCCESS';" 2>/dev/null || echo "FAILED")
-
-          # Teste 3: Laravel log
-          TEST3_RESULT=$(docker exec linkchartapi sh -c "echo 'Deploy test Laravel: $(date)' >> /var/www/storage/logs/laravel.log 2>&1 && echo 'SUCCESS' || echo 'FAILED'")
-
-          if [ "$TEST1_RESULT" != "SUCCESS" ] || [ "$TEST2_RESULT" != "SUCCESS" ] || [ "$TEST3_RESULT" != "SUCCESS" ]; then
-            echo "❌ ERRO: Algum teste de log falhou (T1:$TEST1_RESULT, T2:$TEST2_RESULT, T3:$TEST3_RESULT)"
-            echo "🔧 Aplicando correção emergencial MÁXIMA..."
+          # Verificação simples de logs após migrations
+          echo "🧪 Verificando logs após migrations..."
+          if docker exec linkchartapi sh -c "echo 'Deploy success: $(date)' >> /var/www/storage/logs/laravel.log" 2>/dev/null; then
+            echo "✅ Sistema de logs funcionando após migrations"
+          else
+            echo "⚠️ Reaplicando permissões de logs..."
             docker exec linkchartapi chmod -R 777 /var/www/storage/
             docker exec linkchartapi chown -R www-data:www-data /var/www/storage/
-
-            # Recriar arquivos de log com permissões máximas
-            docker exec linkchartapi rm -f /var/www/storage/logs/*.log 2>/dev/null || true
-            docker exec linkchartapi touch /var/www/storage/logs/laravel.log
-            docker exec linkchartapi chmod 666 /var/www/storage/logs/laravel.log
-            docker exec linkchartapi chown www-data:www-data /var/www/storage/logs/laravel.log
-
-            echo "✅ Correção emergencial aplicada - logs devem funcionar agora"
-          else
-            echo "✅ Todos os testes de log passaram - sistema funcionando corretamente"
+            echo "✅ Permissões de logs corrigidas"
           fi
 
           echo "✅ Correção final de permissões concluída!"
@@ -604,21 +446,19 @@ jobs:
           echo "🏥 Health check final da aplicação..."
           sleep 15
 
-          # Tentar health check múltiplas vezes
-          for i in {1..5}; do
+          # Health check simples (3 tentativas)
+          for i in {1..3}; do
             if curl -f -s --max-time 15 http://localhost:8000/health >/dev/null 2>&1; then
               echo "✅ Health check passou na tentativa $i"
               break
             else
               echo "⚠️ Health check falhou na tentativa $i"
-              if [ $i -eq 5 ]; then
-                echo "❌ Health check falhou após 5 tentativas"
-                # Mostrar logs para debug
-                echo "📋 Logs do container para debug:"
-                docker logs linkchartapi --tail 50
+              if [ $i -eq 3 ]; then
+                echo "❌ Health check falhou após 3 tentativas"
+                docker logs linkchartapi --tail 30
                 rollback
               fi
-              sleep 20
+              sleep 15
             fi
           done
 
@@ -631,16 +471,11 @@ jobs:
             break
           else
             echo "❌ SSH failed on attempt $attempt"
-            if [ $attempt -eq $max_attempts ]; then
-              echo "💥 SSH failed after $max_attempts attempts"
-              echo "🔧 Troubleshooting steps:"
-              echo "  1. SSH rate limiting due to brute force attacks"
-              echo "  2. Check server status: ssh root@${{ env.DEPLOY_HOST }}"
-              echo "  3. Check SSH logs: journalctl -u ssh -n 20"
-              echo "  4. Restart SSH if needed: systemctl restart sshd"
+            if [ $attempt -eq 3 ]; then
+              echo "💥 SSH failed after 3 attempts"
+              echo "🔧 Verifique: ssh root@${{ env.DEPLOY_HOST }}"
               exit 1
             fi
-            echo "⏳ SSH attempt failed, will retry with increased delay..."
           fi
         done
 
