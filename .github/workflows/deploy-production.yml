@@ -466,6 +466,25 @@ jobs:
             fi
           done
 
+          # ==========================================
+          # CORREÇÃO FINAL DEFINITIVA DE PERMISSÕES (ÚLTIMO PASSO)
+          # ==========================================
+          echo "🔧 APLICANDO CORREÇÃO FINAL DE PERMISSÕES PARA GEOIP (ÚLTIMO PASSO)..."
+
+          # Garantir que diretório de cache existe
+          docker exec linkchartapi mkdir -p /var/www/storage/framework/cache/data
+
+          # Aplicar permissões 777 DEFINITIVAS para GeoIP
+          docker exec linkchartapi chmod -R 777 /var/www/storage/framework/cache
+          docker exec linkchartapi chown -R www-data:www-data /var/www/storage/framework/cache
+
+          # Verificar permissões finais
+          echo "🔍 Verificação final de permissões do cache:"
+          docker exec linkchartapi ls -la /var/www/storage/framework/cache/data/
+          docker exec linkchartapi stat /var/www/storage/framework/cache/data/ | grep Access
+
+          echo "✅ CORREÇÃO FINAL DE PERMISSÕES APLICADA - GEOIP DEVE FUNCIONAR!"
+
             echo "🎉 DEPLOYMENT DE PRODUÇÃO CONCLUÍDO COM SUCESSO!"
             echo "📊 Containers ativos:"
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
@@ -520,6 +539,15 @@ jobs:
           echo "📋 Health response: $HEALTH_FULL"
         else
           echo "⚠️ Health endpoint response: $HEALTH_FULL"
+        fi
+
+        # Verificar se GeoIP está funcionando (teste final)
+        echo "🌍 Testando GeoIP após deploy..."
+        GEOIP_TEST=$(curl -s -k --max-time 15 'https://api.linkcharts.com.br/api/r/djuMBO?real_ip=8.8.8.8' | jq -r '.success // "false"')
+        if [ "$GEOIP_TEST" = "true" ]; then
+          echo "✅ GeoIP endpoint respondendo corretamente"
+        else
+          echo "⚠️ GeoIP endpoint com problemas - mas deploy prosseguiu"
         fi
 
         echo "🎉 VERIFICAÇÃO DE PRODUÇÃO CONCLUÍDA!"
