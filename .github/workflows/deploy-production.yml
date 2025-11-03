@@ -90,15 +90,9 @@ jobs:
             # Parar containers atuais
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
 
-            # Restaurar backup mais recente
-            BACKUP_FILE=$(ls -t .env.backup.* 2>/dev/null | head -1)
-            if [ -n "$BACKUP_FILE" ]; then
-              echo "📦 Restaurando backup: $BACKUP_FILE"
-              cp "$BACKUP_FILE" .env
-            else
-              echo "📋 Usando .env.production como fallback (JWT_SECRET já incluído)"
-              cp .env.production .env
-            fi
+            # Restaurar configuração de produção padrão
+            echo "📋 Restaurando .env.production como configuração padrão"
+            cp .env.production .env
 
             # Tentar subir versão anterior
             docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
@@ -112,8 +106,8 @@ jobs:
           # ==========================================
           echo "🧹 Preparando ambiente de produção..."
 
-          # Limpar backups antigos (manter 7 mais recentes)
-          ls -t .env.backup.* 2>/dev/null | tail -n +8 | xargs rm -f 2>/dev/null || true
+          # Limpeza básica (sem necessidade de backups de .env)
+          echo "🧹 Limpeza básica do ambiente..."
 
           # Pull das mudanças mais recentes
           echo "⬇️ Baixando código atualizado..."
@@ -146,11 +140,8 @@ jobs:
             exit 1
           fi
 
-          # Backup do .env atual
-          if [ -f .env ]; then
-            echo "💾 Backup do .env atual..."
-            cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
-          fi
+          # Preparar para sobrescrever .env (sem backup desnecessário)
+          echo "📋 Preparando para configurar .env de produção..."
 
           # ==========================================
           # CONFIGURAÇÃO DO AMBIENTE PRODUCTION
@@ -563,7 +554,7 @@ jobs:
           echo "  2. cd ${{ env.PROJECT_PATH }}"
           echo "  3. docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps"
           echo "  4. docker logs linkchartapi"
-          echo "  5. Verificar .env.backup.* para versões anteriores"
+          echo "  5. Verificar .env.production para configuração base"
           echo ""
           echo "💡 Rollback executado - sistema deve estar na versão anterior"
         fi
