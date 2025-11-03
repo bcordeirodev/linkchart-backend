@@ -62,11 +62,35 @@ class DatabaseSeeder extends Seeder
             'clicks' => 0,
         ]);
 
+        // Criar link ID 5 - E-commerce Campaign (Novo)
+        \App\Models\Link::factory()->create([
+            'id' => 5,
+            'user_id' => 2,
+            'title' => 'E-commerce Black Friday 2024',
+            'slug' => 'bf2024',
+            'original_url' => 'https://shop.example.com/black-friday',
+            'is_active' => true,
+            'clicks' => 0,
+        ]);
+
+        // Criar link ID 6 - Tech Blog International (Novo)
+        \App\Models\Link::factory()->create([
+            'id' => 6,
+            'user_id' => 2,
+            'title' => 'Advanced React Patterns Guide',
+            'slug' => 'react-patterns',
+            'original_url' => 'https://blog.tech.com/react-patterns',
+            'is_active' => true,
+            'clicks' => 0,
+        ]);
+
         // Popular clicks com dados realísticos
         $this->call([
             ClicksSeeder::class,
             LinkThreeClicksSeeder::class,
             LinkFourClicksSeeder::class,
+            LinkFiveClicksSeeder::class,  // Novo seeder
+            LinkSixClicksSeeder::class,   // Novo seeder
         ]);
     }
 }
