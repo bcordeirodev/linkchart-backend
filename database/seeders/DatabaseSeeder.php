@@ -51,10 +51,22 @@ class DatabaseSeeder extends Seeder
             'clicks' => 0,
         ]);
 
+        // Criar link ID 4 para testes de analytics
+        \App\Models\Link::factory()->create([
+            'id' => 4,
+            'user_id' => 2,
+            'title' => 'Link Analytics Dashboard',
+            'slug' => 'analytics-test',
+            'original_url' => 'https://linkcharts.com.br',
+            'is_active' => true,
+            'clicks' => 0,
+        ]);
+
         // Popular clicks com dados realísticos
         $this->call([
             ClicksSeeder::class,
             LinkThreeClicksSeeder::class,
+            LinkFourClicksSeeder::class,
         ]);
     }
 }

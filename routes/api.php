@@ -1,8 +1,6 @@
 <?php
 
-use App\Http\Controllers\Analytics\ChartController;
 use App\Http\Controllers\Analytics\AnalyticsController;
-use App\Http\Controllers\Analytics\MetricsController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\RedirectController;
@@ -89,15 +87,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
     Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
 
-    // === ANALYTICS LEGADOS ===
-    Route::get('/analytics', [ChartController::class, 'index']);         // ✅ USADO: useDashboardData hook
-
-    // === MÉTRICAS ===
-    Route::prefix('metrics')->controller(MetricsController::class)->group(function () {
-        Route::get('/dashboard', 'getDashboardMetrics');                 // ✅ USADO: useDashboardData hook
-    });
-
-
     // === CRIAÇÃO DE LINKS (LEGACY) ===
     Route::prefix('gerar-url')->controller(LinkController::class)->group(function () {
         Route::post('/', 'store');                      // ✅ USADO: LinkService.createShortUrl()
@@ -130,16 +119,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useAudienceData
     });
 
-    // === ANALYTICS GLOBAIS ===
-    Route::prefix('analytics/global')->controller(AnalyticsController::class)->group(function () {
-        Route::get('/dashboard', 'getGlobalDashboardData');     // ✅ NOVO: useDashboardData (globalMode)
-        Route::get('/heatmap', 'getGlobalHeatmapData');         // ✅ USADO: useHeatmapData (globalMode)
-        Route::get('/geographic', 'getGlobalGeographicData');   // ✅ USADO: useGeographicData (globalMode)
-        Route::get('/temporal', 'getGlobalTemporalData');       // ✅ USADO: useTemporalData (globalMode)
-        Route::get('/insights', 'getGlobalInsightsData');       // ✅ USADO: useInsightsData (globalMode)
-        Route::get('/performance', 'getGlobalPerformanceData'); // ✅ NOVO: useLinkPerformance hook
-        Route::get('/audience', 'getGlobalAudienceData');       // ✅ USADO: useAudienceData (globalMode)
-    });
 
     // === TESTE DE EMAIL (DESENVOLVIMENTO/DEBUG) ===
     Route::prefix('email-test')->controller(EmailTestController::class)->group(function () {
