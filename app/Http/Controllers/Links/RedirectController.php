@@ -458,7 +458,7 @@ class RedirectController extends Controller
 
     /**
      * Parse meta tags do HTML para extrair Open Graph e outros metadados.
-     *
+     * 
      * @param string $html
      * @param string $url
      * @return array
@@ -499,6 +499,36 @@ class RedirectController extends Controller
         if (preg_match('/<meta\s+name=["\']twitter:image["\']\s+content=["\']([^"\']+)["\']/i', $html, $matches)) {
             if (empty($metadata['og_image'])) {
                 $metadata['og_image'] = html_entity_decode($matches[1]);
+            }
+        }
+
+        // ✅ PASSO 1: Priorizar valores reais sobre defaults
+        $domain = parse_url($url, PHP_URL_HOST);
+        
+        // Se og_title é apenas o domínio (default), usar title real se existir
+        if (isset($metadata['title']) && !empty($metadata['title'])) {
+            if ($metadata['og_title'] === $domain) {
+                $metadata['og_title'] = $metadata['title'];
+            }
+        }
+        
+        // Se og_description é o default, usar description real se existir
+        if (isset($metadata['description']) && !empty($metadata['description'])) {
+            if (strpos($metadata['og_description'], 'Clique para acessar') !== false) {
+                $metadata['og_description'] = $metadata['description'];
+            }
+        }
+
+        // ✅ PASSO 2: Converter URLs de imagem relativas para absolutas
+        if (!empty($metadata['og_image'])) {
+            // URL sem protocolo: //cdn.example.com/image.png
+            if (strpos($metadata['og_image'], '//') === 0) {
+                $metadata['og_image'] = 'https:' . $metadata['og_image'];
+            } 
+            // URL relativa: /images/logo.png
+            elseif (strpos($metadata['og_image'], '/') === 0) {
+                $parsedUrl = parse_url($url);
+                $metadata['og_image'] = $parsedUrl['scheme'] . '://' . $parsedUrl['host'] . $metadata['og_image'];
             }
         }
 
@@ -572,7 +602,11 @@ class RedirectController extends Controller
 
     <!-- Canonical -->
     <link rel="canonical" href="{$targetUrl}">
-
+    
+    <!-- Metadados adicionais -->
+    <meta property="og:site_name" content="LinkChart">
+    <meta property="og:locale" content="pt_BR">
+    
     <title>{$title}</title>
 
     <style>
