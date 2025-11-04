@@ -27,6 +27,8 @@ class DatabaseSeeder extends Seeder
             'name' => 'Usuário Teste',
             'email' => 'usuario2@example.com',
             'password' => bcrypt('password'),
+            'email_verified' => true,
+            'email_verified_at' => now(),
         ]);
 
         // Criar link de teste
