@@ -71,6 +71,6 @@ class Link extends Model
         // URL encurtada aponta para o back-end (rota web com preview + redirect)
         // Esta rota serve HTML com Open Graph para preview em redes sociais
         $backendUrl = env('REDIRECT_URL', 'http://localhost:8000');
-        return "{$backendUrl}/r/{$this->slug}";
+        return "{$backendUrl}/{$this->slug}";
     }
 }
