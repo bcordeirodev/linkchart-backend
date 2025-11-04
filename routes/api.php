@@ -18,8 +18,21 @@ use Illuminate\Support\Facades\Route;
  * - Retorna JSON com URL original para frontend redirecionar
  * - Middleware específico para coleta completa de dados
  */
-Route::middleware(['metrics.redirect'])
-    ->get('/r/{slug}', [RedirectController::class, 'handle']);
+/**
+ * ⚠️ ROTA DESABILITADA - MIGRADA PARA WEB
+ *
+ * Esta rota foi movida para routes/web.php para suportar:
+ * - Preview de metadados em redes sociais (Open Graph)
+ * - Redirecionamento direto sem passar pelo front-end
+ * - Tracking completo de cliques
+ *
+ * Nova rota: Route::get('/r/{slug}', [RedirectController::class, 'redirect'])
+ * Local: routes/web.php
+ *
+ * Data da migração: 04/11/2025
+ */
+// Route::middleware(['metrics.redirect'])
+//     ->get('/r/{slug}', [RedirectController::class, 'handle']);
 
 /**
  * ==============================
