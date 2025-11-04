@@ -1196,10 +1196,6 @@ class LinkAnalyticsService
     }
 
     /**
-     * Performance global - agregando múltiplos links com dados reais
-     */
-
-    /**
      * Calcula tempo de resposta baseado em padrões reais de uso
      */
     private function calculateRealResponseTime(array $linkIds, int $totalClicks): int
