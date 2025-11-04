@@ -458,7 +458,7 @@ class RedirectController extends Controller
 
     /**
      * Parse meta tags do HTML para extrair Open Graph e outros metadados.
-     * 
+     *
      * @param string $html
      * @param string $url
      * @return array
@@ -504,14 +504,14 @@ class RedirectController extends Controller
 
         // ✅ PASSO 1: Priorizar valores reais sobre defaults
         $domain = parse_url($url, PHP_URL_HOST);
-        
+
         // Se og_title é apenas o domínio (default), usar title real se existir
         if (isset($metadata['title']) && !empty($metadata['title'])) {
             if ($metadata['og_title'] === $domain) {
                 $metadata['og_title'] = $metadata['title'];
             }
         }
-        
+
         // Se og_description é o default, usar description real se existir
         if (isset($metadata['description']) && !empty($metadata['description'])) {
             if (strpos($metadata['og_description'], 'Clique para acessar') !== false) {
@@ -524,7 +524,7 @@ class RedirectController extends Controller
             // URL sem protocolo: //cdn.example.com/image.png
             if (strpos($metadata['og_image'], '//') === 0) {
                 $metadata['og_image'] = 'https:' . $metadata['og_image'];
-            } 
+            }
             // URL relativa: /images/logo.png
             elseif (strpos($metadata['og_image'], '/') === 0) {
                 $parsedUrl = parse_url($url);
@@ -602,11 +602,11 @@ class RedirectController extends Controller
 
     <!-- Canonical -->
     <link rel="canonical" href="{$targetUrl}">
-    
+
     <!-- Metadados adicionais -->
     <meta property="og:site_name" content="LinkChart">
     <meta property="og:locale" content="pt_BR">
-    
+
     <title>{$title}</title>
 
     <style>
@@ -770,6 +770,7 @@ HTML;
     private function renderErrorPage(string $message): \Illuminate\Http\Response
     {
         $safeMessage = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
 
         $html = <<<HTML
 <!DOCTYPE html>
@@ -842,7 +843,7 @@ HTML;
         <div class="icon">❌</div>
         <h1>Oops!</h1>
         <p>{$safeMessage}</p>
-        <a href="/" class="btn">Voltar à Página Inicial</a>
+        <a href="{$frontendUrl}" class="btn">Voltar à Página Inicial</a>
     </div>
 </body>
 </html>
