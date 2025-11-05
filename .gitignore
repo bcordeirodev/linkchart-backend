@@ -48,3 +48,4 @@ server.log
 # .env.production
 .cursorignore
 .cursorrules
+.env.local
