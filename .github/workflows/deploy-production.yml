@@ -17,8 +17,44 @@ env:
   DOCKER_COMPOSE_FILE: docker-compose.prod.yml
 
 jobs:
+  validate:
+    name: 🧪 Lint + Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      APP_ENV: testing
+      APP_KEY: "base64:6Te5B+hW2AgrwEQi9uaO4f72snjcV1X6mVzmVrE+xKQ="
+      APP_DEBUG: "true"
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ":memory:"
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      JWT_SECRET: test-secret-ci-not-for-production-use-only
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐘 Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, xml, zip, pdo_sqlite, redis, bcmath
+          coverage: none
+
+      - name: 📥 Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--prefer-dist --no-progress"
+
+      - name: ✅ Run tests
+        run: php artisan test
+
   deploy:
     name: 🏗️ Deploy to Production Server
+    needs: validate
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 20
