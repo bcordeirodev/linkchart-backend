@@ -159,7 +159,7 @@ class MetricsService
             $conversionRate = $uniqueVisitors > 0 ? round(($totalClicks / $uniqueVisitors) * 100, 1) : 0;
 
             // Cliques das últimas 24h
-            $clicks24h = $clicks->where('created_at', '>=', now()->subDay())->count();
+            $clicks24h = $clicks->where('created_at', '>=', now()->va())->count();
 
             // Visitantes únicos das últimas 24h
             $uniqueVisitors24h = $clicks->where('created_at', '>=', now()->subDay())
@@ -563,5 +563,77 @@ class MetricsService
         return [
             'device_breakdown' => $deviceData
         ];
+    }
+
+    /**
+     * Cliques diários dos últimos N dias para sparkline de um link.
+     * Retorna array com N itens: [{date, clicks}]
+     */
+    public function getLinkSparkline(int $linkId, int $days = 7): array
+    {
+        $cacheKey = "meta:sparkline:{$linkId}:{$days}d";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($linkId, $days) {
+            $rows = DB::table('clicks')
+                ->where('link_id', $linkId)
+                ->where('created_at', '>=', now()->subDays($days))
+                ->selectRaw('DATE(created_at) as date, COUNT(*) as clicks')
+                ->groupBy('date')
+                ->orderBy('date')
+                ->get()
+                ->keyBy('date');
+
+            $result = [];
+            for ($i = $days - 1; $i >= 0; $i--) {
+                $date = now()->subDays($i)->format('Y-m-d');
+                $result[] = [
+                    'date'   => $date,
+                    'clicks' => (int) ($rows->get($date)?->clicks ?? 0),
+                ];
+            }
+            return $result;
+        });
+    }
+
+    /**
+     * Tendência comparando janela atual vs janela anterior.
+     * Retorna {current, previous, percent_change, last_click_at}
+     */
+    public function getLinkTrend(int $linkId, int $window = 7): array
+    {
+        $cacheKey = "meta:trend:{$linkId}:{$window}d";
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($linkId, $window) {
+            $now = now();
+
+            $current = DB::table('clicks')
+                ->where('link_id', $linkId)
+                ->where('created_at', '>=', $now->copy()->subDays($window))
+                ->count();
+
+            $previous = DB::table('clicks')
+                ->where('link_id', $linkId)
+                ->whereBetween('created_at', [
+                    $now->copy()->subDays($window * 2),
+                    $now->copy()->subDays($window),
+                ])
+                ->count();
+
+            $percentChange = $previous > 0
+                ? round((($current - $previous) / $previous) * 100, 1)
+                : ($current > 0 ? 100.0 : 0.0);
+
+            $lastClick = DB::table('clicks')
+                ->where('link_id', $linkId)
+                ->orderByDesc('created_at')
+                ->value('created_at');
+
+            return [
+                'current'        => $current,
+                'previous'       => $previous,
+                'percent_change' => $percentChange,
+                'last_click_at'  => $lastClick,
+            ];
+        });
     }
 }
