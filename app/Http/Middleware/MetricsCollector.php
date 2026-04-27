@@ -97,8 +97,8 @@ class MetricsCollector
             'POST:auth/google' => 'auth.google',
             'GET:me' => 'auth.me',
             'POST:logout' => 'auth.logout',
-            'POST:gerar-url' => 'link.create',
-            'GET:link' => 'link.index',
+            'POST:links' => 'link.create',
+            'GET:links' => 'link.index',
             'GET:link/\d+' => 'link.show',
             'PUT:link/\d+' => 'link.update',
             'DELETE:link/\d+' => 'link.delete',
@@ -238,7 +238,7 @@ class MetricsCollector
     {
         try {
             // Priorizar Redis se disponível
-            $cacheDriver = env('CACHE_DRIVER', 'file');
+            $cacheDriver = config('cache.default');
 
             if ($cacheDriver === 'redis') {
                 // Testar Redis primeiro

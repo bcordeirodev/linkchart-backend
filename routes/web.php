@@ -1,15 +1,15 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
 use App\Http\Controllers\Links\RedirectController;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return response()->json([
         'message' => 'Link Charts API is running!',
         'version' => '1.0.0',
-        'status' => 'active'
+        'status' => 'active',
     ]);
 });
 
@@ -34,9 +34,9 @@ Route::get('/health', function () {
             'services' => [
                 'database' => $dbStatus,
                 'cache' => $cacheStatus,
-                'api' => 'running'
+                'api' => 'running',
             ],
-            'version' => '1.0.0'
+            'version' => '1.0.0',
         ]);
 
     } catch (Exception $e) {
@@ -47,8 +47,8 @@ Route::get('/health', function () {
             'services' => [
                 'database' => 'disconnected',
                 'cache' => 'unknown',
-                'api' => 'running'
-            ]
+                'api' => 'running',
+            ],
         ], 503);
     }
 });
@@ -66,4 +66,5 @@ Route::get('/health', function () {
  * - Cache inteligente de metadados
  */
 Route::get('/r/{slug}', [RedirectController::class, 'redirect'])
+    ->middleware(['throttle:redirect', 'metrics.redirect'])
     ->name('public.redirect');

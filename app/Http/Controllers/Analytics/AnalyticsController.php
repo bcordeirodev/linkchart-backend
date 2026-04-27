@@ -364,20 +364,6 @@ class AnalyticsController extends Controller
     }
 
     /**
-     * Análise temporal avançada
-     *
-     * @deprecated Usar getTemporalAnalytics() que agora inclui dados advanced
-     *
-     * Este endpoint está deprecated e será removido em versões futuras.
-     * Use /api/analytics/link/{linkId}/temporal que agora retorna todos os dados.
-     */
-    public function getAdvancedTemporalAnalytics(int $linkId): JsonResponse
-    {
-        // Redirecionar para endpoint unificado
-        return $this->getTemporalAnalytics($linkId);
-    }
-
-    /**
      * Análise de engajamento e conversão
      */
     public function getEngagementAnalytics(int $linkId): JsonResponse
