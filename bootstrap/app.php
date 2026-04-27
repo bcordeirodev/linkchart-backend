@@ -6,6 +6,9 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
+    ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
+        $schedule->job(new \App\Jobs\LinkHealthCheckJob)->hourly()->withoutOverlapping();
+    })
     ->withRouting(
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
         api: __DIR__.'/../routes/api.php',
@@ -16,7 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::fallback(function () {
                 return response()->json([
                     'error' => 'Not Found',
-                    'message' => 'A rota solicitada não foi encontrada nesta API'
+                    'message' => 'A rota solicitada não foi encontrada nesta API',
                 ], 404);
             });
         }
@@ -31,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api([
             \App\Http\Middleware\TrustProxies::class,
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\NormalizeApiResponse::class,
         ]);
 
         // 🔧 CORS GLOBAL: Aplicar a todas as requisições para resolver problemas de desenvolvimento
@@ -48,87 +52,102 @@ return Application::configure(basePath: dirname(__DIR__))
         // NOTA: Rota /r/* configurada em web.php com middlewares específicos
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // Tratamento para erros de autenticação
+        // Autenticação ausente/invalida
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
-            if ($request->expectsJson() || $request->is('api/*')) {
-                return response()->json([
-                    'error' => 'Unauthenticated',
-                    'message' => 'Token de autenticação não fornecido ou inválido'
-                ], 401);
+            if ($request->isApiRequest()) {
+                return response()->json(['error' => [
+                    'code' => 'UNAUTHENTICATED',
+                    'message' => 'Token de autenticação não fornecido ou inválido.',
+                ]], 401);
             }
         });
 
-        // Tratamento para erros de JWT
+        // JWT malformado/expirado
         $exceptions->render(function (\Tymon\JWTAuth\Exceptions\JWTException $e, $request) {
-            if ($request->expectsJson() || $request->is('api/*')) {
+            if ($request->isApiRequest()) {
                 \Log::channel('api_errors')->error('JWT Error', [
                     'message' => $e->getMessage(),
                     'url' => $request->fullUrl(),
                     'method' => $request->method(),
                     'ip' => $request->ip(),
-                    'user_agent' => $request->userAgent()
                 ]);
 
-                return response()->json([
-                    'error' => 'JWT Error',
-                    'message' => 'Erro na configuração do JWT: ' . $e->getMessage()
-                ], 500);
+                return response()->json(['error' => [
+                    'code' => 'JWT_INVALID',
+                    'message' => 'Token JWT inválido ou expirado.',
+                ]], 401);
             }
         });
 
-        // Tratamento para erros de validação
+        // Validação FormRequest
         $exceptions->render(function (\Illuminate\Validation\ValidationException $e, $request) {
-            if ($request->expectsJson() || $request->is('api/*')) {
-                return response()->json([
-                    'error' => 'Validation Error',
-                    'message' => 'Dados inválidos fornecidos',
-                    'errors' => $e->errors()
-                ], 422);
+            if ($request->isApiRequest()) {
+                return response()->json(['error' => [
+                    'code' => 'VALIDATION_FAILED',
+                    'message' => 'Dados inválidos fornecidos.',
+                    'details' => ['fields' => $e->errors()],
+                ]], 422);
             }
         });
 
-        // Tratamento geral para exceções não tratadas
+        // Recurso não encontrado (route/model binding)
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, $request) {
+            if ($request->isApiRequest()) {
+                return response()->json(['error' => [
+                    'code' => 'NOT_FOUND',
+                    'message' => 'Recurso não encontrado.',
+                ]], 404);
+            }
+        });
+
+        // Método HTTP não permitido
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException $e, $request) {
+            if ($request->isApiRequest()) {
+                return response()->json(['error' => [
+                    'code' => 'METHOD_NOT_ALLOWED',
+                    'message' => 'Método HTTP não permitido para este endpoint.',
+                ]], 405);
+            }
+        });
+
+        // Fallback — qualquer exceção não tratada acima
         $exceptions->render(function (\Throwable $e, $request) {
-            if ($request->expectsJson() || $request->is('api/*')) {
-                // Log detalhado do erro (com try-catch para evitar falhas em cascata)
-                try {
-                    \Log::channel('api_errors')->error('API Exception', [
-                        'message' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine(),
-                        'url' => $request->fullUrl(),
-                        'method' => $request->method(),
-                        'parameters' => $request->all(),
-                        'ip' => $request->ip(),
-                        'user_agent' => $request->userAgent(),
-                        'trace' => $e->getTraceAsString()
-                    ]);
-                } catch (\Exception $logError) {
-                    // Se falhar o log, usar error_log como fallback
-                    error_log('Laravel Exception: ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
-                }
+            if (! $request->isApiRequest()) {
+                return null;
+            }
 
-                // Resposta diferente para produção vs desenvolvimento
-                // SAFE: Usar env() direto para evitar problema de container resolution
-                $isDebug = (bool) env('APP_DEBUG', false);
+            $errorId = uniqid('err_');
 
-                $responseData = $isDebug ? [
-                    'error' => 'Server Error',
+            try {
+                \Log::channel('api_errors')->error('API Exception', [
+                    'error_id' => $errorId,
                     'message' => $e->getMessage(),
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
-                    'trace' => $e->getTrace()
-                ] : [
-                    'error' => 'Server Error',
-                    'message' => 'Erro interno do servidor. Verifique os logs para mais detalhes.',
-                    'error_id' => uniqid('err_')
-                ];
-
-                $response = response()->json($responseData, 500);
-
-                // Laravel CORS padrão será aplicado automaticamente
-
-                return $response;
+                    'url' => $request->fullUrl(),
+                    'method' => $request->method(),
+                    'ip' => $request->ip(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            } catch (\Throwable $logError) {
+                error_log('Laravel Exception: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             }
+
+            $isDebug = (bool) env('APP_DEBUG', false);
+
+            $error = [
+                'code' => 'SERVER_ERROR',
+                'message' => $isDebug ? $e->getMessage() : 'Erro interno do servidor.',
+                'details' => [
+                    'error_id' => $errorId,
+                    ...($isDebug ? [
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'type' => get_class($e),
+                    ] : []),
+                ],
+            ];
+
+            return response()->json(['error' => $error], 500);
         });
     })->create();
