@@ -1,13 +1,10 @@
 <?php
 
 use App\Http\Controllers\Analytics\AnalyticsController;
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
-use App\Http\Controllers\Links\RedirectController;
-use App\Http\Controllers\Auth\AuthController;
-use App\Http\Controllers\EmailTestController;
 use Illuminate\Support\Facades\Route;
-
 
 /**
  * 🚀 ROTA PÚBLICA DE REDIRECIONAMENTO - CORAÇÃO DO SISTEMA
@@ -41,19 +38,9 @@ use Illuminate\Support\Facades\Route;
  * Endpoints para encurtamento de URLs sem autenticação
  */
 Route::prefix('public')->controller(PublicLinkController::class)->group(function () {
-    Route::post('/shorten', 'store');                           // ✅ NOVO: Encurtamento público
+    Route::post('/shorten', 'store')->middleware('throttle:public-shorten'); // ✅ NOVO: Encurtamento público
     Route::get('/link/{slug}', 'showBySlug');                   // ✅ NOVO: Informações básicas do link
     Route::get('/analytics/{slug}', 'basicAnalytics');          // ✅ NOVO: Analytics básicos públicos
-});
-
-/**
- * ==============================
- * TESTE PÚBLICO DE EMAIL (TEMPORÁRIO)
- * ==============================
- */
-Route::prefix('public/email-test')->controller(EmailTestController::class)->group(function () {
-    Route::get('/config', 'testConfiguration');                      // ✅ TESTE: Verificar configuração SendGrid
-    Route::post('/sendgrid-api', 'sendTestViaSendGridAPI');          // ✅ TESTE: Enviar via SendGrid API
 });
 
 /**
@@ -62,7 +49,7 @@ Route::prefix('public/email-test')->controller(EmailTestController::class)->grou
  * ==============================
  * Endpoints usados pelo front-end para autenticação de usuários
  */
-Route::prefix('auth')->controller(AuthController::class)->group(function () {
+Route::prefix('auth')->middleware('throttle:login')->controller(AuthController::class)->group(function () {
     Route::post('/login', 'login');
     Route::post('/register', 'register');
     Route::post('/google', 'googleLogin');
@@ -100,11 +87,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
     Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
 
-    // === CRIAÇÃO DE LINKS (LEGACY) ===
-    Route::prefix('gerar-url')->controller(LinkController::class)->group(function () {
-        Route::post('/', 'store');                      // ✅ USADO: LinkService.createShortUrl()
-    });
-
     // === GERENCIAMENTO DE LINKS (RESTful API) ===
     Route::prefix('links')->controller(LinkController::class)->group(function () {
         Route::get('/', 'index');                                        // ✅ USADO: LinkService.all()
@@ -113,6 +95,15 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
         Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
         Route::get('/{id}/analytics', 'analyticsByLinkId')->where('id', '[0-9]+'); // ✅ USADO: LinkService.getAnalytics()
+    });
+
+    // === META-DADOS DE LINKS (sparkline, trend, preview, health) ===
+    Route::prefix('links')->controller(\App\Http\Controllers\Links\LinkMetaController::class)->group(function () {
+        Route::post('/batch-meta', 'batchMeta');
+        Route::get('/{id}/sparkline', 'sparkline')->where('id', '[0-9]+');
+        Route::get('/{id}/trend', 'trend')->where('id', '[0-9]+');
+        Route::get('/{id}/preview', 'preview')->where('id', '[0-9]+');
+        Route::get('/{id}/health', 'health')->where('id', '[0-9]+');
     });
 
     // === DADOS DETALHADOS DE LINKS ===
@@ -128,16 +119,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{linkId}/geographic', 'getGeographicAnalytics')->where('linkId', '[0-9]+');  // ✅ USADO: useGeographicData
         Route::get('/{linkId}/insights', 'getBusinessInsights')->where('linkId', '[0-9]+');       // ✅ USADO: useInsightsData
         Route::get('/{linkId}/temporal', 'getTemporalAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useTemporalData
-        Route::get('/{linkId}/temporal-advanced', 'getAdvancedTemporalAnalytics')->where('linkId', '[0-9]+'); // ✅ USADO: useTemporalData
         Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useAudienceData
-    });
-
-
-    // === TESTE DE EMAIL (DESENVOLVIMENTO/DEBUG) ===
-    Route::prefix('email-test')->controller(EmailTestController::class)->group(function () {
-        Route::get('/config', 'testConfiguration');                      // ✅ NOVO: Verificar configuração de email
-        Route::post('/send', 'sendTest');                               // ✅ NOVO: Enviar email de teste (SendGrid API + SMTP fallback)
-        Route::post('/sendgrid-api', 'sendTestViaSendGridAPI');          // ✅ NOVO: Enviar email via SendGrid API especificamente
-        Route::post('/custom', 'sendCustom');                           // ✅ NOVO: Enviar email personalizado
     });
 });
