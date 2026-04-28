@@ -159,7 +159,7 @@ class MetricsService
             $conversionRate = $uniqueVisitors > 0 ? round(($totalClicks / $uniqueVisitors) * 100, 1) : 0;
 
             // Cliques das últimas 24h
-            $clicks24h = $clicks->where('created_at', '>=', now()->va())->count();
+            $clicks24h = $clicks->where('created_at', '>=', now()->subDay())->count();
 
             // Visitantes únicos das últimas 24h
             $uniqueVisitors24h = $clicks->where('created_at', '>=', now()->subDay())
