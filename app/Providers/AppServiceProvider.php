@@ -40,6 +40,12 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        // 30 consultas/min por IP em analytics públicos — mitiga scraping
+        // por enumeração de slugs no endpoint GET /api/public/analytics/{slug}.
+        RateLimiter::for('public-analytics', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
         // Limite permissivo para /r/{slug} — só previne flood por IP.
         RateLimiter::for('redirect', function (Request $request) {
             return Limit::perMinute(600)->by($request->ip());
