@@ -87,6 +87,21 @@ curl http://localhost:8000/api/health
 
 Acesse `/api/documentation` para ver a documentação completa da API.
 
+## 🪝 Git Hooks (pre-push)
+
+Hook `pre-push` versionado em `scripts/hooks/` que roda os mesmos checks do CI (`php artisan test`) dentro do container Docker antes de cada push, evitando quebrar a pipeline.
+
+**Ativação (uma vez por clone):**
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+O script aponta `core.hooksPath` para `scripts/hooks` e dá `chmod +x` nos hooks. Requer `docker compose` com o serviço `app` rodando.
+
+- Bypass de emergência: `git push --no-verify`
+- Desativar: `git config --unset core.hooksPath`
+
 ## 🤝 Contribuição
 
 1. Fork o projeto
