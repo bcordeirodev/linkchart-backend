@@ -156,9 +156,13 @@ class PublicLinkController extends Controller
                     });
 
                 // Cliques por hora do dia (últimos 7 dias)
+                $hourExpression = \DB::connection()->getDriverName() === 'sqlite'
+                    ? \DB::raw("CAST(strftime('%H', created_at) AS INTEGER) as hour")
+                    : \DB::raw('EXTRACT(HOUR FROM created_at) as hour');
+
                 $clicksByHour = \App\Models\Click::where('link_id', $link->id)
                     ->where('created_at', '>=', now()->subDays(7))
-                    ->select(\DB::raw('EXTRACT(HOUR FROM created_at) as hour'), \DB::raw('count(*) as clicks'))
+                    ->select($hourExpression, \DB::raw('count(*) as clicks'))
                     ->groupBy('hour')
                     ->orderBy('hour')
                     ->get()
