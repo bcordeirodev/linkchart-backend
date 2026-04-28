@@ -1,0 +1,577 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Parameter \#1 \$id of class App\\DTOs\\LinkDTO constructor expects string\|null, int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/DTOs/LinkDTO.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Controllers\\Analytics\\AnalyticsController\:\:\$advancedAnalyticsService\.$#'
+			identifier: property.notFound
+			count: 5
+			path: app/Http/Controllers/Analytics/AnalyticsController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Link\:\:\$short_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Analytics/AnalyticsController.php
+
+		-
+			message: '#^Cannot call method toISOString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Http/Controllers/Auth/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$forceForever of static method Tymon\\JWTAuth\\JWT\:\:invalidate\(\) expects bool, Tymon\\JWTAuth\\Token\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Auth/AuthController.php
+
+		-
+			message: '#^Parameter \#1 \$forceForever of static method Tymon\\JWTAuth\\JWT\:\:refresh\(\) expects bool, Tymon\\JWTAuth\\Token\|null given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Http/Controllers/Auth/AuthController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Click\:\:\$utm\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Link\:\:\$shorted_url\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$action\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$ip_address\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$new_values\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$old_values\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$user_agent\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<\(int\|string\),Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Relation ''utm'' is not found in App\\Models\\Click model\.$#'
+			identifier: larastan.relationExistence
+			count: 1
+			path: app/Http/Controllers/Links/LinkController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Click\:\:\$clicks\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Http/Controllers/Links/PublicLinkController.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Click\:\:\$hour\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Controllers/Links/PublicLinkController.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 1
+			path: app/Http/Controllers/Links/RedirectController.php
+
+		-
+			message: '#^Call to method clearUserMetricsCache\(\) on an unknown class App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Call to method getLinkMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Call to method getUserAudienceMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 2
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Call to method getUserBasicMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 5
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Call to method getUserGeographicMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 2
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Call to method getUserPerformanceMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 2
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Parameter \$metricsService of method App\\Http\\Controllers\\MetricsController\:\:__construct\(\) has invalid type App\\Services\\MetricsService\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Property App\\Http\\Controllers\\MetricsController\:\:\$metricsService has unknown class App\\Services\\MetricsService as its type\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Http/Controllers/MetricsController.php
+
+		-
+			message: '#^Return type \(void\) of method App\\Http\\Middleware\\ApiAuthenticate\:\:unauthenticated\(\) should be compatible with return type \(never\) of method Illuminate\\Auth\\Middleware\\Authenticate\:\:unauthenticated\(\)$#'
+			identifier: method.childReturnType
+			count: 1
+			path: app/Http/Middleware/ApiAuthenticate.php
+
+		-
+			message: '#^Cannot call method toISOString\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Http/Middleware/EnsureEmailIsVerified.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 1
+			path: app/Http/Middleware/MetricsCollector.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: app/Http/Middleware/MetricsCollector.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$description\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$is_active\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$original_url\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$starts_in\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$title\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$updated_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$user_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$utm_campaign\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$utm_content\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$utm_medium\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$utm_source\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$utm_term\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Call to an undefined method App\\Http\\Resources\\LinkResource\:\:clicks\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Call to an undefined method App\\Http\\Resources\\LinkResource\:\:getShortedUrl\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Http/Resources/LinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$clicks\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$created_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$expires_at\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$is_active\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$original_url\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$slug\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$title\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Access to an undefined property App\\Http\\Resources\\PublicLinkResource\:\:\$user_id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Call to an undefined method App\\Http\\Resources\\PublicLinkResource\:\:getShortedUrl\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Http/Resources/PublicLinkResource.php
+
+		-
+			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
+			identifier: larastan.noEnvCallsOutsideOfConfig
+			count: 1
+			path: app/Models/Link.php
+
+		-
+			message: '#^Cannot call method addMinutes\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Return type \(void\) of method App\\Models\\User\:\:markEmailAsVerified\(\) should be compatible with return type \(bool\) of method Illuminate\\Foundation\\Auth\\User\:\:markEmailAsVerified\(\)$#'
+			identifier: method.childReturnType
+			count: 1
+			path: app/Models/User.php
+
+		-
+			message: '#^Relation ''link'' is not found in App\\Models\\Click model\.$#'
+			identifier: larastan.relationExistence
+			count: 8
+			path: app/Repositories/ChartRepository.php
+
+		-
+			message: '#^Call to static method all\(\) on an unknown class App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Call to static method create\(\) on an unknown class App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Call to static method find\(\) on an unknown class App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 3
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Method App\\Repositories\\WordRepository\:\:create\(\) has invalid return type App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Method App\\Repositories\\WordRepository\:\:delete\(\) has invalid return type App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Method App\\Repositories\\WordRepository\:\:find\(\) has invalid return type App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Method App\\Repositories\\WordRepository\:\:update\(\) has invalid return type App\\Models\\Word\.$#'
+			identifier: class.notFound
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Type static\(App\\Repositories\\WordRepository\) in generic type Illuminate\\Database\\Eloquent\\Collection\<int, static\(App\\Repositories\\WordRepository\)\> in PHPDoc tag @return is not subtype of template type TModel of Illuminate\\Database\\Eloquent\\Model of class Illuminate\\Database\\Eloquent\\Collection\.$#'
+			identifier: generics.notSubtype
+			count: 1
+			path: app/Repositories/WordRepository.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Link\:\:\$short_url\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Call to an undefined method App\\Services\\Analytics\\LinkAnalyticsService\:\:getDeviceBreakdown\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Call to an undefined method App\\Services\\Analytics\\LinkAnalyticsService\:\:getHeatmapData\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Call to an undefined method App\\Services\\Analytics\\LinkAnalyticsService\:\:getTopCities\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Call to an undefined method App\\Services\\Analytics\\LinkAnalyticsService\:\:getTopCountries\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Call to an undefined method App\\Services\\Analytics\\LinkAnalyticsService\:\:getTopStates\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Called ''count'' on Laravel collection, but could have been retrieved as a query\.$#'
+			identifier: larastan.noUnnecessaryCollectionCall
+			count: 2
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Comparison operation "\>" between int\<1, max\> and 0 is always true\.$#'
+			identifier: greater.alwaysTrue
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:calculateLocationDensity\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:calculatePerformanceScore\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:calculateUptimePercentage\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:extractBrowserFromUserAgent\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:extractBrowserFromUserAgent\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:extractOSFromUserAgent\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:extractOSFromUserAgent\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:getAudienceAnalytics\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:getGeographicAnalytics\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\LinkAnalyticsService\:\:getTemporalAnalytics\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 1
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>clicks" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Services/Analytics/LinkAnalyticsService.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Support\\Carbon\:\:va\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Services/Analytics/MetricsService.php
+
+		-
+			message: '#^Constant App\\Services\\Analytics\\MetricsService\:\:CACHE_KEYS is unused\.$#'
+			identifier: classConstant.unused
+			count: 1
+			path: app/Services/Analytics/MetricsService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>clicks" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Analytics/MetricsService.php
