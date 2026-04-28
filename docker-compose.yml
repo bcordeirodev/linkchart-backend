@@ -46,7 +46,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 123456
     volumes:
-      - ./docker/data/postgres:/var/lib/postgresql/data
+      - postgres_data_dev:/var/lib/postgresql/data
     ports:
       - "5433:5432"
     networks:
@@ -80,6 +80,7 @@ services:
       - linkchartnet
 
 volumes:
+  postgres_data_dev:
   redis_data_dev:
   vendor_cache:
 
