@@ -163,6 +163,10 @@ class AnalyticsController extends Controller
 
     /**
      * Insights de negócio automatizados
+     *
+     * Retorna o payload completo de insights (insights + summary + analytics_data
+     * com retention/session_depth/traffic_sources) consumido por
+     * useInsightsData no frontend.
      */
     public function getBusinessInsights(int $linkId): JsonResponse
     {
@@ -175,11 +179,11 @@ class AnalyticsController extends Controller
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
+            $insights = $this->analyticsService->getLinkInsightsAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics['insights'] ?? []
+                'data' => $insights
             ]);
         } catch (\Exception $e) {
             return response()->json([
