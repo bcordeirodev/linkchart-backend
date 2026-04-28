@@ -6,8 +6,8 @@ use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreatePublicLinkDTO;
 use App\Http\Requests\CreatePublicLinkRequest;
 use App\Http\Resources\PublicLinkResource;
-use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Routing\Controller;
 
 /**
  * Controller para encurtamento público de URLs
@@ -33,9 +33,6 @@ class PublicLinkController extends Controller
 
     /**
      * Cria um novo link encurtado público.
-     *
-     * @param CreatePublicLinkRequest $request
-     * @return JsonResponse
      */
     public function store(CreatePublicLinkRequest $request): JsonResponse
     {
@@ -45,35 +42,32 @@ class PublicLinkController extends Controller
 
             return response()->json([
                 'message' => 'Link criado com sucesso.',
-                'data' => new PublicLinkResource($link)
+                'data' => new PublicLinkResource($link),
             ], 201);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'Dados inválidos.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao criar link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
 
     /**
      * Exibe informações básicas de um link público pelo slug.
-     *
-     * @param string $slug
-     * @return JsonResponse
      */
     public function showBySlug(string $slug): JsonResponse
     {
         try {
             $link = \App\Models\Link::where('slug', $slug)
-                                  ->where('is_active', true)
-                                  ->first();
+                ->where('is_active', true)
+                ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou inativo.'], 404);
             }
 
@@ -88,21 +82,18 @@ class PublicLinkController extends Controller
             }
 
             return response()->json([
-                'data' => new PublicLinkResource($link)
+                'data' => new PublicLinkResource($link),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
 
     /**
      * Obtém analytics básicos de um link público (sem dados sensíveis).
-     *
-     * @param string $slug
-     * @return JsonResponse
      */
     public function basicAnalytics(string $slug): JsonResponse
     {
@@ -123,7 +114,7 @@ class PublicLinkController extends Controller
                 })
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado.'], 404);
             }
 
@@ -132,7 +123,7 @@ class PublicLinkController extends Controller
                 'created_at' => $link->created_at,
                 'is_active' => $link->is_active,
                 'short_url' => $link->getShortedUrl(),
-                'has_analytics' => $link->clicks > 0
+                'has_analytics' => $link->clicks > 0,
             ];
 
             // Se há cliques, incluir dados básicos de gráficos
@@ -147,7 +138,7 @@ class PublicLinkController extends Controller
                     ->map(function ($item) {
                         return [
                             'country' => $item->country,
-                            'clicks' => (int) $item->clicks
+                            'clicks' => (int) $item->clicks,
                         ];
                     });
 
@@ -160,7 +151,7 @@ class PublicLinkController extends Controller
                     ->map(function ($item) {
                         return [
                             'device' => ucfirst($item->device),
-                            'clicks' => (int) $item->clicks
+                            'clicks' => (int) $item->clicks,
                         ];
                     });
 
@@ -174,7 +165,7 @@ class PublicLinkController extends Controller
                     ->map(function ($item) {
                         return [
                             'hour' => (int) $item->hour,
-                            'clicks' => (int) $item->clicks
+                            'clicks' => (int) $item->clicks,
                         ];
                     });
 
@@ -184,20 +175,54 @@ class PublicLinkController extends Controller
                     $hourData = $clicksByHour->firstWhere('hour', $i);
                     $hourlyData[] = [
                         'hour' => $i,
-                        'clicks' => $hourData ? $hourData['clicks'] : 0
+                        'clicks' => $hourData ? $hourData['clicks'] : 0,
+                    ];
+                }
+
+                // Distribuição por browser (top 5, excluindo nulos)
+                $browserBreakdown = \App\Models\Click::where('link_id', $link->id)
+                    ->whereNotNull('browser')
+                    ->select('browser', \DB::raw('count(*) as clicks'))
+                    ->groupBy('browser')
+                    ->orderBy('clicks', 'desc')
+                    ->limit(5)
+                    ->get()
+                    ->map(function ($item) {
+                        return [
+                            'browser' => ucfirst($item->browser ?? 'Desconhecido'),
+                            'clicks' => (int) $item->clicks,
+                        ];
+                    });
+
+                // Distribuição por dia da semana (0=Dom … 6=Sáb) usando campo pré-computado
+                $clicksByDow = \App\Models\Click::where('link_id', $link->id)
+                    ->select('day_of_week', \DB::raw('count(*) as clicks'))
+                    ->groupBy('day_of_week')
+                    ->orderBy('day_of_week')
+                    ->get();
+
+                // Preencher todos os 7 dias, mesmo os sem clique
+                $dowData = [];
+                for ($i = 0; $i < 7; $i++) {
+                    $dayData = $clicksByDow->firstWhere('day_of_week', $i);
+                    $dowData[] = [
+                        'day' => $i,
+                        'clicks' => $dayData ? (int) $dayData['clicks'] : 0,
                     ];
                 }
 
                 $basicData['charts'] = [
                     'geographic' => [
-                        'top_countries' => $topCountries
+                        'top_countries' => $topCountries,
                     ],
                     'audience' => [
-                        'device_breakdown' => $deviceBreakdown
+                        'device_breakdown' => $deviceBreakdown,
+                        'browser_breakdown' => $browserBreakdown,
                     ],
                     'temporal' => [
-                        'clicks_by_hour' => $hourlyData
-                    ]
+                        'clicks_by_hour' => $hourlyData,
+                        'clicks_by_day_of_week' => $dowData,
+                    ],
                 ];
             }
 
@@ -205,7 +230,7 @@ class PublicLinkController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics básicos.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
