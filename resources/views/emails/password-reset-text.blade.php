@@ -1,26 +1,22 @@
-Recuperação de Senha - {{ config('app.name') }}
+{{ $app_name }} — Recuperação de senha
 
-Olá, {{ $user->name }}!
+Olá, {{ $user_name }}!
 
-Recebemos uma solicitação para redefinir a senha da sua conta no {{ config('app.name') }}.
+Recebemos uma solicitação para redefinir a senha da sua conta no {{ $app_name }}.
 
-Para criar uma nova senha, acesse o link abaixo:
-{{ $resetUrl }}
+Para criar uma nova senha, acesse:
+{{ $reset_url }}
 
-IMPORTANTE:
-- Este link expira em 24 horas por segurança
-- Se você não solicitou esta alteração, ignore este e-mail
-- Sua senha permanecerá inalterada se você não usar este link
+Detalhes:
+- Email: {{ $user_email }}
+- Válido até: {{ $expires_at }}
 
-Dicas de Segurança:
-- Use uma senha forte com pelo menos 8 caracteres
-- Combine letras maiúsculas, minúsculas, números e símbolos
-- Não compartilhe sua senha com ninguém
-- Use senhas diferentes para cada serviço
+Importante:
+- Este link expira em 1 hora.
+- Use apenas se você solicitou a redefinição.
+- Após o uso, o link é invalidado automaticamente.
+- Não compartilhe com ninguém.
 
----
-Este e-mail foi enviado automaticamente pelo sistema {{ config('app.name') }}.
-Para suporte, entre em contato: {{ config('mail.from.address') }}
+Se você não solicitou esta redefinição, ignore este email — sua senha permanece inalterada.
 
-© {{ date('Y') }} {{ config('app.name') }}. Todos os direitos reservados.
-Plataforma profissional de encurtamento e análise de URLs.
+{{ $app_name }}
