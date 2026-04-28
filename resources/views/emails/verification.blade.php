@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $app_name }} — Recuperação de senha</title>
+    <title>{{ $app_name }} — Verificação de email</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -153,23 +153,23 @@
 
             <div class="header">
                 <div class="header-logo">🔗 {{ $app_name }}</div>
-                <div class="header-subtitle">Recuperação de senha</div>
+                <div class="header-subtitle">Verificação de email</div>
             </div>
 
             <div class="body">
                 <p class="greeting">Olá, {{ $user_name }}!</p>
 
                 <p class="text">
-                    Recebemos uma solicitação para redefinir a senha da sua conta
-                    no <strong>{{ $app_name }}</strong>. Clique no botão abaixo para criar uma nova senha.
+                    Obrigado por se cadastrar no <strong>{{ $app_name }}</strong>!
+                    Para ativar sua conta, confirme seu endereço de email clicando no botão abaixo.
                 </p>
 
                 <div class="btn-wrap">
-                    <a href="{{ $reset_url }}" class="btn">Redefinir minha senha</a>
+                    <a href="{{ $verification_url }}" class="btn">Verificar meu email</a>
                 </div>
 
                 <div class="details-box">
-                    <strong>Detalhes da solicitação</strong>
+                    <strong>Detalhes da verificação</strong>
                     <div class="details-row">Email: <strong>{{ $user_email }}</strong></div>
                     <div class="details-row">Válido até: <strong>{{ $expires_at }}</strong></div>
                 </div>
@@ -177,20 +177,19 @@
                 <div class="security-box">
                     <strong>Importante</strong>
                     <ul>
-                        <li>Este link expira em 1 hora.</li>
-                        <li>Use apenas se você solicitou a redefinição.</li>
-                        <li>Após o uso, o link é invalidado automaticamente.</li>
+                        <li>Este link expira em 24 horas.</li>
+                        <li>Use apenas se você criou esta conta.</li>
                         <li>Não compartilhe com ninguém.</li>
                     </ul>
                 </div>
 
                 <div class="fallback">
                     <p>Não consegue clicar no botão? Copie e cole no navegador:</p>
-                    <a href="{{ $reset_url }}">{{ $reset_url }}</a>
+                    <a href="{{ $verification_url }}">{{ $verification_url }}</a>
                 </div>
 
                 <p class="ignore-note">
-                    Se você não solicitou esta redefinição, ignore este email — sua senha permanece inalterada.
+                    Se você não criou esta conta, ignore este email — nenhuma ação é necessária.
                 </p>
             </div>
 

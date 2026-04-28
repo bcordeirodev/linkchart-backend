@@ -352,74 +352,7 @@ class EmailVerificationService
      */
     private function getVerificationEmailTemplate(array $data): string
     {
-        return "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset='UTF-8'>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <title>Verificação de Email - {$data['app_name']}</title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f4f4f4; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #4caf50, #66bb6a); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
-                .content { background: #ffffff; padding: 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-                .verify-button { display: inline-block; background: #4caf50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
-                .verify-button:hover { background: #45a049; }
-                .info { background: #e8f5e8; padding: 20px; border-left: 4px solid #4caf50; margin: 20px 0; border-radius: 4px; }
-                .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
-                .token-info { background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 15px 0; font-family: monospace; }
-                .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 4px; margin: 15px 0; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h1>✉️ {$data['app_name']}</h1>
-                    <p>Verificação de Email</p>
-                </div>
-                <div class='content'>
-                    <h2>Olá, {$data['user_name']}!</h2>
-
-                    <p>Obrigado por se cadastrar no <strong>{$data['app_name']}</strong>! Para completar seu cadastro e começar a usar nossa plataforma, você precisa verificar seu endereço de email.</p>
-
-                    <div style='text-align: center; margin: 30px 0;'>
-                        <a href='{$data['verification_url']}' class='verify-button'>
-                            ✅ Verificar Email
-                        </a>
-                    </div>
-
-                    <div class='info'>
-                        <strong>📋 Detalhes da Verificação:</strong><br>
-                        <strong>Email:</strong> {$data['user_email']}<br>
-                        <strong>Válido até:</strong> {$data['expires_at']}<br>
-                        <strong>Data/Hora:</strong> {$data['timestamp']}
-                    </div>
-
-                    <div class='warning'>
-                        <strong>⚠️ Importante:</strong><br>
-                        • Este link expira em 24 horas<br>
-                        • Use apenas se você solicitou esta verificação<br>
-                        • Não compartilhe este link com ninguém
-                    </div>
-
-                    <p><strong>Não consegue clicar no botão?</strong><br>
-                    Copie e cole este link no seu navegador:</p>
-                    <div class='token-info'>
-                        {$data['verification_url']}
-                    </div>
-
-                    <p>Se você não se cadastrou no {$data['app_name']}, pode ignorar este email com segurança.</p>
-
-                    <p><em>Este é um email automático. Não é necessário responder.</em></p>
-                </div>
-                <div class='footer'>
-                    <p><strong>{$data['app_name']}</strong> - Sistema de Encurtamento de URLs<br>
-                    <small>Desenvolvido com ❤️ usando Laravel + SendGrid</small></p>
-                </div>
-            </div>
-        </body>
-        </html>";
+        return view('emails.verification', $data)->render();
     }
 
     /**
@@ -427,30 +360,7 @@ class EmailVerificationService
      */
     private function getVerificationEmailTextContent(array $data): string
     {
-        return "
-        Verificação de Email - {$data['app_name']}
-
-        Olá, {$data['user_name']}!
-
-        Obrigado por se cadastrar no {$data['app_name']}! Para completar seu cadastro, você precisa verificar seu endereço de email.
-
-        Clique no link abaixo para verificar:
-        {$data['verification_url']}
-
-        Detalhes:
-        - Email: {$data['user_email']}
-        - Válido até: {$data['expires_at']}
-        - Data/Hora: {$data['timestamp']}
-
-        IMPORTANTE:
-        - Este link expira em 24 horas
-        - Use apenas se você solicitou esta verificação
-        - Não compartilhe este link com ninguém
-
-        Se você não se cadastrou no {$data['app_name']}, pode ignorar este email.
-
-        {$data['app_name']} - Sistema de Encurtamento de URLs
-        ";
+        return view('emails.verification-text', $data)->render();
     }
 
     /**
@@ -458,76 +368,7 @@ class EmailVerificationService
      */
     private function getPasswordResetEmailTemplate(array $data): string
     {
-        return "
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset='UTF-8'>
-            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-            <title>Recuperação de Senha - {$data['app_name']}</title>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background: #f4f4f4; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: linear-gradient(135deg, #ff9800, #ffb74d); color: white; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0; }
-                .content { background: #ffffff; padding: 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-                .reset-button { display: inline-block; background: #ff9800; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
-                .reset-button:hover { background: #f57c00; }
-                .info { background: #fff3e0; padding: 20px; border-left: 4px solid #ff9800; margin: 20px 0; border-radius: 4px; }
-                .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
-                .token-info { background: #f9f9f9; padding: 15px; border-radius: 4px; margin: 15px 0; font-family: monospace; }
-                .warning { background: #ffebee; border: 1px solid #ffcdd2; color: #c62828; padding: 15px; border-radius: 4px; margin: 15px 0; }
-            </style>
-        </head>
-        <body>
-            <div class='container'>
-                <div class='header'>
-                    <h1>🔐 {$data['app_name']}</h1>
-                    <p>Recuperação de Senha</p>
-                </div>
-                <div class='content'>
-                    <h2>Olá, {$data['user_name']}!</h2>
-
-                    <p>Recebemos uma solicitação para redefinir a senha da sua conta no <strong>{$data['app_name']}</strong>.</p>
-
-                    <div style='text-align: center; margin: 30px 0;'>
-                        <a href='{$data['reset_url']}' class='reset-button'>
-                            🔑 Redefinir Senha
-                        </a>
-                    </div>
-
-                    <div class='info'>
-                        <strong>📋 Detalhes da Solicitação:</strong><br>
-                        <strong>Email:</strong> {$data['user_email']}<br>
-                        <strong>Válido até:</strong> {$data['expires_at']}<br>
-                        <strong>Data/Hora:</strong> {$data['timestamp']}
-                    </div>
-
-                    <div class='warning'>
-                        <strong>🚨 Segurança:</strong><br>
-                        • Este link expira em 1 hora<br>
-                        • Use apenas se você solicitou esta recuperação<br>
-                        • Não compartilhe este link com ninguém<br>
-                        • Após usar, o link será invalidado
-                    </div>
-
-                    <p><strong>Não consegue clicar no botão?</strong><br>
-                    Copie e cole este link no seu navegador:</p>
-                    <div class='token-info'>
-                        {$data['reset_url']}
-                    </div>
-
-                    <p><strong>Não solicitou esta recuperação?</strong><br>
-                    Se você não solicitou a redefinição de senha, pode ignorar este email com segurança. Sua senha permanecerá inalterada.</p>
-
-                    <p><em>Este é um email automático. Não é necessário responder.</em></p>
-                </div>
-                <div class='footer'>
-                    <p><strong>{$data['app_name']}</strong> - Sistema de Encurtamento de URLs<br>
-                    <small>Desenvolvido com ❤️ usando Laravel + SendGrid</small></p>
-                </div>
-            </div>
-        </body>
-        </html>";
+        return view('emails.password-reset', $data)->render();
     }
 
     /**
@@ -535,30 +376,6 @@ class EmailVerificationService
      */
     private function getPasswordResetEmailTextContent(array $data): string
     {
-        return "
-        Recuperação de Senha - {$data['app_name']}
-
-        Olá, {$data['user_name']}!
-
-        Recebemos uma solicitação para redefinir a senha da sua conta no {$data['app_name']}.
-
-        Clique no link abaixo para redefinir sua senha:
-        {$data['reset_url']}
-
-        Detalhes:
-        - Email: {$data['user_email']}
-        - Válido até: {$data['expires_at']}
-        - Data/Hora: {$data['timestamp']}
-
-        IMPORTANTE:
-        - Este link expira em 1 hora
-        - Use apenas se você solicitou esta recuperação
-        - Não compartilhe este link com ninguém
-        - Após usar, o link será invalidado
-
-        Se você não solicitou esta recuperação, pode ignorar este email.
-
-        {$data['app_name']} - Sistema de Encurtamento de URLs
-        ";
+        return view('emails.password-reset-text', $data)->render();
     }
 }
