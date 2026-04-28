@@ -61,8 +61,11 @@ echo "[$(date)] DEPLOY: Log system initialized by fix-permissions.sh" >> storage
 # ==========================================
 # 3. APLICAÇÃO ÚNICA E DEFINITIVA DE OWNERSHIP
 # ==========================================
-echo "👤 Aplicando ownership definitivo (www-data:www-data)..."
-chown -R www-data:www-data /var/www
+echo "👤 Aplicando ownership definitivo (www:www)..."
+# Usar www (uid 1000) porque é o usuário do PHP-FPM (após override no Dockerfile)
+# e dos queue/schedule workers do supervisord. www-data quebra append nos
+# laravel-YYYY-MM-DD.log criados pelos workers.
+chown -R www:www /var/www
 
 # ==========================================
 # 4. APLICAÇÃO ÚNICA E DEFINITIVA DE PERMISSÕES
