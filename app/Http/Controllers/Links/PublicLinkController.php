@@ -107,7 +107,21 @@ class PublicLinkController extends Controller
     public function basicAnalytics(string $slug): JsonResponse
     {
         try {
-            $link = \App\Models\Link::where('slug', $slug)->first();
+            // Filtros de validade aplicados na própria query para evitar
+            // vazar a existência de slugs inativos/expirados/não iniciados.
+            // Qualquer link que não passe nesses filtros retorna 404 genérico.
+            $now = now();
+            $link = \App\Models\Link::where('slug', $slug)
+                ->where('is_active', true)
+                ->where(function ($query) use ($now) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', $now);
+                })
+                ->where(function ($query) use ($now) {
+                    $query->whereNull('starts_in')
+                        ->orWhere('starts_in', '<=', $now);
+                })
+                ->first();
 
             if (!$link) {
                 return response()->json(['message' => 'Link não encontrado.'], 404);
