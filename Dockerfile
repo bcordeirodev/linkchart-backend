@@ -60,6 +60,17 @@ COPY docker/nginx/prod.conf /etc/nginx/conf.d/default.conf
 # Configurar Supervisor para produção
 COPY docker/supervisor/supervisord-prod.conf /etc/supervisor/conf.d/supervisord.conf
 
+# PHP-FPM precisa rodar como `www` (mesmo user dos workers do supervisord
+# e do owner de /var/www/storage). A imagem base usa `www-data` por padrão
+# e isso causa Permission denied quando o queue worker (www) cria o
+# laravel-YYYY-MM-DD.log e o PHP-FPM (www-data) tenta dar append.
+RUN sed -i \
+    -e 's/^user = www-data/user = www/' \
+    -e 's/^group = www-data/group = www/' \
+    -e 's/^listen.owner = www-data/listen.owner = www/' \
+    -e 's/^listen.group = www-data/listen.group = www/' \
+    /usr/local/etc/php-fpm.d/www.conf
+
 # Criar usuário para aplicação e diretórios necessários
 RUN addgroup -g 1000 www && \
     adduser -D -s /bin/sh -u 1000 -G www www && \
