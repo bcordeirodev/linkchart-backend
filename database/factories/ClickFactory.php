@@ -19,6 +19,8 @@ class ClickFactory extends Factory
             'country' => $this->faker->countryCode(),
             'city' => $this->faker->city(),
             'device' => $this->faker->randomElement(['mobile', 'desktop', 'tablet']),
+            'browser' => $this->faker->randomElement(['Chrome', 'Safari', 'Firefox', 'Edge']),
+            'day_of_week' => $this->faker->numberBetween(0, 6),
             'created_at' => now()->subDays(rand(0, 30)),
             'updated_at' => now(),
         ];
