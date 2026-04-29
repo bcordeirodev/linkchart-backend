@@ -106,10 +106,10 @@ Bugs que exigem mudança em pipeline ou semântica.
 | Renomear `calculate*Real*` → `estimate*` (heurísticas explícitas) | 08, 11 | S | ✅ `estimateResponseTime` + `estimateSuccessRate` |
 | Padronizar `day_of_week` ISO 1-7 em todo o pipeline | 05, 11 | M | ✅ `COALESCE(day_of_week, ...)` em `getClicksByDayOfWeekOptimized`; `getDailyPatterns` usa `format('N')`/coluna |
 | Refazer queries de temporal para usar colunas pré-computadas (`hour_of_day`) | 05 | M | ✅ `COALESCE(hour_of_day, EXTRACT(HOUR...))` em `getClicksByHourOptimized` |
-| Corrigir `getReturnVisitorRate` (clicks vs visitors) e `getTrafficSourceAnalysis` | 07 | M | — pendente |
-| Cache do response de public-analytics + decisão de privacy model | 09 | M | — pendente |
-| Tipar respostas `Promise<unknown>` no `analyticsService` | 03, 11 | S | — pendente |
-| Aplicar humps middleware no `ApiClient` (camelCase normalizado) | 11 | M | — pendente |
+| Corrigir `getReturnVisitorRate` (clicks vs visitors) e `getTrafficSourceAnalysis` | 07 | M | ✅ `getReturnVisitorRate` usa `COUNT(DISTINCT ip)`; `getTrafficSourceAnalysis` usa `match()` direto nos valores de `click_source` |
+| Cache do response de public-analytics + decisão de privacy model | 09 | M | ✅ `Cache::remember()` TTL=300s; loop `day_of_week` corrigido para ISO 1-7 |
+| Tipar respostas `Promise<unknown>` no `analyticsService` | 03, 11 | S | ✅ `GeographicData`, `HeatmapPoint[]`, `InsightsData \| BusinessInsight[]` |
+| Aplicar humps middleware no `ApiClient` (camelCase normalizado) | 11 | M | ⏸ Adiado — requer migração de todos os types FE (snake_case→camelCase); já documentado em `client.ts` |
 
 ### Wave 3 — Refactor estrutural (3-4 sprints)
 
