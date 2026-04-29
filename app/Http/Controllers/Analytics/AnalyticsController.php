@@ -315,7 +315,7 @@ class AnalyticsController extends Controller
      * Dashboard de link individual - dados para a tab Dashboard
      * Combina métricas básicas com dados de gráficos para um link específico
      */
-    public function getLinkDashboardData(int $linkId): JsonResponse
+    public function getLinkDashboardData(Request $request, int $linkId): JsonResponse
     {
         try {
             $userId = auth()->guard('api')->id();
@@ -335,8 +335,12 @@ class AnalyticsController extends Controller
                 ], 404);
             }
 
-            // Usar o service para buscar analytics consolidados do link específico
-            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId);
+            $validHours = [1, 24, 168, 720];
+            $hours = in_array((int) $request->query('hours'), $validHours, true)
+                ? (int) $request->query('hours')
+                : 0;
+
+            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId, $hours);
 
             return response()->json([
                 'success' => true,

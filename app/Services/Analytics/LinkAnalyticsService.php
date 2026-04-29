@@ -10,6 +10,17 @@ use App\Models\Link;
  */
 class LinkAnalyticsService
 {
+    /** Filtro temporal aplicado durante getLinkDashboardAnalytics (por hora) */
+    private ?\Carbon\Carbon $queryAfter = null;
+
+    /** Base de queries de clicks com filtro temporal opcional */
+    private function clicksBase(int $linkId): \Illuminate\Database\Query\Builder
+    {
+        return \DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter));
+    }
+
     /**
      * Obtém analytics completos de um link específico - versão otimizada
      */
@@ -138,6 +149,7 @@ class LinkAnalyticsService
                 MAX(created_at) as last_click
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
             ->whereNotNull('country')
@@ -181,6 +193,7 @@ class LinkAnalyticsService
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('country')
             ->where('country', '!=', 'localhost')
             ->groupBy('country', 'iso_code', 'currency')
@@ -211,6 +224,7 @@ class LinkAnalyticsService
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('state')
             ->groupBy('country', 'state', 'state_name')
             ->orderBy('clicks', 'desc')
@@ -240,6 +254,7 @@ class LinkAnalyticsService
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('city')
             ->groupBy('city', 'state', 'country')
             ->orderBy('clicks', 'desc')
@@ -275,6 +290,7 @@ class LinkAnalyticsService
         $hourlyData = \DB::table('clicks')
             ->selectRaw('EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as clicks')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('hour')
             ->orderBy('hour')
             ->get()
@@ -300,6 +316,7 @@ class LinkAnalyticsService
         $daysData = \DB::table('clicks')
             ->selectRaw('EXTRACT(DOW FROM created_at) as day, COUNT(*) as clicks')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('day')
             ->orderBy('day')
             ->get()
@@ -340,6 +357,7 @@ class LinkAnalyticsService
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('device')
             ->groupBy('device')
             ->orderBy('clicks', 'desc')
@@ -365,6 +383,7 @@ class LinkAnalyticsService
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('browser')
             ->orderBy('clicks', 'desc')
             ->limit(10)
@@ -389,6 +408,7 @@ class LinkAnalyticsService
                 COUNT(*) as clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('os')
             ->orderBy('clicks', 'desc')
             ->limit(10)
@@ -466,6 +486,7 @@ class LinkAnalyticsService
         $topCountry = \DB::table('clicks')
             ->selectRaw('country, COUNT(*) as clicks')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('country')
             ->where('country', '!=', 'localhost')
             ->groupBy('country')
@@ -490,6 +511,7 @@ class LinkAnalyticsService
         $topDevice = \DB::table('clicks')
             ->selectRaw('device, COUNT(*) as clicks')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('device')
             ->groupBy('device')
             ->orderBy('clicks', 'desc')
@@ -513,6 +535,7 @@ class LinkAnalyticsService
         $peakHour = \DB::table('clicks')
             ->selectRaw('EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as clicks')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('hour')
             ->orderBy('clicks', 'desc')
             ->first();
@@ -549,6 +572,7 @@ class LinkAnalyticsService
         // 5. Insight de diversidade geográfica
         $uniqueCountries = \DB::table('clicks')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('country')
             ->where('country', '!=', 'localhost')
             ->distinct('country')
@@ -571,6 +595,7 @@ class LinkAnalyticsService
         $suspiciousIPs = \DB::table('clicks')
             ->selectRaw('ip, COUNT(*) as click_count')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('ip')
             ->havingRaw('COUNT(*) > 50') // Mais de 50 cliques do mesmo IP
             ->get()
@@ -768,6 +793,7 @@ class LinkAnalyticsService
                 AVG(CAST(response_time as DECIMAL)) as avg_response_time
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('session_clicks')
             ->where('session_clicks', '>', 0)
             ->groupBy('session_clicks')
@@ -846,6 +872,7 @@ class LinkAnalyticsService
                 AVG(session_clicks) as avg_session_depth
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->groupBy('click_source')
             ->orderBy('clicks', 'desc')
             ->get();
@@ -1111,8 +1138,11 @@ class LinkAnalyticsService
      * Analytics consolidados para dashboard de link individual
      * Combina métricas básicas com dados de gráficos para um link específico
      */
-    public function getLinkDashboardAnalytics(int $linkId): array
+    public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
     {
+        $this->queryAfter = $hours > 0 ? now()->subHours($hours) : null;
+
+        try {
         // Verificar se o link existe
         $link = Link::find($linkId);
         if (!$link) {
@@ -1143,9 +1173,14 @@ class LinkAnalyticsService
         }
 
         // Buscar dados básicos do link
-        $totalClicks = Click::where('link_id', $linkId)->count();
-        $uniqueVisitors = Click::where('link_id', $linkId)->distinct('ip')->count();
+        $totalClicks = Click::where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
+            ->count();
+        $uniqueVisitors = Click::where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
+            ->distinct('ip')->count();
         $countriesReached = Click::where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('country')
             ->where('country', '!=', 'localhost')
             ->distinct('country')
@@ -1193,6 +1228,9 @@ class LinkAnalyticsService
             'geographic_data' => $geographicData,
             'audience_data' => $audienceData
         ];
+        } finally {
+            $this->queryAfter = null;
+        }
     }
 
     /**
@@ -1358,6 +1396,7 @@ class LinkAnalyticsService
                 ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('browser')
             ->groupBy('browser', 'browser_version')
             ->orderBy('clicks', 'desc')
@@ -1387,6 +1426,7 @@ class LinkAnalyticsService
                 ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('os')
             ->groupBy('os', 'os_version')
             ->orderBy('clicks', 'desc')
@@ -1417,6 +1457,7 @@ class LinkAnalyticsService
                 COUNT(*) as total_clicks
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('device')
             ->whereNotNull('response_time')
             ->groupBy('device')
@@ -1442,6 +1483,7 @@ class LinkAnalyticsService
         $clicks = \DB::table('clicks')
             ->select('accept_language')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('accept_language')
             ->get();
 
@@ -1537,6 +1579,7 @@ class LinkAnalyticsService
                 COUNT(DISTINCT ip) as unique_visitors
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->whereNotNull('hour_of_day')
             ->groupBy('hour_of_day')
             ->orderBy('hour_of_day')
@@ -1564,6 +1607,7 @@ class LinkAnalyticsService
                 AVG(response_time) as avg_response_time
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->where('is_weekend', true)
             ->first();
 
@@ -1574,6 +1618,7 @@ class LinkAnalyticsService
                 AVG(response_time) as avg_response_time
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->where('is_weekend', false)
             ->first();
 
@@ -1606,6 +1651,7 @@ class LinkAnalyticsService
                 AVG(session_clicks) as avg_session_depth
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->where('is_business_hours', true)
             ->first();
 
@@ -1617,6 +1663,7 @@ class LinkAnalyticsService
                 AVG(session_clicks) as avg_session_depth
             ')
             ->where('link_id', $linkId)
+            ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
             ->where('is_business_hours', false)
             ->first();
 
