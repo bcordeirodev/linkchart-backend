@@ -485,6 +485,128 @@ class LinkController extends Controller
     }
 
     /**
+     * Lista paginada de cliques de um link específico para exibição em tabela.
+     *
+     * Suporta paginação (page, per_page), busca textual (search) em campos
+     * relevantes e ordenação (sort_by, sort_dir). Retorna `data` + `meta` no
+     * envelope padronizado pelo NormalizeApiResponse middleware.
+     */
+    public function getClicksList(string $id, Request $request): JsonResponse
+    {
+        try {
+            $userId = auth()->guard('api')->id();
+            if (!$userId) {
+                return response()->json(['message' => 'Usuário não autenticado.'], 401);
+            }
+
+            $link = \App\Models\Link::where('id', $id)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$link) {
+                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
+            }
+
+            $perPage = (int) min(max($request->input('per_page', 25), 1), 100);
+            $page = (int) max($request->input('page', 1), 1);
+            $search = trim((string) $request->input('search', ''));
+
+            $allowedSorts = [
+                'created_at', 'country', 'city', 'state', 'device',
+                'browser', 'os', 'ip', 'referer',
+            ];
+            $sortBy = in_array($request->input('sort_by'), $allowedSorts, true)
+                ? $request->input('sort_by')
+                : 'created_at';
+            $sortDir = strtolower((string) $request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+            $query = \App\Models\Click::where('link_id', $link->id)->with('utm');
+
+            if ($search !== '') {
+                $needle = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $search) . '%';
+                $query->where(function ($q) use ($needle) {
+                    $q->where('country', 'ilike', $needle)
+                        ->orWhere('city', 'ilike', $needle)
+                        ->orWhere('state', 'ilike', $needle)
+                        ->orWhere('state_name', 'ilike', $needle)
+                        ->orWhere('device', 'ilike', $needle)
+                        ->orWhere('browser', 'ilike', $needle)
+                        ->orWhere('os', 'ilike', $needle)
+                        ->orWhere('ip', 'ilike', $needle)
+                        ->orWhere('referer', 'ilike', $needle);
+                });
+            }
+
+            $paginator = $query->orderBy($sortBy, $sortDir)
+                ->orderBy('id', 'desc')
+                ->paginate(perPage: $perPage, page: $page);
+
+            $items = collect($paginator->items())->map(function ($click) {
+                $referer = $click->referer;
+                $refererHost = null;
+                if ($referer && $referer !== '-' && $referer !== '') {
+                    $refererHost = parse_url($referer, PHP_URL_HOST) ?: null;
+                }
+
+                return [
+                    'id' => $click->id,
+                    'created_at' => $click->created_at?->toIso8601String(),
+                    'local_time' => $click->local_time,
+                    'ip' => $click->ip,
+                    'country' => $click->country,
+                    'iso_code' => $click->iso_code,
+                    'state' => $click->state,
+                    'state_name' => $click->state_name,
+                    'city' => $click->city,
+                    'continent' => $click->continent,
+                    'timezone' => $click->timezone,
+                    'device' => $click->device,
+                    'browser' => $click->browser,
+                    'browser_version' => $click->browser_version,
+                    'os' => $click->os,
+                    'os_version' => $click->os_version,
+                    'is_mobile' => (bool) $click->is_mobile,
+                    'is_tablet' => (bool) $click->is_tablet,
+                    'is_desktop' => (bool) $click->is_desktop,
+                    'is_bot' => (bool) $click->is_bot,
+                    'referer' => $referer,
+                    'referer_host' => $refererHost ?: ($referer && $referer !== '-' ? null : 'Direct'),
+                    'click_source' => $click->click_source,
+                    'is_return_visitor' => (bool) $click->is_return_visitor,
+                    'response_time' => $click->response_time,
+                    'utm' => $click->utm ? [
+                        'source' => $click->utm->utm_source,
+                        'medium' => $click->utm->utm_medium,
+                        'campaign' => $click->utm->utm_campaign,
+                        'term' => $click->utm->utm_term,
+                        'content' => $click->utm->utm_content,
+                    ] : null,
+                ];
+            })->values();
+
+            return response()->json([
+                'data' => $items,
+                'meta' => [
+                    'total' => $paginator->total(),
+                    'per_page' => $paginator->perPage(),
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'from' => $paginator->firstItem(),
+                    'to' => $paginator->lastItem(),
+                    'sort_by' => $sortBy,
+                    'sort_dir' => $sortDir,
+                    'search' => $search,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erro ao listar cliques.',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Obtém o histórico de auditoria de um link específico.
      */
     public function auditHistory(string $id): JsonResponse
