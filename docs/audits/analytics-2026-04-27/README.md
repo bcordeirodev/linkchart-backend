@@ -80,19 +80,19 @@ Priorização sugerida — combina impacto, esforço e dependências entre módu
 
 PRs pequenos, sem dependências cruzadas, bugs visíveis ao usuário ou erros de runtime.
 
-| Fix | Audit | Esforço |
-|-----|-------|---------|
-| Plugar `getLinkInsightsAnalytics` no controller (insights mortos) | 07 | S |
-| Remover `Math.random` em `useAudienceData.ts` | 06 | S |
-| Corrigir labels do `HeatmapMetrics` (Países/Cidades Únicas) | 03 | S |
-| Corrigir percentual no `GeographicChart` (denominador) | 04 | S |
-| Remover/marcar como hardcoded os 4 campos fantasma no adapter Performance | 08 | S |
-| Corrigir `TimeframeSelector` (BE aceitar `?hours=` ou FE não enviar) | 02 | S |
-| Remover 5 métodos quebrados do `AnalyticsController` | 10 | S |
-| Corrigir `now()->va()` em `MetricsService.php:162` | 10 | S |
-| Renomear pasta `perfomance/` → `performance/` | 08, 11 | S |
-| Adicionar `throttle:public-analytics` + filtros `is_active`/`expires_at` | 09 | S |
-| Decisão de produto: `continents` no BE ou remover do FE | 04, 11 | S+decisão |
+| Fix | Audit | Esforço | Status |
+|-----|-------|---------|--------|
+| Plugar `getLinkInsightsAnalytics` no controller (insights mortos) | 07 | S | ✅ `fix(insights)` commit b2ce74c |
+| Remover `Math.random` em `useAudienceData.ts` | 06 | S | ✅ removido + `AudienceStats` limpo |
+| Corrigir labels do `HeatmapMetrics` (Países/Cidades Únicas) | 03 | S | ✅ `uniqueCountries`/`uniqueCities` expostos |
+| Corrigir percentual no `GeographicChart` (denominador) | 04 | S | ✅ usa `stats.totalClicks` (soma real) |
+| Remover/marcar como hardcoded os 4 campos fantasma no adapter Performance | 08 | S | ✅ campos removidos do adapter |
+| Corrigir `TimeframeSelector` (BE aceitar `?hours=` ou FE não enviar) | 02 | S | ✅ commit 170d88f — `?hours=` honrado no controller/service |
+| Remover 5 métodos quebrados do `AnalyticsController` | 10 | S | ✅ `fix(analytics)` commit e499741 |
+| Corrigir `now()->va()` em `MetricsService.php:162` | 10 | S | ✅ `fix(metrics)` commit c2d0402 |
+| Renomear pasta `perfomance/` → `performance/` | 08, 11 | S | ✅ pasta renomeada |
+| Adicionar `throttle:public-analytics` + filtros `is_active`/`expires_at` | 09 | S | ✅ `fix(public-analytics)` commit 4817dcd |
+| Decisão de produto: `continents` no BE ou remover do FE | 04, 11 | S+decisão | ✅ gráfico hardcoded removido do `GeographicInsights` |
 
 ### Wave 2 — Funcional (1-2 semanas)
 
