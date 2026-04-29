@@ -109,6 +109,7 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     // === DADOS DETALHADOS DE LINKS ===
     Route::prefix('link')->controller(LinkController::class)->group(function () {
         Route::get('/{id}/clicks', 'getClicksData')->where('id', '[0-9]+'); // ✅ USADO: LinkClicksRealTime component
+        Route::get('/{id}/clicks-list', 'getClicksList')->where('id', '[0-9]+'); // ✅ USADO: ClicksTable tab em LinkAnalyticsTabs
     });
 
     // === ANALYTICS POR LINK ===
