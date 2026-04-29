@@ -287,12 +287,14 @@ class LinkAnalyticsService
      */
     private function getClicksByHourOptimized(int $linkId): array
     {
+        // Usa coluna pré-computada hour_of_day (local do visitante) quando disponível.
+        // Fallback para EXTRACT(HOUR FROM created_at) (UTC) em registros antigos.
         $hourlyData = \DB::table('clicks')
-            ->selectRaw('EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as clicks')
+            ->selectRaw('COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int) as hour, COUNT(*) as clicks')
             ->where('link_id', $linkId)
             ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
-            ->groupBy('hour')
-            ->orderBy('hour')
+            ->groupByRaw('COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)')
+            ->orderByRaw('COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)')
             ->get()
             ->keyBy('hour');
 
@@ -313,19 +315,24 @@ class LinkAnalyticsService
      */
     private function getClicksByDayOfWeekOptimized(int $linkId): array
     {
+        // Usa coluna pré-computada day_of_week (ISO 1-7: 1=Seg...7=Dom) quando disponível.
+        // Fallback para EXTRACT(DOW) convertido: DOW 0 (Dom) → 7, demais +0.
+        $expr = 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
+
         $daysData = \DB::table('clicks')
-            ->selectRaw('EXTRACT(DOW FROM created_at) as day, COUNT(*) as clicks')
+            ->selectRaw("{$expr} as day, COUNT(*) as clicks")
             ->where('link_id', $linkId)
             ->when($this->queryAfter, fn($q) => $q->where('created_at', '>=', $this->queryAfter))
-            ->groupBy('day')
-            ->orderBy('day')
+            ->groupByRaw($expr)
+            ->orderByRaw($expr)
             ->get()
             ->keyBy('day');
 
-        $dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        // ISO 1-7: 1=Segunda ... 6=Sábado, 7=Domingo
+        $dayNames = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 7 => 'Domingo'];
 
         $result = [];
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 1; $i <= 7; $i++) {
             $result[] = [
                 'day' => $i,
                 'day_name' => $dayNames[$i],
@@ -1209,8 +1216,8 @@ class LinkAnalyticsService
         $audienceData = $this->getAudienceAnalyticsOptimized($linkId);
 
         // Calcular métricas avançadas
-        $avgResponseTime = $this->calculateRealResponseTime([$linkId], $totalClicks);
-        $successRate = $link->is_active ? $this->calculateRealSuccessRate([$linkId]) : 0;
+        $avgResponseTime = $this->estimateResponseTime([$linkId], $totalClicks);
+        $successRate = $link->is_active ? $this->estimateSuccessRate([$linkId]) : 0;
 
         return [
             'summary' => [
@@ -1236,7 +1243,7 @@ class LinkAnalyticsService
     /**
      * Calcula tempo de resposta baseado em padrões reais de uso
      */
-    private function calculateRealResponseTime(array $linkIds, int $totalClicks): int
+    private function estimateResponseTime(array $linkIds, int $totalClicks): int
     {
         // Análise baseada no volume e distribuição temporal
         $hourlyDistribution = \DB::table('clicks')
@@ -1261,7 +1268,7 @@ class LinkAnalyticsService
     /**
      * Calcula taxa de sucesso baseada em padrões de erro
      */
-    private function calculateRealSuccessRate(array $linkIds): float
+    private function estimateSuccessRate(array $linkIds): float
     {
         // Verificar se há links inativos ou com problemas
         $activeLinks = Link::whereIn('id', $linkIds)

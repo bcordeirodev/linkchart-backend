@@ -348,11 +348,12 @@ class UserAgentAnalyticsService
 
     private function getDailyPatterns($clicks): array
     {
-        $patterns = array_fill(0, 7, 0);
+        // ISO 1-7: 1=Segunda...7=Domingo, alinhado com a coluna day_of_week do tracking.
+        $patterns = array_fill(1, 7, 0);
 
         foreach ($clicks as $click) {
-            $day = (int) $click->created_at->format('w');
-            $patterns[$day]++;
+            $day = $click->day_of_week ?? (int) $click->created_at->format('N');
+            $patterns[$day] = ($patterns[$day] ?? 0) + 1;
         }
 
         return $patterns;
@@ -392,7 +393,8 @@ class UserAgentAnalyticsService
         $peakHour = array_keys($hourly, max($hourly))[0];
         $peakDay = array_keys($daily, max($daily))[0];
 
-        $dayNames = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+        // ISO 1-7: 1=Segunda...7=Domingo
+        $dayNames = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 7 => 'Domingo'];
 
         return [
             'peak_hour' => $peakHour,

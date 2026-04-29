@@ -6,6 +6,7 @@ use App\Models\Click;
 use App\Models\Link;
 use App\Models\LinkUtm;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Jenssegers\Agent\Agent;
 
@@ -23,7 +24,7 @@ class LinkTrackingService
      *     referer?: ?string,
      *     accept_language?: ?string,
      *     query_params?: array<string, string>,
-     *     start_time?: float
+     *     http_response_ms?: float
      * }  $payload
      */
     public function registrarCliqueFromPayload(int $linkId, array $payload): void
@@ -36,7 +37,7 @@ class LinkTrackingService
             return;
         }
 
-        $startTime = $payload['start_time'] ?? microtime(true);
+        $httpResponseMs = $payload['http_response_ms'] ?? null;
         $ip = $payload['ip'] ?? '0.0.0.0';
         $userAgent = $payload['user_agent'] ?? 'Unknown';
         $referer = $payload['referer'] ?? null;
@@ -47,7 +48,7 @@ class LinkTrackingService
         $deviceData = $this->parseUserAgent($userAgent);
         $temporalData = $this->enrichTemporalData(now(), $locationData['timezone']);
         $behaviorData = $this->analyzeVisitorBehavior($ip, $link->id, $referer);
-        $performanceData = $this->collectPerformanceData($acceptLanguage, $startTime);
+        $performanceData = $this->collectPerformanceData($acceptLanguage, $httpResponseMs);
 
         $click = Click::create(array_merge([
             'link_id' => $link->id,
@@ -67,6 +68,8 @@ class LinkTrackingService
             'continent' => $locationData['continent'],
             'currency' => $locationData['currency'],
         ], $deviceData, $temporalData, $behaviorData, $performanceData));
+
+        DB::table('links')->where('id', $link->id)->increment('clicks');
 
         $utm = $this->extractUtm($queryParams, $referer);
 
@@ -375,25 +378,12 @@ class LinkTrackingService
         return 'referral';
     }
 
-    private function collectPerformanceData(?string $acceptLanguage, float $startTime): array
+    private function collectPerformanceData(?string $acceptLanguage, ?float $httpResponseMs): array
     {
-        try {
-            $responseTime = (microtime(true) - $startTime) * 1000;
-
-            return [
-                'response_time' => round($responseTime, 3),
-                'accept_language' => $acceptLanguage,
-            ];
-        } catch (\Exception $e) {
-            Log::warning('Failed to collect performance data', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return [
-                'response_time' => null,
-                'accept_language' => null,
-            ];
-        }
+        return [
+            'response_time' => $httpResponseMs !== null ? round($httpResponseMs, 3) : null,
+            'accept_language' => $acceptLanguage,
+        ];
     }
 
     private function isValidIP(string $ip): bool

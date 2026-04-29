@@ -98,18 +98,18 @@ PRs pequenos, sem dependências cruzadas, bugs visíveis ao usuário ou erros de
 
 Bugs que exigem mudança em pipeline ou semântica.
 
-| Fix | Audit | Esforço |
-|-----|-------|---------|
-| Validar `click_limit` em `/r/{slug}` antes de redirecionar | 01 | M |
-| Sincronizar `links.clicks` counter (observer no `Click@created` ou remover counter e usar `count`) | 01 | M |
-| Padronizar `day_of_week` ISO 1-7 em todo o pipeline | 05, 11 | M |
-| Instrumentar redirect para gravar `response_time` real | 01, 08 | M |
-| Renomear `calculate*Real*` → `estimate*` (heurísticas explícitas) | 08, 11 | S |
-| Refazer queries de temporal para usar colunas pré-computadas (`hour_of_day`, `local_time`) | 05 | M |
-| Corrigir `getReturnVisitorRate` (clicks vs visitors) e `getTrafficSourceAnalysis` (categorização contraditória) | 07 | M |
-| Cache do response de public-analytics + decisão de privacy model | 09 | M |
-| Tipar respostas `Promise<unknown>` no `analyticsService` | 03, 11 | S |
-| Aplicar humps middleware no `ApiClient` (camelCase normalizado) | 11 | M |
+| Fix | Audit | Esforço | Status |
+|-----|-------|---------|--------|
+| Validar `click_limit` em `/r/{slug}` antes de redirecionar | 01 | M | ✅ `hasReachedClickLimit()` adicionado ao `RedirectController::redirect` |
+| Sincronizar `links.clicks` counter — mover para após `Click::create` no job | 01 | M | ✅ removido do controller, inserido em `LinkTrackingService::registrarCliqueFromPayload` |
+| Instrumentar redirect para gravar `response_time` real | 01, 08 | M | ✅ `http_response_ms` calculado com `LARAVEL_START` no controller, passado ao job |
+| Renomear `calculate*Real*` → `estimate*` (heurísticas explícitas) | 08, 11 | S | ✅ `estimateResponseTime` + `estimateSuccessRate` |
+| Padronizar `day_of_week` ISO 1-7 em todo o pipeline | 05, 11 | M | ✅ `COALESCE(day_of_week, ...)` em `getClicksByDayOfWeekOptimized`; `getDailyPatterns` usa `format('N')`/coluna |
+| Refazer queries de temporal para usar colunas pré-computadas (`hour_of_day`) | 05 | M | ✅ `COALESCE(hour_of_day, EXTRACT(HOUR...))` em `getClicksByHourOptimized` |
+| Corrigir `getReturnVisitorRate` (clicks vs visitors) e `getTrafficSourceAnalysis` | 07 | M | — pendente |
+| Cache do response de public-analytics + decisão de privacy model | 09 | M | — pendente |
+| Tipar respostas `Promise<unknown>` no `analyticsService` | 03, 11 | S | — pendente |
+| Aplicar humps middleware no `ApiClient` (camelCase normalizado) | 11 | M | — pendente |
 
 ### Wave 3 — Refactor estrutural (3-4 sprints)
 

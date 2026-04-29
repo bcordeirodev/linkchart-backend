@@ -61,7 +61,7 @@ class RedirectTest extends TestCase
                 'utm_medium' => 'social',
             ], $job->payload['query_params']);
             $this->assertArrayNotHasKey('ignored', $job->payload['query_params']);
-            $this->assertIsFloat($job->payload['start_time']);
+            $this->assertIsFloat($job->payload['http_response_ms']);
 
             return true;
         });
@@ -69,12 +69,25 @@ class RedirectTest extends TestCase
 
     public function test_human_visitor_increments_clicks_counter(): void
     {
-        Queue::fake();
+        // Não usa Queue::fake() — com QUEUE_CONNECTION=sync o job roda inline.
+        // O increment acontece dentro do job, após Click::create com sucesso.
         $link = $this->makeLink(['clicks' => 0]);
 
         $this->withHeaders(['User-Agent' => self::HUMAN_UA])->get('/r/'.$link->slug);
 
         $this->assertSame(1, (int) DB::table('links')->where('id', $link->id)->value('clicks'));
+    }
+
+    public function test_click_limit_returns_error_page(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink(['click_limit' => 5, 'clicks' => 5]);
+
+        $response = $this->withHeaders(['User-Agent' => self::HUMAN_UA])->get('/r/'.$link->slug);
+
+        $response->assertStatus(404);
+        $this->assertStringContainsString('atingiu o limite de cliques', $response->getContent());
+        Queue::assertNothingPushed();
     }
 
     public function test_whatsapp_bot_receives_html_with_open_graph_tags(): void

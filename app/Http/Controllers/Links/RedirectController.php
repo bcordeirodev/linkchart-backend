@@ -9,7 +9,6 @@ use App\Services\Links\LinkTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Jenssegers\Agent\Agent;
@@ -76,6 +75,10 @@ class RedirectController extends Controller
                 return $this->renderErrorPage('Este link ainda não está disponível');
             }
 
+            if ($link->hasReachedClickLimit()) {
+                return $this->renderErrorPage('Este link atingiu o limite de cliques');
+            }
+
             $isBot = $this->isBotUserAgent($request->userAgent());
             $isPreview = $request->has('preview');
 
@@ -118,12 +121,10 @@ class RedirectController extends Controller
                 'referer' => $request->header('referer'),
                 'accept_language' => $request->header('Accept-Language'),
                 'query_params' => $request->only(LinkTrackingService::UTM_KEYS),
-                'start_time' => microtime(true),
+                'http_response_ms' => round((microtime(true) - (defined('LARAVEL_START') ? LARAVEL_START : microtime(true))) * 1000, 2),
             ];
 
             ProcessLinkClickJob::dispatch($link->id, $payload);
-
-            DB::table('links')->where('id', $link->id)->increment('clicks');
         } catch (\Throwable $e) {
             Log::error('Failed to dispatch click tracking', [
                 'slug' => $slug,
