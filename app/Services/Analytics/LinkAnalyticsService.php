@@ -738,9 +738,10 @@ class LinkAnalyticsService
      */
     private function getReturnVisitorRate(int $linkId): array
     {
-        $totalClicks = Click::where('link_id', $linkId)->count();
+        // Conta IPs únicos para medir visitantes, não cliques.
+        $totalVisitors = Click::where('link_id', $linkId)->distinct('ip')->count('ip');
 
-        if ($totalClicks === 0) {
+        if ($totalVisitors === 0) {
             return [
                 'return_visitor_rate' => 0,
                 'new_visitor_rate' => 0,
@@ -752,14 +753,15 @@ class LinkAnalyticsService
             ];
         }
 
-        // Contar visitantes recorrentes vs novos
+        // IPs únicos que têm ao menos um clique marcado como return visitor.
         $returnVisitors = Click::where('link_id', $linkId)
             ->where('is_return_visitor', true)
-            ->count();
+            ->distinct('ip')
+            ->count('ip');
 
-        $newVisitors = $totalClicks - $returnVisitors;
-        $returnVisitorRate = round(($returnVisitors / $totalClicks) * 100, 2);
-        $newVisitorRate = round(($newVisitors / $totalClicks) * 100, 2);
+        $newVisitors = max(0, $totalVisitors - $returnVisitors);
+        $returnVisitorRate = round(($returnVisitors / $totalVisitors) * 100, 2);
+        $newVisitorRate = round(($newVisitors / $totalVisitors) * 100, 2);
 
         // Calcular score de retenção (0-100)
         $retentionScore = min(100, round($returnVisitorRate * 1.5, 1)); // Peso maior para retenção
@@ -779,7 +781,7 @@ class LinkAnalyticsService
         return [
             'return_visitor_rate' => $returnVisitorRate,
             'new_visitor_rate' => $newVisitorRate,
-            'total_visitors' => $totalClicks,
+            'total_visitors' => $totalVisitors,
             'return_visitors' => $returnVisitors,
             'new_visitors' => $newVisitors,
             'retention_score' => $retentionScore,
@@ -896,30 +898,15 @@ class LinkAnalyticsService
 
         $totalClicks = $sourceData->sum('clicks');
 
-        // Categorizar fontes em canais
-        $channelMapping = [
-            'social' => ['facebook', 'twitter', 'instagram', 'linkedin', 'tiktok', 'social'],
-            'search' => ['google', 'bing', 'yahoo', 'search', 'organic'],
-            'direct' => ['direct', 'bookmark', 'typed'],
-            'email' => ['email', 'newsletter', 'campaign'],
-            'referral' => ['referral', 'link', 'website'],
-            'paid' => ['ads', 'paid', 'ppc', 'sponsored']
-        ];
-
+        // Mapeia diretamente os valores gravados por categorizeClickSource:
+        // 'direct', 'social', 'search', 'email', 'referral', 'unknown'
         $channelData = [];
 
         foreach ($sourceData as $source) {
-            $channel = 'other';
-            $sourceLower = strtolower($source->source);
-
-            foreach ($channelMapping as $channelName => $keywords) {
-                foreach ($keywords as $keyword) {
-                    if (strpos($sourceLower, $keyword) !== false) {
-                        $channel = $channelName;
-                        break 2;
-                    }
-                }
-            }
+            $channel = match($source->source) {
+                'social', 'search', 'direct', 'email', 'referral' => $source->source,
+                default => 'other',
+            };
 
             if (!isset($channelData[$channel])) {
                 $channelData[$channel] = [

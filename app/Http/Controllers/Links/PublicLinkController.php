@@ -8,6 +8,8 @@ use App\Http\Requests\CreatePublicLinkRequest;
 use App\Http\Resources\PublicLinkResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Controller para encurtamento público de URLs
@@ -118,117 +120,86 @@ class PublicLinkController extends Controller
                 return response()->json(['message' => 'Link não encontrado.'], 404);
             }
 
-            $basicData = [
-                'total_clicks' => $link->clicks,
-                'created_at' => $link->created_at,
-                'is_active' => $link->is_active,
-                'short_url' => $link->getShortedUrl(),
-                'has_analytics' => $link->clicks > 0,
-            ];
+            $basicData = Cache::remember("public_analytics_{$link->id}", 300, function () use ($link) {
+                $data = [
+                    'total_clicks' => $link->clicks,
+                    'created_at' => $link->created_at,
+                    'is_active' => $link->is_active,
+                    'short_url' => $link->getShortedUrl(),
+                    'has_analytics' => $link->clicks > 0,
+                ];
 
-            // Se há cliques, incluir dados básicos de gráficos
-            if ($link->clicks > 0) {
+                if ($link->clicks === 0) {
+                    return $data;
+                }
+
                 // Top 5 países
                 $topCountries = \App\Models\Click::where('link_id', $link->id)
-                    ->select('country', \DB::raw('count(*) as clicks'))
+                    ->select('country', DB::raw('count(*) as clicks'))
                     ->groupBy('country')
                     ->orderBy('clicks', 'desc')
                     ->limit(5)
                     ->get()
-                    ->map(function ($item) {
-                        return [
-                            'country' => $item->country,
-                            'clicks' => (int) $item->clicks,
-                        ];
-                    });
+                    ->map(fn($item) => ['country' => $item->country, 'clicks' => (int) $item->clicks]);
 
                 // Distribuição por dispositivos
                 $deviceBreakdown = \App\Models\Click::where('link_id', $link->id)
-                    ->select('device', \DB::raw('count(*) as clicks'))
+                    ->select('device', DB::raw('count(*) as clicks'))
                     ->groupBy('device')
                     ->orderBy('clicks', 'desc')
                     ->get()
-                    ->map(function ($item) {
-                        return [
-                            'device' => ucfirst($item->device),
-                            'clicks' => (int) $item->clicks,
-                        ];
-                    });
+                    ->map(fn($item) => ['device' => ucfirst($item->device), 'clicks' => (int) $item->clicks]);
 
-                // Cliques por hora do dia (últimos 7 dias)
-                $hourExpression = \DB::connection()->getDriverName() === 'sqlite'
-                    ? \DB::raw("CAST(strftime('%H', created_at) AS INTEGER) as hour")
-                    : \DB::raw('EXTRACT(HOUR FROM created_at) as hour');
+                // Cliques por hora do dia (últimos 7 dias) — usa coluna pré-computada quando disponível
+                $hourExpr = DB::connection()->getDriverName() === 'sqlite'
+                    ? DB::raw("COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER)) as hour")
+                    : DB::raw('COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int) as hour');
 
                 $clicksByHour = \App\Models\Click::where('link_id', $link->id)
                     ->where('created_at', '>=', now()->subDays(7))
-                    ->select($hourExpression, \DB::raw('count(*) as clicks'))
+                    ->select($hourExpr, DB::raw('count(*) as clicks'))
                     ->groupBy('hour')
                     ->orderBy('hour')
                     ->get()
-                    ->map(function ($item) {
-                        return [
-                            'hour' => (int) $item->hour,
-                            'clicks' => (int) $item->clicks,
-                        ];
-                    });
+                    ->map(fn($item) => ['hour' => (int) $item->hour, 'clicks' => (int) $item->clicks]);
 
-                // Preencher horas faltantes com 0
                 $hourlyData = [];
                 for ($i = 0; $i < 24; $i++) {
-                    $hourData = $clicksByHour->firstWhere('hour', $i);
-                    $hourlyData[] = [
-                        'hour' => $i,
-                        'clicks' => $hourData ? $hourData['clicks'] : 0,
-                    ];
+                    $h = $clicksByHour->firstWhere('hour', $i);
+                    $hourlyData[] = ['hour' => $i, 'clicks' => $h ? $h['clicks'] : 0];
                 }
 
-                // Distribuição por browser (top 5, excluindo nulos)
+                // Distribuição por browser (top 5)
                 $browserBreakdown = \App\Models\Click::where('link_id', $link->id)
                     ->whereNotNull('browser')
-                    ->select('browser', \DB::raw('count(*) as clicks'))
+                    ->select('browser', DB::raw('count(*) as clicks'))
                     ->groupBy('browser')
                     ->orderBy('clicks', 'desc')
                     ->limit(5)
                     ->get()
-                    ->map(function ($item) {
-                        return [
-                            'browser' => ucfirst($item->browser ?? 'Desconhecido'),
-                            'clicks' => (int) $item->clicks,
-                        ];
-                    });
+                    ->map(fn($item) => ['browser' => ucfirst($item->browser ?? 'Desconhecido'), 'clicks' => (int) $item->clicks]);
 
-                // Distribuição por dia da semana (0=Dom … 6=Sáb) usando campo pré-computado
+                // Distribuição por dia da semana — ISO 1-7 (1=Seg...7=Dom)
                 $clicksByDow = \App\Models\Click::where('link_id', $link->id)
-                    ->select('day_of_week', \DB::raw('count(*) as clicks'))
+                    ->select('day_of_week', DB::raw('count(*) as clicks'))
                     ->groupBy('day_of_week')
                     ->orderBy('day_of_week')
                     ->get();
 
-                // Preencher todos os 7 dias, mesmo os sem clique
                 $dowData = [];
-                for ($i = 0; $i < 7; $i++) {
-                    $dayData = $clicksByDow->firstWhere('day_of_week', $i);
-                    $dowData[] = [
-                        'day' => $i,
-                        'clicks' => $dayData ? (int) $dayData['clicks'] : 0,
-                    ];
+                for ($i = 1; $i <= 7; $i++) {
+                    $d = $clicksByDow->firstWhere('day_of_week', $i);
+                    $dowData[] = ['day' => $i, 'clicks' => $d ? (int) $d['clicks'] : 0];
                 }
 
-                $basicData['charts'] = [
-                    'geographic' => [
-                        'top_countries' => $topCountries,
-                    ],
-                    'audience' => [
-                        'device_breakdown' => $deviceBreakdown,
-                        'browser_breakdown' => $browserBreakdown,
-                    ],
-                    'temporal' => [
-                        'clicks_by_hour' => $hourlyData,
-                        'clicks_by_day_of_week' => $dowData,
-                    ],
+                $data['charts'] = [
+                    'geographic' => ['top_countries' => $topCountries],
+                    'audience' => ['device_breakdown' => $deviceBreakdown, 'browser_breakdown' => $browserBreakdown],
+                    'temporal' => ['clicks_by_hour' => $hourlyData, 'clicks_by_day_of_week' => $dowData],
                 ];
-            }
+
+                return $data;
+            });
 
             return response()->json($basicData);
         } catch (\Exception $e) {
