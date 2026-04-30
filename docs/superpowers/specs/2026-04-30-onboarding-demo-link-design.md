@@ -15,7 +15,7 @@ User::create() → UserObserver::created() → SeedDemoLinkJob::dispatch($user)
                                                       ↓
                                           [queue worker executa]
                                                       ↓
-                                     OnboardingDemoSeeder::run($user)
+                                     OnboardingDemoDataService::run($user)
                                         ├── cria Link (is_demo=true)
                                         └── insere ~1.200 clicks em batch
 ```
@@ -27,9 +27,9 @@ User::create() → UserObserver::created() → SeedDemoLinkJob::dispatch($user)
 | Arquivo | Responsabilidade |
 |---|---|
 | `app/Models/Observers/UserObserver.php` | Escuta `created` no model `User`, dispara `SeedDemoLinkJob` |
-| `app/Jobs/SeedDemoLinkJob.php` | Job assíncrono (`ShouldQueue`), delega ao `OnboardingDemoSeeder` |
-| `app/Services/Onboarding/OnboardingDemoSeeder.php` | Cria o link demo e os clicks com dados realistas |
-| `database/migrations/YYYY_MM_DD_add_is_demo_to_links_table.php` | Adiciona coluna `is_demo` boolean na tabela `links` |
+| `app/Jobs/SeedDemoLinkJob.php` | Job assíncrono (`ShouldQueue`), delega ao `OnboardingDemoDataService` |
+| `app/Services/Onboarding/OnboardingDemoDataService.php` | Cria o link demo e os clicks com dados realistas (não é um seeder Laravel — fica em Services/) |
+| `database/migrations/2026_04_30_000001_add_is_demo_to_links_table.php` | Adiciona coluna `is_demo` boolean na tabela `links` |
 
 ---
 
@@ -64,7 +64,7 @@ User::create() → UserObserver::created() → SeedDemoLinkJob::dispatch($user)
 - **Distribuição geográfica:** 20 países com pesos (US 30%, BR 20%, GB 10%, DE 8%, etc.)
 - **Dispositivos:** mobile 60%, desktop 35%, tablet 4%, bot 1%
 - **Referrers:** direct 40%, social 30%, search 20%, other 10%
-- **Dados reutilizados:** países, cidades, user agents e referrers já definidos nos seeders existentes, extraídos para o `OnboardingDemoSeeder`
+- **Dados reutilizados:** países, cidades, user agents e referrers já definidos nos seeders existentes, extraídos para o `OnboardingDemoDataService`
 
 ---
 
