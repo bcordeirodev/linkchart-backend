@@ -4,6 +4,7 @@ namespace Tests\Feature\Analytics;
 
 use App\Models\Click;
 use App\Services\Analytics\DashboardAnalyticsService;
+use App\Services\Analytics\GeographicAnalyticsService;
 use App\Services\Analytics\LinkAnalyticsService;
 use App\Services\Analytics\Support\UserAgentParser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -171,5 +172,36 @@ class AnalyticsStructureTest extends TestCase
         $parser = new UserAgentParser();
         $this->assertSame('Português (Brasil)', $parser->extractPrimaryLanguage('pt-BR,pt;q=0.9,en;q=0.8'));
         $this->assertNull($parser->extractPrimaryLanguage(null));
+    }
+
+    public function test_geographic_service_matches_monolith_structure(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $legacy  = app(LinkAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
+        $service = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
+
+        $this->assertSame(array_keys($legacy), array_keys($service));
+    }
+
+    public function test_geographic_service_heatmap_returns_valid_structure(): void
+    {
+        $link = $this->makeLink();
+        Click::factory()->count(2)->create([
+            'link_id'   => $link->id,
+            'latitude'  => -23.5,
+            'longitude' => -46.6,
+            'country'   => 'Brazil',
+        ]);
+
+        $result = app(GeographicAnalyticsService::class)->getHeatmapData($link->id);
+
+        $this->assertIsArray($result);
+        if (count($result) > 0) {
+            $this->assertArrayHasKey('lat', $result[0]);
+            $this->assertArrayHasKey('lng', $result[0]);
+            $this->assertArrayHasKey('clicks', $result[0]);
+        }
     }
 }
