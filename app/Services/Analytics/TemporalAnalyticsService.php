@@ -176,6 +176,10 @@ class TemporalAnalyticsService
 
     private function getPeakAnalysis($clicks): array
     {
+        if ($clicks->isEmpty()) {
+            return ['peak_hour' => null, 'peak_day' => null, 'peak_day_name' => null, 'peak_hour_clicks' => 0, 'peak_day_clicks' => 0];
+        }
+
         $hourly = array_fill(0, 24, 0);
         $daily  = array_fill(1, 7, 0);
         foreach ($clicks as $click) {
