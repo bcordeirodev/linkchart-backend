@@ -4,6 +4,7 @@ namespace Tests\Feature\Analytics;
 
 use App\Models\Click;
 use App\Services\Analytics\LinkAnalyticsService;
+use App\Services\Analytics\Support\UserAgentParser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesTestLinks;
 use Tests\TestCase;
@@ -123,5 +124,26 @@ class AnalyticsStructureTest extends TestCase
         $this->assertArrayHasKey('retention', $result['analytics_data']);
         $this->assertArrayHasKey('session_depth', $result['analytics_data']);
         $this->assertArrayHasKey('traffic_sources', $result['analytics_data']);
+    }
+
+    public function test_ua_parser_identifies_chrome(): void
+    {
+        $parser = new UserAgentParser();
+        $ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36';
+        $this->assertSame('Chrome', $parser->extractBrowser($ua));
+    }
+
+    public function test_ua_parser_identifies_android(): void
+    {
+        $parser = new UserAgentParser();
+        $ua = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36';
+        $this->assertSame('Android', $parser->extractOS($ua));
+    }
+
+    public function test_ua_parser_extracts_primary_language(): void
+    {
+        $parser = new UserAgentParser();
+        $this->assertSame('Português (Brasil)', $parser->extractPrimaryLanguage('pt-BR,pt;q=0.9,en;q=0.8'));
+        $this->assertNull($parser->extractPrimaryLanguage(null));
     }
 }
