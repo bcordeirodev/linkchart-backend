@@ -7,7 +7,7 @@ use App\Models\Link;
 use App\Services\Analytics\Support\UserAgentParser;
 use Illuminate\Support\Facades\DB;
 
-class AudienceAnalyticsService
+class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnalyticsInterface
 {
     public function __construct(private readonly UserAgentParser $uaParser) {}
 

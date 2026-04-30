@@ -6,7 +6,7 @@ use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
 
-class GeographicAnalyticsService
+class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicAnalyticsInterface
 {
     public function getLinkGeographicAnalytics(int $linkId): array
     {

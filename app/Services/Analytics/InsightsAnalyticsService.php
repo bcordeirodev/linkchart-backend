@@ -15,7 +15,7 @@ use App\Services\Analytics\Insights\Generators\TemporalInsightGenerator;
 use App\Services\Analytics\Insights\InsightGeneratorRegistry;
 use Illuminate\Support\Facades\DB;
 
-class InsightsAnalyticsService
+class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnalyticsInterface
 {
     private InsightGeneratorRegistry $registry;
 

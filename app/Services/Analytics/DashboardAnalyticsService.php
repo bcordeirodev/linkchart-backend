@@ -7,7 +7,7 @@ use App\Models\Link;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
-class DashboardAnalyticsService
+class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAnalyticsInterface
 {
     public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
     {

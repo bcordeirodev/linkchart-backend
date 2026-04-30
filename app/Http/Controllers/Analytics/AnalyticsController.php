@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Analytics;
 
-use App\Services\Analytics\LinkAnalyticsService;
-use App\Services\Analytics\UserAgentAnalyticsService;
+use App\Contracts\Analytics\TemporalAnalyticsInterface;
+use App\Services\Analytics\LinkAnalyticsOrchestrator;
 use Illuminate\Routing\Controller;
 use App\Models\Link;
 use Illuminate\Http\JsonResponse;
@@ -16,8 +16,8 @@ use Illuminate\Http\Request;
 class AnalyticsController extends Controller
 {
     public function __construct(
-        private LinkAnalyticsService $analyticsService,
-        private UserAgentAnalyticsService $userAgentAnalyticsService
+        private LinkAnalyticsOrchestrator $analyticsService,
+        private TemporalAnalyticsInterface $temporalService
     ) {}
 
     /**
@@ -212,7 +212,7 @@ class AnalyticsController extends Controller
             $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId);
 
             // 2. Buscar dados avançados (weekly_trends, monthly_trends, peak_analysis, timezone_analysis)
-            $advancedData = $this->userAgentAnalyticsService->getAdvancedTemporalAnalytics($linkId);
+            $advancedData = $this->temporalService->getAdvancedTemporalAnalytics($linkId);
 
             // 3. Enriquecer timezone analysis com percentuais
             $enrichedTimezones = $this->enrichTimezoneAnalysis($advancedData['timezone_analysis'] ?? []);

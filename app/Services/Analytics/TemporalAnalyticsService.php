@@ -6,7 +6,7 @@ use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
 
-class TemporalAnalyticsService
+class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnalyticsInterface
 {
     public function getLinkTemporalAnalytics(int $linkId): array
     {
