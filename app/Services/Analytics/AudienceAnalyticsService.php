@@ -16,7 +16,15 @@ class AudienceAnalyticsService
         Link::findOrFail($linkId);
 
         if (!Click::where('link_id', $linkId)->exists()) {
-            return ['device_breakdown' => []];
+            return [
+                'device_breakdown'   => [],
+                'browser_breakdown'  => [],
+                'os_breakdown'       => [],
+                'browsers'           => [],
+                'operating_systems'  => [],
+                'device_performance' => [],
+                'languages'          => [],
+            ];
         }
 
         return [
