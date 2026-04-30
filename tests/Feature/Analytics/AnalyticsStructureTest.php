@@ -3,6 +3,7 @@
 namespace Tests\Feature\Analytics;
 
 use App\Models\Click;
+use App\Services\Analytics\AudienceAnalyticsService;
 use App\Services\Analytics\DashboardAnalyticsService;
 use App\Services\Analytics\GeographicAnalyticsService;
 use App\Services\Analytics\LinkAnalyticsService;
@@ -210,6 +211,17 @@ class AnalyticsStructureTest extends TestCase
         $this->assertArrayHasKey('timezone_analysis', $result);
         $this->assertArrayHasKey('weekly_trends', $result);
         $this->assertArrayHasKey('monthly_trends', $result);
+    }
+
+    public function test_audience_service_matches_monolith_structure(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $legacy  = app(LinkAnalyticsService::class)->getLinkAudienceAnalytics($link->id);
+        $service = app(AudienceAnalyticsService::class)->getLinkAudienceAnalytics($link->id);
+
+        $this->assertSame(array_keys($legacy), array_keys($service));
     }
 
     public function test_geographic_service_heatmap_returns_valid_structure(): void
