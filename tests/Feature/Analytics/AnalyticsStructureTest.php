@@ -7,6 +7,7 @@ use App\Services\Analytics\DashboardAnalyticsService;
 use App\Services\Analytics\GeographicAnalyticsService;
 use App\Services\Analytics\LinkAnalyticsService;
 use App\Services\Analytics\Support\UserAgentParser;
+use App\Services\Analytics\TemporalAnalyticsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CreatesTestLinks;
 use Tests\TestCase;
@@ -183,6 +184,32 @@ class AnalyticsStructureTest extends TestCase
         $service = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
 
         $this->assertSame(array_keys($legacy), array_keys($service));
+    }
+
+    public function test_temporal_service_matches_monolith_structure(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $legacy  = app(LinkAnalyticsService::class)->getLinkTemporalAnalytics($link->id);
+        $service = app(TemporalAnalyticsService::class)->getLinkTemporalAnalytics($link->id);
+
+        $this->assertSame(array_keys($legacy), array_keys($service));
+        $this->assertCount(24, $service['clicks_by_hour']);
+        $this->assertCount(7, $service['clicks_by_day_of_week']);
+    }
+
+    public function test_temporal_service_advanced_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(TemporalAnalyticsService::class)->getAdvancedTemporalAnalytics($link->id);
+
+        $this->assertArrayHasKey('peak_analysis', $result);
+        $this->assertArrayHasKey('timezone_analysis', $result);
+        $this->assertArrayHasKey('weekly_trends', $result);
+        $this->assertArrayHasKey('monthly_trends', $result);
     }
 
     public function test_geographic_service_heatmap_returns_valid_structure(): void
