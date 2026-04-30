@@ -17,7 +17,7 @@ class DeviceInsightGenerator implements InsightGeneratorInterface
             ->orderBy('clicks', 'desc')
             ->first();
 
-        if (! $top) {
+        if (! $top || $totalClicks === 0) {
             return null;
         }
 

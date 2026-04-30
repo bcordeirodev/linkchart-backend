@@ -155,6 +155,18 @@ class InsightsAnalyticsService
         }
 
         $totalUsers = $sessionData->sum('users');
+
+        if ($totalUsers === 0) {
+            return [
+                'avg_session_depth' => 0,
+                'max_session_depth' => 0,
+                'session_distribution' => [],
+                'power_users_count' => 0,
+                'engagement_score' => 0,
+                'session_quality' => 'no_data',
+            ];
+        }
+
         $weightedSum = $sessionData->sum(function ($item) {
             return $item->session_clicks * $item->users;
         });
@@ -207,7 +219,7 @@ class InsightsAnalyticsService
                 AVG(session_clicks) as avg_session_depth
             ')
             ->where('link_id', $linkId)
-            ->groupBy('click_source')
+            ->groupByRaw("COALESCE(click_source, 'direct')")
             ->orderBy('clicks', 'desc')
             ->get();
 
@@ -216,7 +228,7 @@ class InsightsAnalyticsService
                 'sources' => [],
                 'top_source' => null,
                 'source_diversity' => 0,
-                'channel_performance' => [],
+                'channels' => [],
                 'recommendations' => [],
             ];
         }
