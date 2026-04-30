@@ -3,6 +3,7 @@
 namespace Tests\Feature\Analytics;
 
 use App\Models\Click;
+use App\Services\Analytics\DashboardAnalyticsService;
 use App\Services\Analytics\LinkAnalyticsService;
 use App\Services\Analytics\Support\UserAgentParser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -124,6 +125,31 @@ class AnalyticsStructureTest extends TestCase
         $this->assertArrayHasKey('retention', $result['analytics_data']);
         $this->assertArrayHasKey('session_depth', $result['analytics_data']);
         $this->assertArrayHasKey('traffic_sources', $result['analytics_data']);
+    }
+
+    public function test_dashboard_service_matches_monolith_structure(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $legacy  = app(LinkAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
+        $service = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
+
+        $this->assertSame(array_keys($legacy), array_keys($service));
+        $this->assertSame(array_keys($legacy['summary']), array_keys($service['summary']));
+    }
+
+    public function test_dashboard_service_since_filter_works(): void
+    {
+        $link = $this->makeLink();
+        Click::factory()->count(2)->create(['link_id' => $link->id, 'created_at' => now()->subHours(2)]);
+        Click::factory()->count(5)->create(['link_id' => $link->id, 'created_at' => now()->subDays(7)]);
+
+        $allTime = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id, 0);
+        $last24h = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id, 24);
+
+        $this->assertSame(7, $allTime['summary']['total_clicks']);
+        $this->assertSame(2, $last24h['summary']['total_clicks']);
     }
 
     public function test_ua_parser_identifies_chrome(): void
