@@ -1,0 +1,127 @@
+<?php
+
+namespace Tests\Feature\Analytics;
+
+use App\Models\Click;
+use App\Services\Analytics\LinkAnalyticsService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesTestLinks;
+use Tests\TestCase;
+
+class AnalyticsStructureTest extends TestCase
+{
+    use CreatesTestLinks, RefreshDatabase;
+
+    private function seedClicks(int $linkId, int $count = 3): void
+    {
+        Click::factory()->count($count)->create(['link_id' => $linkId]);
+    }
+
+    public function test_click_factory_produces_iso_day_of_week(): void
+    {
+        $link   = $this->makeLink();
+        $clicks = Click::factory()->count(30)->create(['link_id' => $link->id]);
+
+        foreach ($clicks as $click) {
+            $this->assertGreaterThanOrEqual(1, $click->day_of_week);
+            $this->assertLessThanOrEqual(7, $click->day_of_week);
+        }
+    }
+
+    public function test_comprehensive_analytics_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(LinkAnalyticsService::class)->getComprehensiveLinkAnalytics($link->id);
+
+        $this->assertTrue($result['has_data']);
+        $this->assertArrayHasKey('overview', $result);
+        $this->assertArrayHasKey('geographic', $result);
+        $this->assertArrayHasKey('temporal', $result);
+        $this->assertArrayHasKey('audience', $result);
+        $this->assertArrayHasKey('insights', $result);
+        $this->assertArrayHasKey('total_clicks', $result['overview']);
+        $this->assertArrayHasKey('unique_visitors', $result['overview']);
+    }
+
+    public function test_dashboard_analytics_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(LinkAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
+
+        $this->assertArrayHasKey('summary', $result);
+        $this->assertArrayHasKey('temporal_data', $result);
+        $this->assertArrayHasKey('geographic_data', $result);
+        $this->assertArrayHasKey('audience_data', $result);
+        $this->assertArrayHasKey('total_clicks', $result['summary']);
+    }
+
+    public function test_dashboard_hours_filter_reduces_click_count(): void
+    {
+        $link = $this->makeLink();
+        Click::factory()->count(2)->create(['link_id' => $link->id, 'created_at' => now()->subHours(2)]);
+        Click::factory()->count(5)->create(['link_id' => $link->id, 'created_at' => now()->subDays(7)]);
+
+        $allTime = app(LinkAnalyticsService::class)->getLinkDashboardAnalytics($link->id, 0);
+        $last24h = app(LinkAnalyticsService::class)->getLinkDashboardAnalytics($link->id, 24);
+
+        $this->assertSame(7, $allTime['summary']['total_clicks']);
+        $this->assertSame(2, $last24h['summary']['total_clicks']);
+    }
+
+    public function test_geographic_analytics_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(LinkAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
+
+        $this->assertArrayHasKey('top_countries', $result);
+        $this->assertArrayHasKey('top_states', $result);
+        $this->assertArrayHasKey('top_cities', $result);
+    }
+
+    public function test_temporal_analytics_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(LinkAnalyticsService::class)->getLinkTemporalAnalytics($link->id);
+
+        $this->assertArrayHasKey('clicks_by_hour', $result);
+        $this->assertArrayHasKey('clicks_by_day_of_week', $result);
+        $this->assertCount(24, $result['clicks_by_hour']);
+        $this->assertCount(7, $result['clicks_by_day_of_week']);
+    }
+
+    public function test_audience_analytics_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(LinkAnalyticsService::class)->getLinkAudienceAnalytics($link->id);
+
+        $this->assertArrayHasKey('device_breakdown', $result);
+        $this->assertArrayHasKey('browser_breakdown', $result);
+        $this->assertArrayHasKey('os_breakdown', $result);
+    }
+
+    public function test_insights_analytics_has_required_keys(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $result = app(LinkAnalyticsService::class)->getLinkInsightsAnalytics($link->id);
+
+        $this->assertArrayHasKey('insights', $result);
+        $this->assertArrayHasKey('summary', $result);
+        $this->assertArrayHasKey('analytics_data', $result);
+        $this->assertArrayHasKey('total_insights', $result['summary']);
+        $this->assertArrayHasKey('retention', $result['analytics_data']);
+        $this->assertArrayHasKey('session_depth', $result['analytics_data']);
+        $this->assertArrayHasKey('traffic_sources', $result['analytics_data']);
+    }
+}
