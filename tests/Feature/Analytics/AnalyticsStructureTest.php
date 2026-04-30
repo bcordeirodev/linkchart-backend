@@ -6,6 +6,8 @@ use App\Models\Click;
 use App\Services\Analytics\AudienceAnalyticsService;
 use App\Services\Analytics\DashboardAnalyticsService;
 use App\Services\Analytics\GeographicAnalyticsService;
+use App\Services\Analytics\Insights\InsightGeneratorRegistry;
+use App\Services\Analytics\InsightsAnalyticsService;
 use App\Services\Analytics\LinkAnalyticsService;
 use App\Services\Analytics\Support\UserAgentParser;
 use App\Services\Analytics\TemporalAnalyticsService;
@@ -24,7 +26,7 @@ class AnalyticsStructureTest extends TestCase
 
     public function test_click_factory_produces_iso_day_of_week(): void
     {
-        $link   = $this->makeLink();
+        $link = $this->makeLink();
         $clicks = Click::factory()->count(30)->create(['link_id' => $link->id]);
 
         foreach ($clicks as $click) {
@@ -135,7 +137,7 @@ class AnalyticsStructureTest extends TestCase
         $link = $this->makeLink();
         $this->seedClicks($link->id);
 
-        $legacy  = app(LinkAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
+        $legacy = app(LinkAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
         $service = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
 
         $this->assertSame(array_keys($legacy), array_keys($service));
@@ -157,21 +159,21 @@ class AnalyticsStructureTest extends TestCase
 
     public function test_ua_parser_identifies_chrome(): void
     {
-        $parser = new UserAgentParser();
+        $parser = new UserAgentParser;
         $ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36';
         $this->assertSame('Chrome', $parser->extractBrowser($ua));
     }
 
     public function test_ua_parser_identifies_android(): void
     {
-        $parser = new UserAgentParser();
+        $parser = new UserAgentParser;
         $ua = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36';
         $this->assertSame('Android', $parser->extractOS($ua));
     }
 
     public function test_ua_parser_extracts_primary_language(): void
     {
-        $parser = new UserAgentParser();
+        $parser = new UserAgentParser;
         $this->assertSame('Português (Brasil)', $parser->extractPrimaryLanguage('pt-BR,pt;q=0.9,en;q=0.8'));
         $this->assertNull($parser->extractPrimaryLanguage(null));
     }
@@ -181,7 +183,7 @@ class AnalyticsStructureTest extends TestCase
         $link = $this->makeLink();
         $this->seedClicks($link->id);
 
-        $legacy  = app(LinkAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
+        $legacy = app(LinkAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
         $service = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
 
         $this->assertSame(array_keys($legacy), array_keys($service));
@@ -192,7 +194,7 @@ class AnalyticsStructureTest extends TestCase
         $link = $this->makeLink();
         $this->seedClicks($link->id);
 
-        $legacy  = app(LinkAnalyticsService::class)->getLinkTemporalAnalytics($link->id);
+        $legacy = app(LinkAnalyticsService::class)->getLinkTemporalAnalytics($link->id);
         $service = app(TemporalAnalyticsService::class)->getLinkTemporalAnalytics($link->id);
 
         $this->assertSame(array_keys($legacy), array_keys($service));
@@ -218,20 +220,50 @@ class AnalyticsStructureTest extends TestCase
         $link = $this->makeLink();
         $this->seedClicks($link->id);
 
-        $legacy  = app(LinkAnalyticsService::class)->getLinkAudienceAnalytics($link->id);
+        $legacy = app(LinkAnalyticsService::class)->getLinkAudienceAnalytics($link->id);
         $service = app(AudienceAnalyticsService::class)->getLinkAudienceAnalytics($link->id);
 
         $this->assertSame(array_keys($legacy), array_keys($service));
+    }
+
+    public function test_insights_service_matches_monolith_structure(): void
+    {
+        $link = $this->makeLink();
+        $this->seedClicks($link->id);
+
+        $legacy = app(LinkAnalyticsService::class)->getLinkInsightsAnalytics($link->id);
+        $service = app(InsightsAnalyticsService::class)->getLinkInsightsAnalytics($link->id);
+
+        $this->assertSame(array_keys($legacy), array_keys($service));
+        $this->assertSame(array_keys($legacy['summary']), array_keys($service['summary']));
+        $this->assertSame(array_keys($legacy['analytics_data']), array_keys($service['analytics_data']));
+    }
+
+    public function test_insight_registry_produces_valid_insight_shapes(): void
+    {
+        $link = $this->makeLink();
+        Click::factory()->count(10)->create(['link_id' => $link->id, 'country' => 'Brazil']);
+
+        $registry = app(InsightGeneratorRegistry::class);
+        $insights = $registry->generate($link->id, 10);
+
+        $this->assertIsArray($insights);
+        foreach ($insights as $insight) {
+            $this->assertArrayHasKey('type', $insight);
+            $this->assertArrayHasKey('title', $insight);
+            $this->assertArrayHasKey('priority', $insight);
+            $this->assertArrayHasKey('confidence', $insight);
+        }
     }
 
     public function test_geographic_service_heatmap_returns_valid_structure(): void
     {
         $link = $this->makeLink();
         Click::factory()->count(2)->create([
-            'link_id'   => $link->id,
-            'latitude'  => -23.5,
+            'link_id' => $link->id,
+            'latitude' => -23.5,
             'longitude' => -46.6,
-            'country'   => 'Brazil',
+            'country' => 'Brazil',
         ]);
 
         $result = app(GeographicAnalyticsService::class)->getHeatmapData($link->id);
