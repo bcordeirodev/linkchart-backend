@@ -82,8 +82,21 @@ class LinkAnalyticsOrchestrator
         return $this->insights->getLinkInsightsAnalytics($linkId);
     }
 
+    public function getHeatmapData(int $linkId): array
+    {
+        return $this->geographic->getHeatmapData($linkId);
+    }
+
     private function linkInfo(Link $link): array
     {
-        return ['id' => $link->id, 'title' => $link->title, 'short_url' => $link->short_url, 'original_url' => $link->original_url, 'clicks' => $link->clicks, 'is_active' => $link->is_active, 'created_at' => $link->created_at];
+        return [
+            'id'           => $link->id,
+            'title'        => $link->title,
+            'short_url'    => $link->getShortedUrl(),
+            'original_url' => $link->original_url,
+            'clicks'       => $link->clicks,
+            'is_active'    => $link->is_active,
+            'created_at'   => $link->created_at,
+        ];
     }
 }

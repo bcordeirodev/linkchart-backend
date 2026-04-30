@@ -65,8 +65,7 @@ class AnalyticsController extends Controller
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
-            $heatmapData = $analytics['geographic']['heatmap_data'] ?? [];
+            $heatmapData = $this->analyticsService->getHeatmapData($linkId);
 
             // Adicionar metadados úteis
             $totalClicks = array_sum(array_column($heatmapData, 'clicks'));
@@ -87,7 +86,7 @@ class AnalyticsController extends Controller
                     'link_info' => [
                         'id' => $link->id,
                         'title' => $link->title,
-                        'short_url' => $link->short_url,
+                        'short_url' => $link->getShortedUrl(),
                         'is_active' => $link->is_active
                     ]
                 ]
@@ -115,8 +114,7 @@ class AnalyticsController extends Controller
                 return response()->json(['error' => 'Link não encontrado ou inativo.'], 404);
             }
 
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
-            $heatmapData = $analytics['geographic']['heatmap_data'] ?? [];
+            $heatmapData = $this->analyticsService->getHeatmapData($linkId);
 
             // Retornar apenas os dados essenciais para performance
             return response()->json([
@@ -283,6 +281,13 @@ class AnalyticsController extends Controller
 
             $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
 
+            if (!$analytics['has_data']) {
+                return response()->json([
+                    'success' => true,
+                    'data' => ['link_info' => $analytics['link_info'], 'has_data' => false],
+                ]);
+            }
+
             // Criar resumo executivo
             $summary = [
                 'link_info' => $analytics['link_info'],
@@ -291,11 +296,9 @@ class AnalyticsController extends Controller
                 'geographic_summary' => [
                     'top_country' => $analytics['geographic']['top_countries'][0] ?? null,
                     'countries_count' => count($analytics['geographic']['top_countries'] ?? []),
-                    'continents_count' => count($analytics['geographic']['continents'] ?? []),
                 ],
                 'audience_summary' => [
                     'top_device' => $analytics['audience']['device_breakdown'][0] ?? null,
-                    'returning_visitors' => $analytics['audience']['returning_visitors'] ?? 0,
                 ],
             ];
 
