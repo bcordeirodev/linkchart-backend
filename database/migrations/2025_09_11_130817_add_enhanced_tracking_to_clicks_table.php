@@ -83,7 +83,7 @@ return new class extends Migration
                 'session_clicks',
                 'click_source',
                 'response_time',
-                'accept_language'
+                'accept_language',
             ]);
         });
     }

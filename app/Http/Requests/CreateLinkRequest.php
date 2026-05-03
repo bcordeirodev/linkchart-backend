@@ -3,9 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Services\Links\LinkSafetyService;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Contracts\Validation\Validator;
 
 /**
  * Form Request para criação de links
@@ -49,13 +49,21 @@ class CreateLinkRequest extends FormRequest
                 'nullable',
                 'date',
                 'after:now',
-                'before:' . now()->addYears(5)->toDateString(), // Máximo 5 anos
+                'before:'.now()->addYears(5)->toDateString(), // Máximo 5 anos
             ],
             'starts_in' => [
                 'nullable',
                 'date',
                 'after_or_equal:now',
-                'before:expires_at', // Deve começar antes de expirar
+                function ($attribute, $value, $fail) {
+                    if ($value && $this->input('expires_at')) {
+                        $startsIn = new \DateTime($value);
+                        $expiresAt = new \DateTime($this->input('expires_at'));
+                        if ($startsIn >= $expiresAt) {
+                            $fail('A data de início deve ser anterior à data de expiração.');
+                        }
+                    }
+                },
             ],
             'click_limit' => [
                 'nullable',
@@ -135,7 +143,7 @@ class CreateLinkRequest extends FormRequest
             response()->json([
                 'error' => 'Dados de validação inválidos',
                 'message' => 'Por favor, corrija os erros abaixo.',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422)
         );
     }
@@ -148,13 +156,13 @@ class CreateLinkRequest extends FormRequest
             }
 
             $url = $this->input('original_url');
-            if (!$url) {
+            if (! $url) {
                 return;
             }
 
             $result = app(LinkSafetyService::class)->checkUrl($url);
 
-            if (!$result['safe']) {
+            if (! $result['safe']) {
                 $threats = implode(', ', $result['threats']);
                 $validator->errors()->add(
                     'original_url',
@@ -174,8 +182,8 @@ class CreateLinkRequest extends FormRequest
             $url = trim($this->input('original_url'));
 
             // Adiciona https:// se não tiver protocolo
-            if (!preg_match('/^https?:\/\//', $url)) {
-                $url = 'https://' . $url;
+            if (! preg_match('/^https?:\/\//', $url)) {
+                $url = 'https://'.$url;
             }
 
             $this->merge(['original_url' => $url]);

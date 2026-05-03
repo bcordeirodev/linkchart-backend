@@ -2,11 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 
 class ClicksSeeder extends Seeder
 {
@@ -124,8 +123,9 @@ class ClicksSeeder extends Seeder
 
         // Verificar se o link existe
         $link = Link::find(2);
-        if (!$link) {
+        if (! $link) {
             $this->command->error('❌ Link com ID 2 não encontrado!');
+
             return;
         }
 
@@ -185,7 +185,7 @@ class ClicksSeeder extends Seeder
             if (count($clicks) >= $batchSize) {
                 Click::insert($clicks);
                 $clicks = [];
-                $this->command->info("✅ Inseridos " . ($i + 1) . " clicks...");
+                $this->command->info('✅ Inseridos '.($i + 1).' clicks...');
             }
         }
 
@@ -221,7 +221,7 @@ class ClicksSeeder extends Seeder
             6 => 3, 7 => 5, 8 => 8, 9 => 10, 10 => 12, 11 => 13,
             12 => 14, 13 => 15, 14 => 16, 15 => 17, 16 => 16,
             17 => 15, 18 => 14, 19 => 13, 20 => 12, 21 => 10,
-            22 => 8, 23 => 5
+            22 => 8, 23 => 5,
         ];
 
         return $this->weightedRandom($hourWeights);
@@ -249,12 +249,14 @@ class ClicksSeeder extends Seeder
         ];
 
         $index = $this->weightedRandom($weights);
+
         return $this->countries[$index];
     }
 
     private function getCityData(string $countryCode): array
     {
         $cities = $this->cities[$countryCode] ?? $this->cities['DEFAULT'];
+
         return $cities[array_rand($cities)];
     }
 
@@ -266,6 +268,7 @@ class ClicksSeeder extends Seeder
     private function getUserAgent(string $device): string
     {
         $agents = $this->userAgents[$device] ?? $this->userAgents['desktop'];
+
         return $agents[array_rand($agents)];
     }
 
@@ -294,7 +297,7 @@ class ClicksSeeder extends Seeder
         $ranges = $ipRanges[$countryCode] ?? $ipRanges['DEFAULT'];
         $prefix = $ranges[array_rand($ranges)];
 
-        return $prefix . mt_rand(1, 254) . '.' . mt_rand(1, 254);
+        return $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
     }
 
     private function weightedRandom(array $weights)

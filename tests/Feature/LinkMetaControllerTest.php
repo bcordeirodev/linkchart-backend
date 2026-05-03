@@ -44,9 +44,9 @@ class LinkMetaControllerTest extends TestCase
     public function test_batch_meta_ignores_other_users_links(): void
     {
         Queue::fake();
-        $user  = User::factory()->create(['email_verified_at' => now(), 'email_verified' => true]);
+        $user = User::factory()->create(['email_verified_at' => now(), 'email_verified' => true]);
         $other = User::factory()->create(['email_verified_at' => now(), 'email_verified' => true]);
-        $link  = Link::factory()->create(['user_id' => $other->id]);
+        $link = Link::factory()->create(['user_id' => $other->id]);
 
         $response = $this->authAs($user)->postJson(
             '/api/links/batch-meta',

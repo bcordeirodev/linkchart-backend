@@ -26,7 +26,7 @@ class SeedDemoLinkJob implements ShouldQueue
     {
         $user = User::find($this->userId);
 
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -38,7 +38,7 @@ class SeedDemoLinkJob implements ShouldQueue
         \Log::channel('api_errors')->error('SeedDemoLinkJob failed', [
             'user_id' => $this->userId,
             'message' => $e->getMessage(),
-            'trace'   => $e->getTraceAsString(),
+            'trace' => $e->getTraceAsString(),
         ]);
     }
 }

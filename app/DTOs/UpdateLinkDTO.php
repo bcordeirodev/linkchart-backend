@@ -13,17 +13,29 @@ use Illuminate\Http\Request;
 class UpdateLinkDTO
 {
     public readonly ?string $original_url;
+
     public readonly ?string $title;
+
     public readonly ?string $slug;
+
     public readonly ?string $description;
+
     public readonly ?string $expires_at;
+
     public readonly ?bool $is_active;
+
     public readonly ?string $starts_in;
+
     public readonly ?int $click_limit;
+
     public readonly ?string $utm_source;
+
     public readonly ?string $utm_medium;
+
     public readonly ?string $utm_campaign;
+
     public readonly ?string $utm_term;
+
     public readonly ?string $utm_content;
 
     public function __construct(
@@ -98,7 +110,7 @@ class UpdateLinkDTO
             'utm_campaign' => $this->utm_campaign,
             'utm_term' => $this->utm_term,
             'utm_content' => $this->utm_content,
-        ], fn($value) => $value !== null);
+        ], fn ($value) => $value !== null);
     }
 
     /**
@@ -106,7 +118,7 @@ class UpdateLinkDTO
      */
     public function hasDataToUpdate(): bool
     {
-        return !empty($this->toArray());
+        return ! empty($this->toArray());
     }
 
     /**

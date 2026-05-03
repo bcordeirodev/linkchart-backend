@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Links;
 
 use App\Jobs\FetchLinkPreviewJob;
-use Illuminate\Routing\Controller;
 use App\Models\Link;
 use App\Models\LinkPreview;
 use App\Services\Analytics\MetricsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 
 class LinkMetaController extends Controller
 {
@@ -23,13 +23,13 @@ class LinkMetaController extends Controller
     public function batchMeta(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'ids'   => 'required|array|min:1|max:50',
+            'ids' => 'required|array|min:1|max:50',
             'ids.*' => 'integer|min:1',
-            'days'  => 'integer|min:1|max:90',
+            'days' => 'integer|min:1|max:90',
         ]);
 
-        $ids    = $validated['ids'];
-        $days   = $validated['days'] ?? 7;
+        $ids = $validated['ids'];
+        $days = $validated['days'] ?? 7;
         $userId = auth()->id();
 
         $links = Link::whereIn('id', $ids)
@@ -43,22 +43,22 @@ class LinkMetaController extends Controller
         foreach ($links as $id => $link) {
             $preview = $previews->get($id);
 
-            if (!$preview || $preview->fetched_at->lt(now()->subDay())) {
+            if (! $preview || $preview->fetched_at->lt(now()->subDay())) {
                 FetchLinkPreviewJob::dispatch((int) $id, $link->original_url);
             }
 
             $result[$id] = [
                 'sparkline' => $this->metricsService->getLinkSparkline((int) $id, $days),
-                'trend'     => $this->metricsService->getLinkTrend((int) $id, 7),
-                'preview'   => $preview ? [
-                    'favicon_url'  => $preview->favicon_url,
-                    'og_title'     => $preview->og_title,
+                'trend' => $this->metricsService->getLinkTrend((int) $id, 7),
+                'preview' => $preview ? [
+                    'favicon_url' => $preview->favicon_url,
+                    'og_title' => $preview->og_title,
                     'og_image_url' => $preview->og_image_url,
                 ] : null,
-                'health'    => [
-                    'status'          => $link->health_status ?? 'unknown',
+                'health' => [
+                    'status' => $link->health_status ?? 'unknown',
                     'last_checked_at' => $link->health_checked_at?->toISOString(),
-                    'http_code'       => null,
+                    'http_code' => null,
                 ],
             ];
         }
@@ -73,6 +73,7 @@ class LinkMetaController extends Controller
     {
         $link = Link::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
         $days = max(1, min(90, (int) $request->query('days', 7)));
+
         return response()->json(['data' => $this->metricsService->getLinkSparkline($link->id, $days)]);
     }
 
@@ -81,8 +82,9 @@ class LinkMetaController extends Controller
      */
     public function trend(Request $request, int $id): JsonResponse
     {
-        $link   = Link::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+        $link = Link::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
         $window = max(1, min(90, (int) $request->query('window', 7)));
+
         return response()->json(['data' => $this->metricsService->getLinkTrend($link->id, $window)]);
     }
 
@@ -91,16 +93,16 @@ class LinkMetaController extends Controller
      */
     public function preview(int $id): JsonResponse
     {
-        $link    = Link::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+        $link = Link::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
         $preview = LinkPreview::find($link->id);
 
-        if (!$preview || $preview->fetched_at->lt(now()->subDay())) {
+        if (! $preview || $preview->fetched_at->lt(now()->subDay())) {
             FetchLinkPreviewJob::dispatch($link->id, $link->original_url);
         }
 
         return response()->json(['data' => $preview ? [
-            'favicon_url'  => $preview->favicon_url,
-            'og_title'     => $preview->og_title,
+            'favicon_url' => $preview->favicon_url,
+            'og_title' => $preview->og_title,
             'og_image_url' => $preview->og_image_url,
         ] : null]);
     }
@@ -115,9 +117,9 @@ class LinkMetaController extends Controller
             ->firstOrFail(['id', 'health_status', 'health_checked_at']);
 
         return response()->json(['data' => [
-            'status'          => $link->health_status ?? 'unknown',
+            'status' => $link->health_status ?? 'unknown',
             'last_checked_at' => $link->health_checked_at?->toISOString(),
-            'http_code'       => null,
+            'http_code' => null,
         ]]);
     }
 }

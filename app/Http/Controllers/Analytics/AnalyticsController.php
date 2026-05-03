@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Analytics;
 
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
-use App\Services\Analytics\LinkAnalyticsOrchestrator;
-use Illuminate\Routing\Controller;
 use App\Models\Link;
+use App\Services\Analytics\LinkAnalyticsOrchestrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 
 /**
  * Controller para Analytics Avançados
@@ -31,9 +31,9 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json([
-                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.'
+                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.',
                 ], 404);
             }
 
@@ -41,12 +41,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics
+                'data' => $analytics,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -61,7 +61,7 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
@@ -87,14 +87,14 @@ class AnalyticsController extends Controller
                         'id' => $link->id,
                         'title' => $link->title,
                         'short_url' => $link->getShortedUrl(),
-                        'is_active' => $link->is_active
-                    ]
-                ]
+                        'is_active' => $link->is_active,
+                    ],
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar dados do mapa de calor.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -110,7 +110,7 @@ class AnalyticsController extends Controller
                 ->where('is_active', true)
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado ou inativo.'], 404);
             }
 
@@ -121,12 +121,12 @@ class AnalyticsController extends Controller
                 'success' => true,
                 'data' => $heatmapData,
                 'timestamp' => now()->toISOString(),
-                'total_locations' => count($heatmapData)
+                'total_locations' => count($heatmapData),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar dados em tempo real.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -141,7 +141,7 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
@@ -149,12 +149,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics
+                'data' => $analytics,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics geográficos.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -173,7 +173,7 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
@@ -181,12 +181,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $insights
+                'data' => $insights,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar insights de negócio.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -202,7 +202,7 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
@@ -227,12 +227,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $unifiedData
+                'data' => $unifiedData,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics temporais.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -247,7 +247,7 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
@@ -255,12 +255,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics
+                'data' => $analytics,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics de audiência.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -275,13 +275,13 @@ class AnalyticsController extends Controller
                 ->where('user_id', auth()->guard('api')->id())
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado.'], 404);
             }
 
             $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
 
-            if (!$analytics['has_data']) {
+            if (! $analytics['has_data']) {
                 return response()->json([
                     'success' => true,
                     'data' => ['link_info' => $analytics['link_info'], 'has_data' => false],
@@ -304,12 +304,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $summary
+                'data' => $summary,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar resumo executivo.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -323,7 +323,7 @@ class AnalyticsController extends Controller
         try {
             $userId = auth()->guard('api')->id();
 
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['error' => 'Usuário não autenticado.'], 401);
             }
 
@@ -332,9 +332,9 @@ class AnalyticsController extends Controller
                 ->where('user_id', $userId)
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json([
-                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.'
+                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.',
                 ], 404);
             }
 
@@ -347,12 +347,12 @@ class AnalyticsController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $analytics
+                'data' => $analytics,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar dados do dashboard do link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -360,7 +360,7 @@ class AnalyticsController extends Controller
     /**
      * Função auxiliar para enriquecer timezone analysis com percentuais
      *
-     * @param array $timezones Array de timezones com clicks
+     * @param  array  $timezones  Array de timezones com clicks
      * @return array Array enriquecido com percentuais
      */
     private function enrichTimezoneAnalysis(array $timezones): array
@@ -377,9 +377,8 @@ class AnalyticsController extends Controller
             return [
                 'name' => $tz['name'] ?? 'Unknown',
                 'clicks' => $tz['clicks'] ?? 0,
-                'percentage' => $total > 0 ? round(($tz['clicks'] / $total) * 100, 2) : 0
+                'percentage' => $total > 0 ? round(($tz['clicks'] / $total) * 100, 2) : 0,
             ];
         }, $timezones);
     }
-
 }

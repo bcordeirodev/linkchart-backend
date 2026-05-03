@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\User;
 use App\Models\EmailVerificationToken;
-use Illuminate\Support\Facades\Log;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class EmailVerificationService
 {
@@ -19,15 +19,15 @@ class EmailVerificationService
     /**
      * Enviar email de verificação
      */
-    public function sendVerificationEmail(User $user, Request $request = null): array
+    public function sendVerificationEmail(User $user, ?Request $request = null): array
     {
         try {
             // Verificar rate limiting
-            if (!$user->canResendVerificationEmail()) {
+            if (! $user->canResendVerificationEmail()) {
                 return [
                     'success' => false,
                     'message' => 'Aguarde 2 minutos antes de solicitar um novo email de verificação',
-                    'type' => 'rate_limit'
+                    'type' => 'rate_limit',
                 ];
             }
 
@@ -50,13 +50,13 @@ class EmailVerificationService
                 'expires_at' => $token->expires_at->format('d/m/Y H:i'),
                 'app_name' => config('app.name', 'Link Charts'),
                 'app_url' => config('app.url'),
-                'timestamp' => now()->format('d/m/Y H:i:s')
+                'timestamp' => now()->format('d/m/Y H:i:s'),
             ];
 
             // Enviar email usando SendGrid API
             $result = $this->emailService->sendEmailViaSendGridAPI(
                 $user->email,
-                'Verificação de Email - ' . config('app.name'),
+                'Verificação de Email - '.config('app.name'),
                 $this->getVerificationEmailTemplate($emailData),
                 $this->getVerificationEmailTextContent($emailData),
                 $user->name
@@ -70,21 +70,21 @@ class EmailVerificationService
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'token_id' => $token->id,
-                    'method' => 'SendGrid API'
+                    'method' => 'SendGrid API',
                 ]);
 
                 return [
                     'success' => true,
                     'message' => 'Email de verificação enviado com sucesso',
                     'email' => $user->email,
-                    'expires_at' => $token->expires_at->toISOString()
+                    'expires_at' => $token->expires_at->toISOString(),
                 ];
             }
 
             return [
                 'success' => false,
-                'message' => 'Erro ao enviar email de verificação: ' . $result['message'],
-                'error' => $result['error'] ?? null
+                'message' => 'Erro ao enviar email de verificação: '.$result['message'],
+                'error' => $result['error'] ?? null,
             ];
 
         } catch (\Exception $e) {
@@ -93,13 +93,13 @@ class EmailVerificationService
                 'email' => $user->email,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return [
                 'success' => false,
                 'message' => 'Erro interno ao enviar email de verificação',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -116,22 +116,22 @@ class EmailVerificationService
                 EmailVerificationToken::TYPE_EMAIL_VERIFICATION
             );
 
-            if (!$verificationToken) {
+            if (! $verificationToken) {
                 return [
                     'success' => false,
                     'message' => 'Token de verificação inválido ou expirado',
-                    'type' => 'invalid_token'
+                    'type' => 'invalid_token',
                 ];
             }
 
             // Buscar usuário
             $user = User::where('email', $verificationToken->email)->first();
 
-            if (!$user) {
+            if (! $user) {
                 return [
                     'success' => false,
                     'message' => 'Usuário não encontrado',
-                    'type' => 'user_not_found'
+                    'type' => 'user_not_found',
                 ];
             }
 
@@ -143,7 +143,7 @@ class EmailVerificationService
                     'success' => true,
                     'message' => 'Email já estava verificado',
                     'type' => 'already_verified',
-                    'user' => $user
+                    'user' => $user,
                 ];
             }
 
@@ -154,14 +154,14 @@ class EmailVerificationService
             Log::info('Email verificado com sucesso', [
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'token_id' => $verificationToken->id
+                'token_id' => $verificationToken->id,
             ]);
 
             return [
                 'success' => true,
                 'message' => 'Email verificado com sucesso!',
                 'type' => 'verified',
-                'user' => $user
+                'user' => $user,
             ];
 
         } catch (\Exception $e) {
@@ -169,13 +169,13 @@ class EmailVerificationService
                 'token' => $token,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return [
                 'success' => false,
                 'message' => 'Erro interno ao verificar email',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -183,18 +183,18 @@ class EmailVerificationService
     /**
      * Enviar email de recuperação de senha
      */
-    public function sendPasswordResetEmail(string $email, Request $request = null): array
+    public function sendPasswordResetEmail(string $email, ?Request $request = null): array
     {
         try {
             // Buscar usuário
             $user = User::where('email', $email)->first();
 
-            if (!$user) {
+            if (! $user) {
                 // Por segurança, não revelar se o email existe ou não
                 return [
                     'success' => true,
                     'message' => 'Se o email existir em nossa base, você receberá instruções para redefinir sua senha',
-                    'type' => 'email_sent'
+                    'type' => 'email_sent',
                 ];
             }
 
@@ -217,13 +217,13 @@ class EmailVerificationService
                 'expires_at' => $token->expires_at->format('d/m/Y H:i'),
                 'app_name' => config('app.name', 'Link Charts'),
                 'app_url' => config('app.url'),
-                'timestamp' => now()->format('d/m/Y H:i:s')
+                'timestamp' => now()->format('d/m/Y H:i:s'),
             ];
 
             // Enviar email usando SendGrid API
             $result = $this->emailService->sendEmailViaSendGridAPI(
                 $user->email,
-                'Recuperação de Senha - ' . config('app.name'),
+                'Recuperação de Senha - '.config('app.name'),
                 $this->getPasswordResetEmailTemplate($emailData),
                 $this->getPasswordResetEmailTextContent($emailData),
                 $user->name
@@ -234,7 +234,7 @@ class EmailVerificationService
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'token_id' => $token->id,
-                    'method' => 'SendGrid API'
+                    'method' => 'SendGrid API',
                 ]);
             }
 
@@ -242,7 +242,7 @@ class EmailVerificationService
             return [
                 'success' => true,
                 'message' => 'Se o email existir em nossa base, você receberá instruções para redefinir sua senha',
-                'type' => 'email_sent'
+                'type' => 'email_sent',
             ];
 
         } catch (\Exception $e) {
@@ -250,13 +250,13 @@ class EmailVerificationService
                 'email' => $email,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return [
                 'success' => false,
                 'message' => 'Erro interno ao enviar email de recuperação',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -273,28 +273,28 @@ class EmailVerificationService
                 EmailVerificationToken::TYPE_PASSWORD_RESET
             );
 
-            if (!$resetToken) {
+            if (! $resetToken) {
                 return [
                     'success' => false,
                     'message' => 'Token de recuperação inválido ou expirado',
-                    'type' => 'invalid_token'
+                    'type' => 'invalid_token',
                 ];
             }
 
             // Buscar usuário
             $user = User::where('email', $resetToken->email)->first();
 
-            if (!$user) {
+            if (! $user) {
                 return [
                     'success' => false,
                     'message' => 'Usuário não encontrado',
-                    'type' => 'user_not_found'
+                    'type' => 'user_not_found',
                 ];
             }
 
             // Atualizar senha
             $user->update([
-                'password' => bcrypt($newPassword)
+                'password' => bcrypt($newPassword),
             ]);
 
             // Marcar token como usado
@@ -303,14 +303,14 @@ class EmailVerificationService
             Log::info('Senha redefinida com sucesso', [
                 'user_id' => $user->id,
                 'email' => $user->email,
-                'token_id' => $resetToken->id
+                'token_id' => $resetToken->id,
             ]);
 
             return [
                 'success' => true,
                 'message' => 'Senha redefinida com sucesso!',
                 'type' => 'password_reset',
-                'user' => $user
+                'user' => $user,
             ];
 
         } catch (\Exception $e) {
@@ -318,13 +318,13 @@ class EmailVerificationService
                 'token' => $token,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return [
                 'success' => false,
                 'message' => 'Erro interno ao redefinir senha',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -335,7 +335,8 @@ class EmailVerificationService
     private function generateVerificationUrl(string $token): string
     {
         $frontendUrl = config('app.frontend_url', config('app.url'));
-        return $frontendUrl . '/verify-email?token=' . $token;
+
+        return $frontendUrl.'/verify-email?token='.$token;
     }
 
     /**
@@ -344,7 +345,8 @@ class EmailVerificationService
     private function generatePasswordResetUrl(string $token): string
     {
         $frontendUrl = config('app.frontend_url', config('app.url'));
-        return $frontendUrl . '/reset-password?token=' . $token;
+
+        return $frontendUrl.'/reset-password?token='.$token;
     }
 
     /**

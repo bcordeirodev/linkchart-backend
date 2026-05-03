@@ -82,7 +82,7 @@ class LinkAuditService
             ]);
         } catch (\Exception $e) {
             // Log do erro mas não falha a operação principal
-            \Log::error('Erro ao criar log de auditoria: ' . $e->getMessage(), [
+            \Log::error('Erro ao criar log de auditoria: '.$e->getMessage(), [
                 'link_id' => $linkId,
                 'user_id' => $userId,
                 'action' => $action,

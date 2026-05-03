@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Services\EmailService;
 use Exception;
+use Illuminate\Console\Command;
 
 class TestEmailCommand extends Command
 {
@@ -41,7 +41,7 @@ class TestEmailCommand extends Command
             $this->sendTestEmail($email, $name);
         } else {
             $this->warn('⚠️  Para enviar email real, use a opção --send');
-            $this->line('   Exemplo: php artisan email:test ' . $email . ' --send');
+            $this->line('   Exemplo: php artisan email:test '.$email.' --send');
         }
 
         $this->newLine();
@@ -83,21 +83,22 @@ class TestEmailCommand extends Command
                 $this->line("  ✅ DNS {$host}: {$ip}");
             } else {
                 $this->error("  ❌ DNS {$host}: Falha na resolução");
+
                 return;
             }
 
             // Testar conexão SMTP
-            $emailService = new EmailService();
+            $emailService = new EmailService;
             $result = $emailService->testConnection();
 
             if ($result['success']) {
                 $this->info('  ✅ Conexão SMTP: Sucesso');
             } else {
-                $this->error('  ❌ Conexão SMTP: ' . $result['message']);
+                $this->error('  ❌ Conexão SMTP: '.$result['message']);
             }
 
         } catch (Exception $e) {
-            $this->error('  ❌ Erro de conectividade: ' . $e->getMessage());
+            $this->error('  ❌ Erro de conectividade: '.$e->getMessage());
         }
 
         $this->newLine();
@@ -108,27 +109,27 @@ class TestEmailCommand extends Command
         $this->info('📧 Enviando email de teste...');
 
         try {
-            $emailService = new EmailService();
+            $emailService = new EmailService;
             $result = $emailService->sendTestEmail($email, $name);
 
             if ($result['success']) {
                 $this->info('  ✅ Email enviado com sucesso!');
-                $this->line('  📬 Destinatário: ' . $email);
-                $this->line('  👤 Nome: ' . $name);
+                $this->line('  📬 Destinatário: '.$email);
+                $this->line('  👤 Nome: '.$name);
                 $this->line('  🏷️  Assunto: Teste de Email - Link Charts');
-                $this->line('  📅 Data/Hora: ' . date('d/m/Y H:i:s'));
+                $this->line('  📅 Data/Hora: '.date('d/m/Y H:i:s'));
             } else {
                 $this->error('  ❌ Falha no envio!');
-                $this->line('  🚨 Erro: ' . $result['message']);
+                $this->line('  🚨 Erro: '.$result['message']);
 
                 if (isset($result['error'])) {
-                    $this->line('  📝 Detalhes: ' . $result['error']);
+                    $this->line('  📝 Detalhes: '.$result['error']);
                 }
             }
 
         } catch (Exception $e) {
-            $this->error('  ❌ Exceção: ' . $e->getMessage());
-            $this->line('  📍 Arquivo: ' . $e->getFile() . ':' . $e->getLine());
+            $this->error('  ❌ Exceção: '.$e->getMessage());
+            $this->line('  📍 Arquivo: '.$e->getFile().':'.$e->getLine());
         }
 
         $this->newLine();

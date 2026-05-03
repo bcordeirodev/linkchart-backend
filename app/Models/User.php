@@ -92,7 +92,7 @@ class User extends Authenticatable implements JWTSubject
     {
         $this->update([
             'email_verified' => true,
-            'email_verified_at' => now()
+            'email_verified_at' => now(),
         ]);
     }
 
@@ -101,7 +101,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function canResendVerificationEmail(): bool
     {
-        if (!$this->email_verification_sent_at) {
+        if (! $this->email_verification_sent_at) {
             return true;
         }
 
@@ -115,7 +115,7 @@ class User extends Authenticatable implements JWTSubject
     public function markVerificationEmailSent(): void
     {
         $this->update([
-            'email_verification_sent_at' => now()
+            'email_verification_sent_at' => now(),
         ]);
     }
 

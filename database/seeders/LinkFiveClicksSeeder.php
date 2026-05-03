@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 
 class LinkFiveClicksSeeder extends Seeder
 {
@@ -163,7 +163,7 @@ class LinkFiveClicksSeeder extends Seeder
             6 => 3, 7 => 5, 8 => 8, 9 => 11, 10 => 14, 11 => 16,
             12 => 18, 13 => 20, 14 => 22, 15 => 24, 16 => 23,
             17 => 22, 18 => 21, 19 => 20, 20 => 18, 21 => 16,
-            22 => 12, 23 => 8
+            22 => 12, 23 => 8,
         ];
 
         return $this->weightedRandom($hourWeights);
@@ -184,12 +184,14 @@ class LinkFiveClicksSeeder extends Seeder
         ];
 
         $index = $this->weightedRandom($weights);
+
         return $this->countries[$index];
     }
 
     private function getCityData(string $countryCode): array
     {
         $cities = $this->cities[$countryCode] ?? $this->cities['DEFAULT'];
+
         return $cities[array_rand($cities)];
     }
 
@@ -201,6 +203,7 @@ class LinkFiveClicksSeeder extends Seeder
     private function getUserAgent(string $device): string
     {
         $agents = $this->userAgents[$device] ?? $this->userAgents['desktop'];
+
         return $agents[array_rand($agents)];
     }
 
@@ -233,7 +236,7 @@ class LinkFiveClicksSeeder extends Seeder
         $ranges = $ipRanges[$countryCode] ?? $ipRanges['DEFAULT'];
         $prefix = $ranges[array_rand($ranges)];
 
-        return $prefix . mt_rand(1, 254) . '.' . mt_rand(1, 254);
+        return $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
     }
 
     private function weightedRandom(array $weights)
@@ -252,4 +255,3 @@ class LinkFiveClicksSeeder extends Seeder
         return array_key_first($weights);
     }
 }
-

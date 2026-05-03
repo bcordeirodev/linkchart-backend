@@ -15,26 +15,26 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
     {
         Link::findOrFail($linkId);
 
-        if (!Click::where('link_id', $linkId)->exists()) {
+        if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'device_breakdown'   => [],
-                'browser_breakdown'  => [],
-                'os_breakdown'       => [],
-                'browsers'           => [],
-                'operating_systems'  => [],
+                'device_breakdown' => [],
+                'browser_breakdown' => [],
+                'os_breakdown' => [],
+                'browsers' => [],
+                'operating_systems' => [],
                 'device_performance' => [],
-                'languages'          => [],
+                'languages' => [],
             ];
         }
 
         return [
-            'device_breakdown'   => $this->getDeviceBreakdown($linkId),
-            'browser_breakdown'  => $this->getBrowserBreakdown($linkId),
-            'os_breakdown'       => $this->getOSBreakdown($linkId),
-            'browsers'           => $this->getBrowserDistribution($linkId),
-            'operating_systems'  => $this->getOSDistribution($linkId),
+            'device_breakdown' => $this->getDeviceBreakdown($linkId),
+            'browser_breakdown' => $this->getBrowserBreakdown($linkId),
+            'os_breakdown' => $this->getOSBreakdown($linkId),
+            'browsers' => $this->getBrowserDistribution($linkId),
+            'operating_systems' => $this->getOSDistribution($linkId),
             'device_performance' => $this->getDevicePerformance($linkId),
-            'languages'          => $this->getLanguageDistribution($linkId),
+            'languages' => $this->getLanguageDistribution($linkId),
         ];
     }
 
@@ -50,9 +50,9 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->limit(10)
             ->get()
-            ->map(fn($r) => [
-                'device'     => $r->device,
-                'clicks'     => (int) $r->clicks,
+            ->map(fn ($r) => [
+                'device' => $r->device,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -67,9 +67,9 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->limit(10)
             ->get()
-            ->map(fn($r) => [
+            ->map(fn ($r) => [
                 'browser' => $r->browser,
-                'clicks'  => (int) $r->clicks,
+                'clicks' => (int) $r->clicks,
             ])
             ->toArray();
     }
@@ -83,8 +83,8 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->limit(10)
             ->get()
-            ->map(fn($r) => [
-                'os'     => $r->os,
+            ->map(fn ($r) => [
+                'os' => $r->os,
                 'clicks' => (int) $r->clicks,
             ])
             ->toArray();
@@ -100,10 +100,10 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->limit(15)
             ->get()
-            ->map(fn($r) => [
-                'browser'    => $r->browser,
-                'version'    => $r->browser_version,
-                'clicks'     => (int) $r->clicks,
+            ->map(fn ($r) => [
+                'browser' => $r->browser,
+                'version' => $r->browser_version,
+                'clicks' => (int) $r->clicks,
                 'percentage' => (float) $r->percentage,
             ])
             ->toArray();
@@ -119,10 +119,10 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->limit(15)
             ->get()
-            ->map(fn($r) => [
-                'os'         => $r->os,
-                'version'    => $r->os_version,
-                'clicks'     => (int) $r->clicks,
+            ->map(fn ($r) => [
+                'os' => $r->os,
+                'version' => $r->os_version,
+                'clicks' => (int) $r->clicks,
                 'percentage' => (float) $r->percentage,
             ])
             ->toArray();
@@ -138,12 +138,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->groupBy('device')
             ->orderBy('avg_response_time', 'asc')
             ->get()
-            ->map(fn($r) => [
-                'device'            => $r->device,
+            ->map(fn ($r) => [
+                'device' => $r->device,
                 'avg_response_time' => round((float) $r->avg_response_time, 2),
                 'min_response_time' => round((float) $r->min_response_time, 2),
                 'max_response_time' => round((float) $r->max_response_time, 2),
-                'total_clicks'      => (int) $r->total_clicks,
+                'total_clicks' => (int) $r->total_clicks,
             ])
             ->toArray();
     }
@@ -169,9 +169,9 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
 
         return array_slice(
             array_map(
-                fn($lang, $n) => [
-                    'language'   => $lang,
-                    'clicks'     => $n,
+                fn ($lang, $n) => [
+                    'language' => $lang,
+                    'clicks' => $n,
                     'percentage' => $total > 0 ? round($n / $total * 100, 2) : 0,
                 ],
                 array_keys($counts),

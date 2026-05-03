@@ -13,47 +13,47 @@ use App\Models\Link;
 class LinkAnalyticsOrchestrator
 {
     public function __construct(
-        private readonly DashboardAnalyticsInterface  $dashboard,
+        private readonly DashboardAnalyticsInterface $dashboard,
         private readonly GeographicAnalyticsInterface $geographic,
-        private readonly TemporalAnalyticsInterface   $temporal,
-        private readonly AudienceAnalyticsInterface   $audience,
-        private readonly InsightsAnalyticsInterface   $insights,
+        private readonly TemporalAnalyticsInterface $temporal,
+        private readonly AudienceAnalyticsInterface $audience,
+        private readonly InsightsAnalyticsInterface $insights,
     ) {}
 
     public function getComprehensiveLinkAnalytics(int $linkId): array
     {
         $link = Link::findOrFail($linkId);
 
-        if (!Click::where('link_id', $linkId)->exists()) {
+        if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'has_data'  => false,
+                'has_data' => false,
                 'link_info' => $this->linkInfo($link),
-                'message'   => 'Analytics will be available after the first clicks on your link.',
+                'message' => 'Analytics will be available after the first clicks on your link.',
             ];
         }
 
-        $total   = Click::where('link_id', $linkId)->count();
-        $unique  = Click::where('link_id', $linkId)->distinct('ip')->count();
+        $total = Click::where('link_id', $linkId)->count();
+        $unique = Click::where('link_id', $linkId)->distinct('ip')->count();
         $regions = Click::where('link_id', $linkId)->whereNotNull('country')->where('country', '!=', 'localhost')->distinct('country')->count();
 
         $insightsPayload = $this->insights->getLinkInsightsAnalytics($linkId);
 
         return [
-            'has_data'   => true,
-            'link_info'  => $this->linkInfo($link),
-            'overview'   => [
-                'total_clicks'      => $total,
-                'unique_visitors'   => $unique,
+            'has_data' => true,
+            'link_info' => $this->linkInfo($link),
+            'overview' => [
+                'total_clicks' => $total,
+                'unique_visitors' => $unique,
                 'countries_reached' => $regions,
-                'avg_daily_clicks'  => $total > 0 ? round($total / 30, 1) : 0,
+                'avg_daily_clicks' => $total > 0 ? round($total / 30, 1) : 0,
             ],
             'geographic' => array_merge(
                 ['heatmap_data' => $this->geographic->getHeatmapData($linkId)],
                 $this->geographic->getLinkGeographicAnalytics($linkId)
             ),
-            'temporal'   => $this->temporal->getLinkTemporalAnalytics($linkId),
-            'audience'   => $this->audience->getLinkAudienceAnalytics($linkId),
-            'insights'   => $insightsPayload['insights'] ?? [],
+            'temporal' => $this->temporal->getLinkTemporalAnalytics($linkId),
+            'audience' => $this->audience->getLinkAudienceAnalytics($linkId),
+            'insights' => $insightsPayload['insights'] ?? [],
         ];
     }
 
@@ -90,13 +90,13 @@ class LinkAnalyticsOrchestrator
     private function linkInfo(Link $link): array
     {
         return [
-            'id'           => $link->id,
-            'title'        => $link->title,
-            'short_url'    => $link->getShortedUrl(),
+            'id' => $link->id,
+            'title' => $link->title,
+            'short_url' => $link->getShortedUrl(),
             'original_url' => $link->original_url,
-            'clicks'       => $link->clicks,
-            'is_active'    => $link->is_active,
-            'created_at'   => $link->created_at,
+            'clicks' => $link->clicks,
+            'is_active' => $link->is_active,
+            'created_at' => $link->created_at,
         ];
     }
 }

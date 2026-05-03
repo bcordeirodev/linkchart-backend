@@ -50,7 +50,7 @@ class LinkService implements LinkServiceInterface
     public function createLink(CreateLinkDTO $linkDTO): Link
     {
         // Validação de negócio
-        if (!$linkDTO->isValidUrl()) {
+        if (! $linkDTO->isValidUrl()) {
             throw new \InvalidArgumentException('URL inválida fornecida.');
         }
 
@@ -72,11 +72,11 @@ class LinkService implements LinkServiceInterface
     public function updateLink(string $id, UpdateLinkDTO $linkDTO): ?Link
     {
         // Validação de negócio
-        if (!$linkDTO->hasDataToUpdate()) {
+        if (! $linkDTO->hasDataToUpdate()) {
             throw new \InvalidArgumentException('Nenhum dado fornecido para atualização.');
         }
 
-        if (!$linkDTO->isValidUrl()) {
+        if (! $linkDTO->isValidUrl()) {
             throw new \InvalidArgumentException('URL inválida fornecida.');
         }
 
@@ -98,7 +98,7 @@ class LinkService implements LinkServiceInterface
     {
         $link = $this->linkRepository->findBySlug($slug);
 
-        if (!$link) {
+        if (! $link) {
             return null;
         }
 
@@ -129,11 +129,11 @@ class LinkService implements LinkServiceInterface
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link
     {
         // Validação de negócio
-        if (!$linkDTO->isValidUrl()) {
+        if (! $linkDTO->isValidUrl()) {
             throw new \InvalidArgumentException('URL inválida fornecida.');
         }
 
-        if (!$linkDTO->hasValidData()) {
+        if (! $linkDTO->hasValidData()) {
             throw new \InvalidArgumentException('Dados insuficientes para criar o link.');
         }
 

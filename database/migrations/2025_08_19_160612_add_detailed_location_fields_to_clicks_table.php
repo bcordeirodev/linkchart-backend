@@ -51,7 +51,7 @@ return new class extends Migration
                 'longitude',
                 'timezone',
                 'continent',
-                'currency'
+                'currency',
             ]);
         });
     }

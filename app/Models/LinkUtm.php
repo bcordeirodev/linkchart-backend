@@ -24,4 +24,3 @@ class LinkUtm extends Model
         return $this->belongsTo(Click::class);
     }
 }
-

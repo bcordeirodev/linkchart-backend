@@ -11,13 +11,15 @@ use Illuminate\Support\Str;
 class OnboardingDemoDataService
 {
     private const TOTAL_CLICKS = 1200;
+
     private const BATCH_SIZE = 500;
+
     private const DAYS_BACK = 60;
 
     private array $countries = [
         ['name' => 'United States', 'iso' => 'US', 'currency' => 'USD', 'timezone' => 'America/New_York',      'continent' => 'NA'],
         ['name' => 'Brazil',        'iso' => 'BR', 'currency' => 'BRL', 'timezone' => 'America/Sao_Paulo',     'continent' => 'SA'],
-        ['name' => 'United Kingdom','iso' => 'GB', 'currency' => 'GBP', 'timezone' => 'Europe/London',         'continent' => 'EU'],
+        ['name' => 'United Kingdom', 'iso' => 'GB', 'currency' => 'GBP', 'timezone' => 'Europe/London',         'continent' => 'EU'],
         ['name' => 'Germany',       'iso' => 'DE', 'currency' => 'EUR', 'timezone' => 'Europe/Berlin',         'continent' => 'EU'],
         ['name' => 'France',        'iso' => 'FR', 'currency' => 'EUR', 'timezone' => 'Europe/Paris',          'continent' => 'EU'],
         ['name' => 'Canada',        'iso' => 'CA', 'currency' => 'CAD', 'timezone' => 'America/Toronto',       'continent' => 'NA'],
@@ -96,10 +98,10 @@ class OnboardingDemoDataService
     ];
 
     private array $referrers = [
-        'social'  => ['https://www.facebook.com/', 'https://twitter.com/', 'https://www.instagram.com/', 'https://www.linkedin.com/', 'https://www.tiktok.com/'],
-        'search'  => ['https://www.google.com/search?q=example', 'https://www.bing.com/search?q=example', 'https://duckduckgo.com/?q=example'],
-        'direct'  => [null, null, null],
-        'other'   => ['https://news.ycombinator.com/', 'https://www.reddit.com/', 'https://medium.com/'],
+        'social' => ['https://www.facebook.com/', 'https://twitter.com/', 'https://www.instagram.com/', 'https://www.linkedin.com/', 'https://www.tiktok.com/'],
+        'search' => ['https://www.google.com/search?q=example', 'https://www.bing.com/search?q=example', 'https://duckduckgo.com/?q=example'],
+        'direct' => [null, null, null],
+        'other' => ['https://news.ycombinator.com/', 'https://www.reddit.com/', 'https://medium.com/'],
     ];
 
     public function run(User $user): void
@@ -111,13 +113,13 @@ class OnboardingDemoDataService
         $slug = $this->generateUniqueSlug();
 
         $link = Link::create([
-            'user_id'      => $user->id,
-            'slug'         => $slug,
+            'user_id' => $user->id,
+            'slug' => $slug,
             'original_url' => 'https://www.google.com',
-            'title'        => 'Exemplo — Google',
-            'is_active'    => true,
-            'is_demo'      => true,
-            'clicks'       => 0,
+            'title' => 'Exemplo — Google',
+            'is_active' => true,
+            'is_demo' => true,
+            'clicks' => 0,
         ]);
 
         $this->insertClicks($link->id);
@@ -138,33 +140,33 @@ class OnboardingDemoDataService
     {
         $batch = [];
         $start = Carbon::now()->subDays(self::DAYS_BACK);
-        $end   = Carbon::now();
+        $end = Carbon::now();
 
         for ($i = 0; $i < self::TOTAL_CLICKS; $i++) {
-            $country  = $this->selectCountryByWeight();
+            $country = $this->selectCountryByWeight();
             $cityData = $this->getCityData($country['iso']);
-            $device   = $this->selectDeviceByWeight();
-            $clickAt  = $this->generateRandomDate($start, $end);
+            $device = $this->selectDeviceByWeight();
+            $clickAt = $this->generateRandomDate($start, $end);
 
             $batch[] = [
-                'link_id'     => $linkId,
-                'ip'          => $this->generateRealisticIp($country['iso']),
-                'user_agent'  => $this->getUserAgent($device),
-                'referer'     => $this->getReferer(),
-                'country'     => $country['name'],
-                'iso_code'    => $country['iso'],
-                'state'       => $cityData['state'],
-                'state_name'  => $cityData['state_name'],
-                'city'        => $cityData['city'],
+                'link_id' => $linkId,
+                'ip' => $this->generateRealisticIp($country['iso']),
+                'user_agent' => $this->getUserAgent($device),
+                'referer' => $this->getReferer(),
+                'country' => $country['name'],
+                'iso_code' => $country['iso'],
+                'state' => $cityData['state'],
+                'state_name' => $cityData['state_name'],
+                'city' => $cityData['city'],
                 'postal_code' => $cityData['postal'],
-                'latitude'    => $cityData['lat'],
-                'longitude'   => $cityData['lng'],
-                'timezone'    => $country['timezone'],
-                'continent'   => $country['continent'],
-                'currency'    => $country['currency'],
-                'device'      => $device,
-                'created_at'  => $clickAt,
-                'updated_at'  => $clickAt,
+                'latitude' => $cityData['lat'],
+                'longitude' => $cityData['lng'],
+                'timezone' => $country['timezone'],
+                'continent' => $country['continent'],
+                'currency' => $country['currency'],
+                'device' => $device,
+                'created_at' => $clickAt,
+                'updated_at' => $clickAt,
             ];
 
             if (count($batch) >= self::BATCH_SIZE) {
@@ -173,7 +175,7 @@ class OnboardingDemoDataService
             }
         }
 
-        if (!empty($batch)) {
+        if (! empty($batch)) {
             Click::insert($batch);
         }
     }
@@ -181,7 +183,7 @@ class OnboardingDemoDataService
     private function generateRandomDate(Carbon $start, Carbon $end): Carbon
     {
         $timestamp = mt_rand($start->timestamp, $end->timestamp);
-        $hour      = $this->getRealisticHour();
+        $hour = $this->getRealisticHour();
 
         return Carbon::createFromTimestamp($timestamp)->setTime($hour, mt_rand(0, 59), mt_rand(0, 59));
     }
@@ -232,9 +234,9 @@ class OnboardingDemoDataService
 
     private function getReferer(): ?string
     {
-        $type     = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'other' => 10]);
+        $type = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'other' => 10]);
         $referers = $this->referrers[$type];
-        $referer  = $referers[array_rand($referers)];
+        $referer = $referers[array_rand($referers)];
 
         return $referer ?: null;
     }
@@ -255,15 +257,15 @@ class OnboardingDemoDataService
         ];
 
         $prefixes = $ranges[$iso] ?? ['192.168.', '10.0.', '203.0.'];
-        $prefix   = $prefixes[array_rand($prefixes)];
+        $prefix = $prefixes[array_rand($prefixes)];
 
-        return $prefix . mt_rand(1, 254) . '.' . mt_rand(1, 254);
+        return $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
     }
 
     private function weightedRandom(array $weights): int|string
     {
-        $total   = array_sum($weights);
-        $random  = mt_rand(1, $total);
+        $total = array_sum($weights);
+        $random = mt_rand(1, $total);
         $current = 0;
 
         foreach ($weights as $key => $weight) {

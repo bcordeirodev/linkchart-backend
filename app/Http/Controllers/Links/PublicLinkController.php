@@ -140,7 +140,7 @@ class PublicLinkController extends Controller
                     ->orderBy('clicks', 'desc')
                     ->limit(5)
                     ->get()
-                    ->map(fn($item) => ['country' => $item->country, 'clicks' => (int) $item->clicks]);
+                    ->map(fn ($item) => ['country' => $item->country, 'clicks' => (int) $item->clicks]);
 
                 // Distribuição por dispositivos
                 $deviceBreakdown = \App\Models\Click::where('link_id', $link->id)
@@ -148,7 +148,7 @@ class PublicLinkController extends Controller
                     ->groupBy('device')
                     ->orderBy('clicks', 'desc')
                     ->get()
-                    ->map(fn($item) => ['device' => ucfirst($item->device), 'clicks' => (int) $item->clicks]);
+                    ->map(fn ($item) => ['device' => ucfirst($item->device), 'clicks' => (int) $item->clicks]);
 
                 // Cliques por hora do dia (últimos 7 dias) — usa coluna pré-computada quando disponível
                 $hourExpr = DB::connection()->getDriverName() === 'sqlite'
@@ -161,7 +161,7 @@ class PublicLinkController extends Controller
                     ->groupBy('hour')
                     ->orderBy('hour')
                     ->get()
-                    ->map(fn($item) => ['hour' => (int) $item->hour, 'clicks' => (int) $item->clicks]);
+                    ->map(fn ($item) => ['hour' => (int) $item->hour, 'clicks' => (int) $item->clicks]);
 
                 $hourlyData = [];
                 for ($i = 0; $i < 24; $i++) {
@@ -177,7 +177,7 @@ class PublicLinkController extends Controller
                     ->orderBy('clicks', 'desc')
                     ->limit(5)
                     ->get()
-                    ->map(fn($item) => ['browser' => ucfirst($item->browser ?? 'Desconhecido'), 'clicks' => (int) $item->clicks]);
+                    ->map(fn ($item) => ['browser' => ucfirst($item->browser ?? 'Desconhecido'), 'clicks' => (int) $item->clicks]);
 
                 // Distribuição por dia da semana — ISO 1-7 (1=Seg...7=Dom)
                 $clicksByDow = \App\Models\Click::where('link_id', $link->id)

@@ -16,17 +16,17 @@ class PublicAnalyticsTest extends TestCase
         $link = $this->makeLink(['clicks' => 2]);
 
         Click::factory()->create([
-            'link_id'     => $link->id,
-            'browser'     => 'Chrome',
+            'link_id' => $link->id,
+            'browser' => 'Chrome',
             'day_of_week' => 1,
         ]);
         Click::factory()->create([
-            'link_id'     => $link->id,
-            'browser'     => 'Safari',
+            'link_id' => $link->id,
+            'browser' => 'Safari',
             'day_of_week' => 3,
         ]);
 
-        $response = $this->getJson('/api/public/analytics/' . $link->slug);
+        $response = $this->getJson('/api/public/analytics/'.$link->slug);
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.has_analytics', true);
@@ -48,7 +48,7 @@ class PublicAnalyticsTest extends TestCase
         Click::factory()->create(['link_id' => $link->id, 'day_of_week' => 1]);
         Click::factory()->create(['link_id' => $link->id, 'day_of_week' => 5]);
 
-        $response = $this->getJson('/api/public/analytics/' . $link->slug);
+        $response = $this->getJson('/api/public/analytics/'.$link->slug);
 
         $response->assertStatus(200);
 
@@ -67,7 +67,7 @@ class PublicAnalyticsTest extends TestCase
     {
         $link = $this->makeLink(['clicks' => 0]);
 
-        $response = $this->getJson('/api/public/analytics/' . $link->slug);
+        $response = $this->getJson('/api/public/analytics/'.$link->slug);
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.has_analytics', false);

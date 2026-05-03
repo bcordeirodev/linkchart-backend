@@ -3,9 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Services\Links\LinkSafetyService;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Contracts\Validation\Validator;
 
 /**
  * Form Request para criação de links públicos
@@ -42,7 +42,7 @@ class CreatePublicLinkRequest extends FormRequest
                     // Bloquear IPs privados (sem dependência de API externa)
                     $domain = parse_url($value, PHP_URL_HOST);
                     if (filter_var($domain, FILTER_VALIDATE_IP)) {
-                        if (!filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                        if (! filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                             $fail('URLs com IPs privados não são permitidas.');
                         }
                     }
@@ -107,7 +107,7 @@ class CreatePublicLinkRequest extends FormRequest
             response()->json([
                 'error' => 'Dados de validação inválidos',
                 'message' => 'Por favor, corrija os erros abaixo.',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422)
         );
     }
@@ -120,13 +120,13 @@ class CreatePublicLinkRequest extends FormRequest
             }
 
             $url = $this->input('original_url');
-            if (!$url) {
+            if (! $url) {
                 return;
             }
 
             $result = app(LinkSafetyService::class)->checkUrl($url);
 
-            if (!$result['safe']) {
+            if (! $result['safe']) {
                 $threats = implode(', ', $result['threats']);
                 $validator->errors()->add(
                     'original_url',
@@ -146,8 +146,8 @@ class CreatePublicLinkRequest extends FormRequest
             $url = trim($this->input('original_url'));
 
             // Adiciona https:// se não tiver protocolo
-            if (!preg_match('/^https?:\/\//', $url)) {
-                $url = 'https://' . $url;
+            if (! preg_match('/^https?:\/\//', $url)) {
+                $url = 'https://'.$url;
             }
 
             $this->merge(['original_url' => $url]);

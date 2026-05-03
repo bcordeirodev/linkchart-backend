@@ -21,8 +21,8 @@ class LinkRepository implements LinkRepositoryInterface
     public function getAllByUser(): Collection
     {
         return Link::where('user_id', auth()->guard('api')->id())
-                  ->orderBy('created_at', 'desc')
-                  ->get();
+            ->orderBy('created_at', 'desc')
+            ->get();
     }
 
     /**
@@ -31,8 +31,8 @@ class LinkRepository implements LinkRepositoryInterface
     public function findByIdAndUser(string $id, int $userId): ?Link
     {
         return Link::where('id', $id)
-                  ->where('user_id', $userId)
-                  ->first();
+            ->where('user_id', $userId)
+            ->first();
     }
 
     /**
@@ -41,8 +41,8 @@ class LinkRepository implements LinkRepositoryInterface
     public function findBySlug(string $slug): ?Link
     {
         return Link::where('slug', $slug)
-                  ->where('is_active', true)
-                  ->first();
+            ->where('is_active', true)
+            ->first();
     }
 
     /**
@@ -62,6 +62,7 @@ class LinkRepository implements LinkRepositoryInterface
 
         if ($link) {
             $link->update($data);
+
             return $link->fresh();
         }
 
@@ -88,8 +89,8 @@ class LinkRepository implements LinkRepositoryInterface
     public function incrementClicks(string $slug): bool
     {
         return Link::where('slug', $slug)
-                  ->where('is_active', true)
-                  ->increment('clicks') > 0;
+            ->where('is_active', true)
+            ->increment('clicks') > 0;
     }
 
     /**

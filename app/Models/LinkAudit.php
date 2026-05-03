@@ -47,6 +47,8 @@ class LinkAudit extends Model
      * Constantes para ações de auditoria
      */
     public const ACTION_CREATED = 'created';
+
     public const ACTION_UPDATED = 'updated';
+
     public const ACTION_DELETED = 'deleted';
 }
