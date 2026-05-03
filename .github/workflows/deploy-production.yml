@@ -1,8 +1,8 @@
-name: 🚀 Deploy to Production
+name: Deploy backend to Production
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       force_rebuild:
@@ -14,11 +14,13 @@ on:
 env:
   DEPLOY_HOST: 134.209.33.182
   PROJECT_PATH: /var/www/linkchartapi
-  DOCKER_COMPOSE_FILE: docker-compose.prod.yml
 
 jobs:
+  # ============================================================
+  # Quality checks — tests + code style
+  # ============================================================
   validate:
-    name: 🧪 Lint + Tests
+    name: Validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -34,563 +36,75 @@ jobs:
       JWT_SECRET: test-secret-ci-not-for-production-use-only
 
     steps:
-      - name: 📦 Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: 🐘 Setup PHP 8.2
-        uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
           extensions: mbstring, xml, zip, pdo_sqlite, redis, bcmath
           coverage: none
 
-      - name: 📥 Install Composer dependencies
-        uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v3
         with:
           composer-options: "--prefer-dist --no-progress"
 
-      - name: ✅ Run tests
+      - name: Tests
         run: php artisan test
 
+      - name: Code style (Pint)
+        run: ./vendor/bin/pint --test
+
+  # ============================================================
+  # Deploy — rsync source + build on server
+  # ============================================================
   deploy:
-    name: 🏗️ Deploy to Production Server
-    needs: validate
+    name: Deploy to Production
     runs-on: ubuntu-latest
-    environment: production
-    timeout-minutes: 20
+    needs: validate
+    if: github.ref == 'refs/heads/main'
+
+    environment:
+      name: production
+      url: https://api.linkcharts.com.br
 
     steps:
-    - name: 📦 Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: 🔐 Setup SSH
-      uses: webfactory/ssh-agent@v0.8.0
-      with:
-        ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
 
-    - name: 🌐 Add server to known hosts
-      run: |
-        mkdir -p ~/.ssh
-        echo "Host 134.209.33.182" >> ~/.ssh/config
-        echo "    StrictHostKeyChecking no" >> ~/.ssh/config
-        echo "    UserKnownHostsFile /dev/null" >> ~/.ssh/config
-        echo "    ServerAliveInterval 60" >> ~/.ssh/config
-        echo "    ServerAliveCountMax 3" >> ~/.ssh/config
-        echo "    ConnectTimeout 30" >> ~/.ssh/config
-        echo "    ConnectionAttempts 3" >> ~/.ssh/config
+      - name: Add server to known_hosts
+        run: ssh-keyscan -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-    # REMOVIDO: Configuração SendGrid movida para dentro do SSH (após git pull)
+      - name: Sync source files to server
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='vendor' \
+            --exclude='node_modules' \
+            --exclude='.env.production' \
+            --exclude='.env' \
+            --exclude='storage/logs' \
+            --exclude='storage/app' \
+            . root@${{ env.DEPLOY_HOST }}:${{ env.PROJECT_PATH }}/
 
-    - name: 🏥 Verificar Conectividade do Servidor
-      run: |
-        echo "🔍 Verificação básica de conectividade..."
+      - name: Run deploy script on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.PRODUCTION_SSH_KEY }}
+          script: |
+            chmod +x ${{ env.PROJECT_PATH }}/scripts/deploy.sh
+            SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY }}" \
+            FORCE_REBUILD="${{ inputs.force_rebuild || 'false' }}" \
+            ${{ env.PROJECT_PATH }}/scripts/deploy.sh
 
-        # Teste simples de conectividade SSH
-        if timeout 10 nc -zv ${{ env.DEPLOY_HOST }} 22 2>/dev/null; then
-          echo "✅ Porta SSH 22 acessível - deploy pode prosseguir"
-        else
-          echo "⚠️ Porta SSH 22 não responde, mas tentaremos conectar mesmo assim"
-        fi
-
-    - name: 🚀 Deploy to Production Server
-      run: |
-        echo "🚀 Conectando ao servidor para deploy..."
-
-        # Retry simples para SSH (máximo 3 tentativas)
-        for attempt in {1..3}; do
-          echo "🔄 Tentativa SSH $attempt/3..."
-
-          if [ $attempt -gt 1 ]; then
-            echo "⏳ Aguardando 15s antes da próxima tentativa..."
-            sleep 15
-          fi
-
-          if ssh \
-            -o ConnectTimeout=30 \
-            -o ServerAliveInterval=60 \
-            -o ServerAliveCountMax=3 \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o LogLevel=ERROR \
-            root@${{ env.DEPLOY_HOST }} << ENDSSH
-            set -e  # Exit on any error
-            cd ${{ env.PROJECT_PATH }}
-
-          # ==========================================
-          # FUNÇÃO DE ROLLBACK ROBUSTA
-          # ==========================================
-          rollback() {
-            echo "🔄 EXECUTANDO ROLLBACK DE EMERGÊNCIA..."
-
-            # Parar containers atuais
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
-
-            # Restaurar configuração de produção padrão
-            echo "📋 Restaurando .env.production como configuração padrão"
-            cp .env.production .env
-
-            # Tentar subir versão anterior
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
-
-            echo "❌ ROLLBACK CONCLUÍDO - Verifique o sistema manualmente"
-            exit 1
-          }
-
-          # ==========================================
-          # LIMPEZA E PREPARAÇÃO
-          # ==========================================
-          echo "🧹 Preparando ambiente de produção..."
-
-          # Limpeza básica (sem necessidade de backups de .env)
-          echo "🧹 Limpeza básica do ambiente..."
-
-          # Pull das mudanças mais recentes
-          echo "⬇️ Baixando código atualizado..."
-          git fetch origin
-          git reset --hard origin/main
-
-          # ==========================================
-          # CONFIGURAR SENDGRID NO .ENV.PRODUCTION (APÓS GIT PULL)
-          # ==========================================
-          echo "📧 Configurando SendGrid no .env.production (após git pull)..."
-
-          # Remover linhas existentes do SendGrid
-          sed -i '/^SENDGRID_API_KEY=/d' .env.production
-          sed -i '/^MAIL_PASSWORD=/d' .env.production
-
-          # Adicionar API Key real do GitHub Secrets
-          echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
-          echo "MAIL_PASSWORD=${{ secrets.SENDGRID_API_KEY }}" >> .env.production
-
-          # Debug: Verificar se foi aplicado corretamente
-          echo "🔍 Verificando se SendGrid foi aplicado no .env.production:"
-          if grep -q "^SENDGRID_API_KEY=" .env.production && ! grep -q "PLACEHOLDER" .env.production; then
-            echo "✅ SendGrid configurado no .env.production com API Key real"
-            # Mostrar primeiros caracteres para confirmar (sem expor a key completa)
-            echo "📋 Primeiros caracteres da API Key: $(grep '^SENDGRID_API_KEY=' .env.production | cut -d'=' -f2 | cut -c1-10)..."
-          else
-            echo "❌ ERRO: SendGrid não foi configurado corretamente no .env.production"
-            echo "🔍 Conteúdo atual:"
-            grep -E "(SENDGRID|MAIL_PASSWORD)" .env.production || echo "Nenhuma variável encontrada"
-            exit 1
-          fi
-
-          # Preparar para sobrescrever .env (sem backup desnecessário)
-          echo "📋 Preparando para configurar .env de produção..."
-
-          # ==========================================
-          # CONFIGURAÇÃO DO AMBIENTE PRODUCTION
-          # ==========================================
-          echo "📋 Configurando ambiente de produção..."
-
-          # Usar .env.production como base (agora com SendGrid configurado)
-          echo "📋 Copiando .env.production para .env (JWT_SECRET + SendGrid incluídos)..."
-          cp .env.production .env
-
-          echo "📧 Verificando SendGrid no .env..."
-
-          # Verificar se as variáveis existem (não necessariamente começando com SG.)
-          if ! grep -q "^SENDGRID_API_KEY=" .env || ! grep -q "^MAIL_PASSWORD=" .env; then
-            echo "❌ ERRO: Variáveis SendGrid não encontradas no .env"
-            echo "🔍 Conteúdo atual do .env relacionado ao SendGrid:"
-            grep -E "(SENDGRID|MAIL_PASSWORD)" .env || echo "Nenhuma variável encontrada"
-            rollback
-          fi
-
-          # Verificar se não são placeholders
-          if grep -q "SENDGRID_API_KEY_PLACEHOLDER" .env || grep -q "MAIL_PASSWORD.*PLACEHOLDER" .env; then
-            echo "❌ ERRO: SendGrid ainda contém placeholders"
-            echo "🔍 Conteúdo atual:"
-            grep -E "(SENDGRID|MAIL_PASSWORD)" .env
-            rollback
-          fi
-
-          echo "✅ SendGrid configurado corretamente (sem placeholders)"
-
-          # ==========================================
-          # VALIDAÇÕES BÁSICAS
-          # ==========================================
-          echo "🔧 Validando configurações básicas..."
-
-          # Validações essenciais simplificadas
-          grep -q "APP_ENV=production" .env || { echo "❌ APP_ENV incorreto"; rollback; }
-          grep -q "DB_HOST=linkchartdb" .env || { echo "❌ DB_HOST incorreto"; rollback; }
-
-          # Validar configuração do SendGrid
-          echo "📧 Validando configuração SendGrid..."
-          grep -q "MAIL_MAILER=smtp" .env || { echo "❌ MAIL_MAILER incorreto"; rollback; }
-          grep -q "MAIL_HOST=smtp.sendgrid.net" .env || { echo "❌ MAIL_HOST incorreto"; rollback; }
-          grep -q "MAIL_USERNAME=apikey" .env || { echo "❌ MAIL_USERNAME incorreto"; rollback; }
-
-          # Verificar se a API Key do SendGrid foi configurada (deve começar com SG.)
-          if grep -q "^MAIL_PASSWORD=SG\." .env; then
-            echo "✅ SendGrid API Key configurada corretamente"
-          else
-            echo "❌ ERRO: SendGrid API Key não configurada ou inválida"
-            echo "🔍 Verificando conteúdo da MAIL_PASSWORD..."
-            grep "MAIL_PASSWORD=" .env | head -1
-            rollback
-          fi
-
-          chmod 644 .env
-          echo "✅ Configurações básicas e SendGrid validadas"
-
-          # ==========================================
-          # DEPLOYMENT COM ESTRATÉGIA DEV FUNCIONAL
-          # ==========================================
-          echo "🛑 Parando containers atuais..."
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} down --timeout 60 || true
-
-          # Limpeza opcional de imagens (baseado no dev)
-          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
-            echo "🧹 Forçando rebuild completo..."
-            docker system prune -f
-            docker image prune -a -f
-          else
-            echo "🧹 Limpeza básica..."
-            docker image prune -f
-          fi
-
-          # Build seguindo o padrão que funciona em dev
-          echo "🏗️ Building aplicação..."
-          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --no-cache --parallel
-          else
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} build --parallel
-          fi
-
-          # Iniciar serviços (igual ao dev)
-          echo "🚀 Iniciando serviços de produção..."
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} up -d
-
-          # ==========================================
-          # AGUARDAR HEALTH CHECKS (BASEADO NO DEV)
-          # ==========================================
-          echo "⏳ Aguardando serviços ficarem healthy..."
-
-          # PostgreSQL Health Check
-          echo "🗄️ Aguardando PostgreSQL..."
-          timeout 120 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T database pg_isready -U linkchartuser -d linkchartprod >/dev/null 2>&1; do
-              echo "⏳ PostgreSQL iniciando..."
-              sleep 5
-            done
-          ' || { echo "❌ PostgreSQL timeout"; rollback; }
-          echo "✅ PostgreSQL healthy"
-
-          # Redis Health Check
-          echo "⚡ Aguardando Redis..."
-          timeout 120 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} exec -T redis redis-cli -a CHANGE_ME_REDIS_PASSWORD ping >/dev/null 2>&1; do
-              echo "⏳ Redis iniciando..."
-              sleep 5
-            done
-          ' || { echo "❌ Redis timeout"; rollback; }
-          echo "✅ Redis healthy"
-
-          # Laravel Application Health Check (similar ao dev)
-          echo "🐘 Aguardando Laravel Application..."
-          timeout 180 bash -c '
-            until docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps | grep -q "linkchartapi.*Up"; do
-              echo "⏳ Laravel iniciando..."
-              sleep 10
-            done
-          ' || { echo "❌ Laravel timeout"; rollback; }
-          echo "✅ Laravel Application running"
-
-          # ==========================================
-          # CONFIGURAÇÃO LARAVEL (IGUAL AO DEV)
-          # ==========================================
-          echo "⚙️ Configurando Laravel (baseado no padrão dev)..."
-
-          # Aguardar PHP-FPM e Nginx estarem prontos
+      - name: Final health check (from CI runner)
+        run: |
           sleep 15
-
-
-          # ==========================================
-          # SETUP DE DIRETÓRIOS E PERMISSÕES
-          # ==========================================
-          echo "🔧 Configurando diretórios e permissões..."
-
-          # Copiar script de permissões (faz tudo: diretórios + ownership + permissões)
-          docker cp docker/scripts/fix-permissions.sh linkchartapi:/var/www/fix-permissions.sh
-
-          # Tornar script executável
-          docker exec linkchartapi chmod +x /var/www/fix-permissions.sh
-
-          # Executar configuração completa (diretórios + permissões)
-          docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Erro na configuração de permissões"; rollback; }
-
-          # ==========================================
-          # CONFIGURAÇÃO BÁSICA DE CACHE (MOVIDO PARA APÓS cache:clear)
-          # ==========================================
-          echo "🗂️ Configuração de cache será feita após cache:clear para evitar conflitos..."
-
-          # ==========================================
-          # PREPARAÇÃO INICIAL MÍNIMA
-          # ==========================================
-          echo "🔧 Preparação inicial do sistema de logs..."
-
-          # Apenas garantir que o diretório básico existe
-          docker exec linkchartapi mkdir -p /var/www/storage/logs
-
-          echo "✅ Preparação inicial concluída - permissões completas serão aplicadas após cache:clear"
-
-          # ==========================================
-          # OTIMIZAÇÕES LARAVEL
-          # ==========================================
-          echo "⚡ Otimizações Laravel..."
-          docker exec linkchartapi php /var/www/artisan config:clear || { echo "❌ config:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan cache:clear || { echo "❌ cache:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan route:clear || { echo "❌ route:clear falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan view:clear || { echo "❌ view:clear falhou"; rollback; }
-
-          # ==========================================
-          # EXECUÇÃO DO SCRIPT OTIMIZADO DE PERMISSÕES
-          # ==========================================
-          echo "🔧 Executando script otimizado de permissões (pós cache:clear)..."
-
-          # Executar o script otimizado que faz tudo de uma vez
-          docker exec linkchartapi /var/www/fix-permissions.sh || { echo "❌ Script de permissões falhou"; rollback; }
-
-          echo "✅ Permissões aplicadas via script otimizado"
-
-          # Continuar com otimizações Laravel
-          docker exec linkchartapi php /var/www/artisan storage:link || { echo "❌ storage:link falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan config:cache || { echo "❌ config:cache falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan route:cache || { echo "❌ route:cache falhou"; rollback; }
-          docker exec linkchartapi php /var/www/artisan view:cache || { echo "❌ view:cache falhou"; rollback; }
-
-          # ==========================================
-          # EXECUTAR MIGRAÇÕES (ORDEM CORRETA - APÓS CONFIGURAÇÃO COMPLETA)
-          # ==========================================
-          echo "🗄️ Executando migrações de banco de dados (APÓS configuração completa)..."
-
-          # Aguardar mais um pouco para garantir estabilidade total
-          sleep 10
-
-          # Verificar status das migrations primeiro
-          echo "📋 Verificando status das migrations..."
-          docker exec linkchartapi php /var/www/artisan migrate:status || { echo "❌ migrate:status falhou"; rollback; }
-
-          # Executar migrations (simples, sem retry excessivo)
-          echo "🔄 Executando migrations..."
-          if ! docker exec linkchartapi php /var/www/artisan migrate --force; then
-            echo "❌ ERRO: Migrations falharam"
-            echo "📋 Logs do Laravel:"
-            docker logs linkchartapi --tail 20
-            rollback
-          fi
-          echo "✅ Migrations executadas com sucesso"
-
-          # Verificar status final das migrations
-          echo "📋 Verificando status final das migrations..."
-          docker exec linkchartapi php /var/www/artisan migrate:status
-
-          echo "🎉 MIGRATIONS EXECUTADAS COM SUCESSO!"
-
-          # ==========================================
-          # VERIFICAÇÃO PÓS-MIGRATIONS (SEM REDUNDÂNCIAS)
-          # ==========================================
-          echo "🧪 Verificando sistema após migrations..."
-
-          # Simples verificação de que o sistema está funcionando
-          CURRENT_DATE=$(date +%Y-%m-%d)
-          if docker exec linkchartapi sh -c "echo '[$(date)] Deploy success after migrations' >> /var/www/storage/logs/laravel-$CURRENT_DATE.log" 2>/dev/null; then
-            echo "✅ Sistema funcionando corretamente após migrations"
-          else
-            echo "⚠️ Sistema com problemas após migrations - mas continuando"
-          fi
-
-          # ==========================================
-          # VERIFICAÇÕES BÁSICAS
-          # ==========================================
-          echo "🧪 Verificações básicas..."
-          sleep 10
-
-          # Testar conexões básicas
-          docker exec linkchartapi php /var/www/artisan tinker --execute="DB::connection()->getPdo(); echo 'DB_OK';" 2>/dev/null | grep -q "DB_OK" || rollback
-          docker exec linkchartapi php /var/www/artisan tinker --execute="Cache::store('redis')->put('test', 'ok', 60); echo 'REDIS_OK';" 2>/dev/null | grep -q "REDIS_OK" || rollback
-          echo "✅ Conexões básicas OK"
-
-          # Testar configuração de email SendGrid
-          echo "📧 Testando configuração SendGrid..."
-          EMAIL_TEST_RESULT=$(docker exec linkchartapi php /var/www/artisan email:test test@linkcharts.com.br --name="Deploy Test" 2>&1 | grep -E "(✅|❌)" | tail -1 || echo "TIMEOUT")
-
-          if [[ "$EMAIL_TEST_RESULT" == *"✅"* ]]; then
-            echo "✅ Configuração SendGrid OK"
-          else
-            echo "⚠️ Configuração SendGrid com problemas: $EMAIL_TEST_RESULT"
-            echo "📋 Continuando deploy (email não é crítico para funcionamento básico)"
-          fi
-
-          # ==========================================
-          # HEALTH CHECK FINAL
-          # ==========================================
-          echo "🏥 Health check final da aplicação..."
-          sleep 15
-
-          # Health check simples (3 tentativas)
-          for i in {1..3}; do
-            if curl -f -s --max-time 15 http://localhost:8000/health >/dev/null 2>&1; then
-              echo "✅ Health check passou na tentativa $i"
-              break
-            else
-              echo "⚠️ Health check falhou na tentativa $i"
-              if [ $i -eq 3 ]; then
-                echo "❌ Health check falhou após 3 tentativas"
-                docker logs linkchartapi --tail 30
-                rollback
-              fi
-              sleep 15
-            fi
-          done
-
-          # ==========================================
-          # VERIFICAÇÃO FINAL DO SISTEMA DE CACHE
-          # ==========================================
-          echo "🔍 Verificação final do sistema de cache para GeoIP..."
-
-          # Simples verificação de que o cache está funcionando
-          if docker exec linkchartapi ls -la /var/www/storage/framework/cache/data/ >/dev/null 2>&1; then
-            echo "✅ Sistema de cache pronto para GeoIP"
-
-            # Mostrar estatísticas dos subdiretórios pré-criados
-            SUBDIRS_COUNT=$(docker exec linkchartapi find /var/www/storage/framework/cache/data -type d | wc -l)
-            echo "📊 Subdiretórios de cache disponíveis: $SUBDIRS_COUNT"
-          else
-            echo "⚠️ Sistema de cache com problemas - mas deploy continuando"
-          fi
-
-            echo "🎉 DEPLOYMENT DE PRODUÇÃO CONCLUÍDO COM SUCESSO!"
-            echo "📊 Containers ativos:"
-            docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
-        ENDSSH
-          then
-            echo "✅ SSH connection successful on attempt $attempt"
-            break
-          else
-            echo "❌ SSH failed on attempt $attempt"
-            if [ $attempt -eq 3 ]; then
-              echo "💥 SSH failed after 3 attempts"
-              echo "🔧 Verifique: ssh root@${{ env.DEPLOY_HOST }}"
-              exit 1
-            fi
-          fi
-        done
-
-    - name: 🔍 Verificação Final de Produção
-      run: |
-        echo "🔍 Verificação final completa..."
-
-        # Aguardar estabilização total
-        sleep 20
-
-        # Health Check Principal
-        if curl -f -k -s --max-time 15 https://api.linkcharts.com.br/health; then
-          echo "✅ Health check principal OK"
-        else
-          echo "❌ Health check principal falhou"
-          exit 1
-        fi
-
-        # Teste API - deve retornar 401 (não autenticado)
-        API_RESPONSE=$(curl -s -k -o /dev/null -w "%{http_code}" --max-time 15 https://api.linkcharts.com.br/api/links)
-        case $API_RESPONSE in
-          401)
-            echo "✅ API protegida OK (401 - auth required)"
-            ;;
-          200|422)
-            echo "⚠️ API respondeu $API_RESPONSE (verificar se esperado)"
-            ;;
-          *)
-            echo "❌ API resposta inesperada: $API_RESPONSE"
-            exit 1
-            ;;
-        esac
-
-        # Verificar health endpoint detalhado
-        HEALTH_FULL=$(curl -s -k --max-time 15 https://api.linkcharts.com.br/health)
-        if [[ "$HEALTH_FULL" == *"OK"* ]] || [[ "$HEALTH_FULL" == *"healthy"* ]]; then
-          echo "✅ Health endpoint detalhado OK"
-          echo "📋 Health response: $HEALTH_FULL"
-        else
-          echo "⚠️ Health endpoint response: $HEALTH_FULL"
-        fi
-
-        # Verificar se GeoIP está funcionando (teste final)
-        echo "🌍 Testando GeoIP após deploy..."
-        GEOIP_TEST=$(curl -s -k --max-time 15 'https://api.linkcharts.com.br/api/r/djuMBO?real_ip=8.8.8.8' | jq -r '.success // "false"')
-        if [ "$GEOIP_TEST" = "true" ]; then
-          echo "✅ GeoIP endpoint respondendo corretamente"
-        else
-          echo "⚠️ GeoIP endpoint com problemas - mas deploy prosseguiu"
-        fi
-
-        echo "🎉 VERIFICAÇÃO DE PRODUÇÃO CONCLUÍDA!"
-
-    - name: 📊 Monitoramento Pós-Deploy
-      if: success()
-      run: |
-        echo "📊 Monitoramento pós-deployment..."
-
-        ssh -o StrictHostKeyChecking=no root@${{ env.DEPLOY_HOST }} << 'ENDSSH'
-          cd ${{ env.PROJECT_PATH }}
-
-          echo "📋 Status final dos containers:"
-          docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps
-
+          curl -fsS --max-time 15 https://api.linkcharts.com.br/health
           echo ""
-          echo "📈 Estatísticas de recursos:"
-          docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}"
-
-          echo ""
-          echo "📝 Últimas 10 linhas do log da aplicação:"
-          docker logs linkchartapi --tail 10
-
-          echo ""
-          echo "🔍 Verificação final de configuração:"
-          docker exec linkchartapi php /var/www/artisan --version
-          docker exec linkchartapi php /var/www/artisan env | grep -E "APP_ENV|APP_DEBUG|DB_CONNECTION|REDIS_CLIENT" || true
-        ENDSSH
-
-    - name: 📢 Notificação de Status
-      if: always()
-      run: |
-        if [ "${{ job.status }}" == "success" ]; then
-          echo "🚀 PRODUÇÃO DEPLOYED COM SUCESSO!"
-          echo ""
-          echo "📊 Serviços Ativos:"
-          echo "  ✅ Laravel API Application (PHP 8.2 + FPM)"
-          echo "  ✅ PostgreSQL Database 15 (com health checks)"
-          echo "  ✅ Redis Cache 7 (com auth)"
-          echo "  ✅ Nginx Reverse Proxy"
-          echo "  ✅ Supervisor Process Manager"
-          echo "  ✅ JWT Authentication"
-          echo "  ✅ CORS Configurado"
-          echo ""
-          echo "🌐 URLs de Produção:"
-          echo "  🏠 Application: https://api.linkcharts.com.br"
-          echo "  🏥 Health Check: https://api.linkcharts.com.br/health"
-          echo "  📡 API Base: https://api.linkcharts.com.br/api"
-          echo "  🔐 Auth: https://api.linkcharts.com.br/api/auth/login"
-          echo ""
-          echo "⏱️ Deploy concluído em: $(date)"
-          echo "🔧 Baseado na estrutura dev funcional + .env.production"
-        else
-          echo "💥 FALHA NO DEPLOYMENT DE PRODUÇÃO!"
-          echo ""
-          echo "❌ Status: ${{ job.status }}"
-          echo "🔍 Logs acima contêm detalhes do erro"
-          echo "🔄 Rollback automático executado"
-          echo ""
-          echo "📞 Ações Necessárias:"
-          echo "  1. ssh root@${{ env.DEPLOY_HOST }}"
-          echo "  2. cd ${{ env.PROJECT_PATH }}"
-          echo "  3. docker compose -f ${{ env.DOCKER_COMPOSE_FILE }} ps"
-          echo "  4. docker logs linkchartapi"
-          echo "  5. Verificar .env.production para configuração base"
-          echo ""
-          echo "💡 Rollback executado - sistema deve estar na versão anterior"
-        fi
+          echo "Deploy confirmed via public health check"
