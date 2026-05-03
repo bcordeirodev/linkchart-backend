@@ -6,6 +6,7 @@ use App\Jobs\ProcessLinkClickJob;
 use App\Models\Click;
 use App\Models\LinkUtm;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Tests\Concerns\CreatesTestLinks;
 use Tests\TestCase;
@@ -22,7 +23,7 @@ class ProcessLinkClickJobTest extends TestCase
             'referer' => 'https://www.google.com/search',
             'accept_language' => 'en-US',
             'query_params' => [],
-            'start_time' => microtime(true),
+            'http_response_ms' => 42.5,
         ], $overrides);
     }
 
@@ -100,6 +101,16 @@ class ProcessLinkClickJobTest extends TestCase
         $click = Click::where('link_id', $link->id)->first();
         $this->assertNotNull($click);
         $this->assertSame(0, LinkUtm::where('click_id', $click->id)->count());
+    }
+
+    public function test_increments_links_clicks_counter(): void
+    {
+        $link = $this->makeLink(['clicks' => 0]);
+
+        (new ProcessLinkClickJob($link->id, $this->payload()))
+            ->handle(app(\App\Services\Links\LinkTrackingService::class));
+
+        $this->assertSame(1, (int) DB::table('links')->where('id', $link->id)->value('clicks'));
     }
 
     public function test_missing_link_is_logged_without_creating_click(): void

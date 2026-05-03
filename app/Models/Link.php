@@ -83,7 +83,7 @@ class Link extends Model
         // Esta rota serve HTML com Open Graph para preview em redes sociais
         $backendUrl = env('REDIRECT_URL', 'http://localhost:8000');
 
-        return "{$backendUrl}/{$this->slug}";
+        return "{$backendUrl}/r/{$this->slug}";
     }
 
     public static function findActiveBySlugCached(string $slug): ?self

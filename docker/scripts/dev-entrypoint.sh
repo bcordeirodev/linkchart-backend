@@ -52,13 +52,6 @@ fi
 echo "🗄️ Executando migrações..."
 php artisan migrate --force
 
-# Verificar se há dados na tabela de links
-LINK_COUNT=$(php artisan tinker --execute="echo App\Models\Link::count();" 2>/dev/null | tail -1 || echo "0")
-if [ "$LINK_COUNT" -eq 0 ]; then
-    echo "🌱 Executando seeders..."
-    php artisan db:seed --force
-fi
-
 # Criar link simbólico para storage
 if [ ! -L /var/www/public/storage ]; then
     echo "🔗 Criando link simbólico para storage..."

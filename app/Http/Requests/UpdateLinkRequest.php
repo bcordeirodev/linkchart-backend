@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Links\LinkSafetyService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Contracts\Validation\Validator;
@@ -34,15 +35,6 @@ class UpdateLinkRequest extends FormRequest
                 'url',
                 'max:2048',
                 'regex:/^https?:\/\//',
-                function ($attribute, $value, $fail) {
-                    // Validação customizada para URLs maliciosas
-                    $blockedDomains = ['malware.com', 'phishing.net', 'spam.org'];
-                    $domain = parse_url($value, PHP_URL_HOST);
-
-                    if (in_array($domain, $blockedDomains)) {
-                        $fail('Esta URL não é permitida por questões de segurança.');
-                    }
-                }
             ],
             'title' => 'sometimes|string|max:100',
             'slug' => [
@@ -134,6 +126,30 @@ class UpdateLinkRequest extends FormRequest
                 'errors' => $validator->errors()
             ], 422)
         );
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            if ($validator->errors()->has('original_url') || !$this->has('original_url')) {
+                return;
+            }
+
+            $url = $this->input('original_url');
+            if (!$url) {
+                return;
+            }
+
+            $result = app(LinkSafetyService::class)->checkUrl($url);
+
+            if (!$result['safe']) {
+                $threats = implode(', ', $result['threats']);
+                $validator->errors()->add(
+                    'original_url',
+                    "Esta URL foi identificada como insegura ({$threats}) e não pode ser encurtada."
+                );
+            }
+        });
     }
 
     /**

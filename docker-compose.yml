@@ -7,7 +7,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    command: ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
     container_name: linkchartapi-dev
     restart: unless-stopped
     ports:
@@ -30,6 +29,7 @@ services:
     environment:
       - CONTAINER_ROLE=app
       - DB_HOST=database
+      - DB_PORT=5432
       - REDIS_HOST=redis
       - DB_CONNECTION=pgsql
       - DB_DATABASE=link_chart
