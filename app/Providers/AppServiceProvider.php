@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Observers\UserObserver;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -30,6 +32,8 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        User::observe(UserObserver::class);
+
         Request::macro('isApiRequest', function (): bool {
             /** @var Request $this */
             return $this->expectsJson() || $this->is('api/*');
