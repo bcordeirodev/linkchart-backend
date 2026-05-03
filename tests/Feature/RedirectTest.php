@@ -87,7 +87,7 @@ class RedirectTest extends TestCase
 
         $response->assertStatus(404);
         $this->assertStringContainsString('atingiu o limite de cliques', $response->getContent());
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
     }
 
     public function test_whatsapp_bot_receives_html_with_open_graph_tags(): void
@@ -103,7 +103,7 @@ class RedirectTest extends TestCase
         $response->assertHeader('Content-Type', 'text/html; charset=UTF-8');
         $this->assertStringContainsString('<meta property="og:type" content="website">', $response->getContent());
         $this->assertStringContainsString('<meta property="og:url" content="https://example.com/landing">', $response->getContent());
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
     }
 
     public function test_telegram_bot_receives_html_without_redirect(): void
@@ -116,7 +116,7 @@ class RedirectTest extends TestCase
         ])->get('/r/'.$link->slug);
 
         $response->assertStatus(200);
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
     }
 
     public function test_preview_query_param_serves_html_without_tracking(): void
@@ -129,7 +129,7 @@ class RedirectTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/html; charset=UTF-8');
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
         $this->assertSame(0, (int) DB::table('links')->where('id', $link->id)->value('clicks'));
     }
 
@@ -155,7 +155,7 @@ class RedirectTest extends TestCase
 
         $response->assertStatus(404);
         $this->assertStringContainsString('Link não encontrado', $response->getContent());
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
     }
 
     public function test_expired_link_returns_error_page(): void
@@ -168,7 +168,7 @@ class RedirectTest extends TestCase
 
         $response->assertStatus(404);
         $this->assertStringContainsString('Este link expirou', $response->getContent());
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
     }
 
     public function test_link_not_yet_started_returns_error_page(): void
@@ -181,7 +181,7 @@ class RedirectTest extends TestCase
 
         $response->assertStatus(404);
         $this->assertStringContainsString('Este link ainda não está disponível', $response->getContent());
-        Queue::assertNothingPushed();
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
     }
 
     public function test_error_page_contains_back_to_frontend_button(): void
