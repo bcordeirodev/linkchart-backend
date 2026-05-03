@@ -33,7 +33,7 @@ class EngagementInsightGenerator implements InsightGeneratorInterface
             'title' => $rate > 0 ? 'Crescimento Acelerado' : 'Declínio no Engajamento',
             'description' => $rate > 0
                 ? "Seus cliques cresceram {$rate}% na última semana. Continue com a estratégia atual!"
-                : 'Seus cliques diminuíram ' . abs($rate) . '% na última semana. Revise sua estratégia de conteúdo.',
+                : 'Seus cliques diminuíram '.abs($rate).'% na última semana. Revise sua estratégia de conteúdo.',
             'priority' => abs($rate) > 50 ? 'high' : 'medium',
             'actionable' => $rate < 0,
             'confidence' => 0.8,

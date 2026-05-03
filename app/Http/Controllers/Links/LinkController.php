@@ -9,9 +9,9 @@ use App\Http\Requests\CreateLinkRequest;
 use App\Http\Requests\UpdateLinkRequest;
 use App\Http\Resources\LinkResource;
 use App\Services\Links\LinkAuditService;
-use Illuminate\Routing\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 
 /**
  * Controller para gerenciamento de Links
@@ -23,6 +23,7 @@ use Illuminate\Http\Request;
 class LinkController extends Controller
 {
     protected LinkServiceInterface $linkService;
+
     protected LinkAuditService $auditService;
 
     public function __construct(
@@ -40,11 +41,12 @@ class LinkController extends Controller
     {
         try {
             $links = $this->linkService->getAllUserLinks();
+
             return response()->json(LinkResource::collection($links));
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar links.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -57,23 +59,23 @@ class LinkController extends Controller
         try {
             // Validação adicional de ownership
             $userId = auth()->guard('api')->id();
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
             $link = $this->linkService->getUserLink($id);
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
             }
 
             return response()->json([
-                'data' => new LinkResource($link)
+                'data' => new LinkResource($link),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -92,17 +94,17 @@ class LinkController extends Controller
 
             return response()->json([
                 'message' => 'Link criado com sucesso.',
-                'data' => new LinkResource($link)
+                'data' => new LinkResource($link),
             ], 201);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'Dados inválidos.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao criar link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -115,21 +117,21 @@ class LinkController extends Controller
         try {
             // Validação adicional de ownership
             $userId = auth()->guard('api')->id();
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
             // Verifica se há dados para atualizar
-            if (!$request->hasDataToUpdate()) {
+            if (! $request->hasDataToUpdate()) {
                 return response()->json([
                     'error' => 'Nenhum dado fornecido.',
-                    'message' => 'Pelo menos um campo deve ser fornecido para atualização.'
+                    'message' => 'Pelo menos um campo deve ser fornecido para atualização.',
                 ], 422);
             }
 
             // Verifica se o link existe e pertence ao usuário antes de atualizar
             $existingLink = $this->linkService->getUserLink($id);
-            if (!$existingLink) {
+            if (! $existingLink) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para editá-lo.'], 404);
             }
 
@@ -139,7 +141,7 @@ class LinkController extends Controller
             $linkDTO = UpdateLinkDTO::fromRequest($request);
             $link = $this->linkService->updateLink($id, $linkDTO);
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Erro ao atualizar link.'], 500);
             }
 
@@ -148,17 +150,17 @@ class LinkController extends Controller
 
             return response()->json([
                 'message' => 'Link atualizado com sucesso.',
-                'data' => new LinkResource($link)
+                'data' => new LinkResource($link),
             ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
                 'error' => 'Dados inválidos.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao atualizar link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -171,13 +173,13 @@ class LinkController extends Controller
         try {
             // Validação adicional de ownership
             $userId = auth()->guard('api')->id();
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
             // Verifica se o link existe e pertence ao usuário antes de remover
             $existingLink = $this->linkService->getUserLink($id);
-            if (!$existingLink) {
+            if (! $existingLink) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para removê-lo.'], 404);
             }
 
@@ -186,7 +188,7 @@ class LinkController extends Controller
 
             $deleted = $this->linkService->deleteLink($id);
 
-            if (!$deleted) {
+            if (! $deleted) {
                 return response()->json(['message' => 'Erro ao remover link.'], 500);
             }
 
@@ -194,7 +196,7 @@ class LinkController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao remover link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -207,14 +209,14 @@ class LinkController extends Controller
         try {
             // Buscar link por slug primeiro
             $link = \App\Models\Link::where('slug', $slug)
-                                  ->where('user_id', auth()->guard('api')->id())
-                                  ->first();
+                ->where('user_id', auth()->guard('api')->id())
+                ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
             }
 
-                        // Gerar dados de analytics baseados nos cliques reais
+            // Gerar dados de analytics baseados nos cliques reais
             $totalClicks = $link->clicks;
 
             // REGRA MVP: Se não há cliques, retornar indicação de que não há dados suficientes
@@ -232,11 +234,11 @@ class LinkController extends Controller
                         'created_at' => $link->created_at,
                         'is_active' => $link->is_active,
                         'expires_at' => $link->expires_at,
-                    ]
+                    ],
                 ]);
             }
 
-                        // Buscar dados reais da tabela clicks
+            // Buscar dados reais da tabela clicks
             $clicks = \App\Models\Click::where('link_id', $link->id)->get();
 
             // Calcular métricas reais
@@ -246,19 +248,20 @@ class LinkController extends Controller
             // Taxa de conversão baseada em visitantes únicos vs total de cliques
             $conversionRate = $uniqueVisitors > 0 ? round(($totalClicks / $uniqueVisitors) * 100, 1) : 0;
 
-                        // Cliques ao longo do tempo (dados reais dos últimos 30 dias)
+            // Cliques ao longo do tempo (dados reais dos últimos 30 dias)
             $clicksOverTime = [];
             for ($i = 29; $i >= 0; $i--) {
                 $date = now()->subDays($i);
 
-                $dailyClicks = $clicks->filter(function($click) use ($date) {
+                $dailyClicks = $clicks->filter(function ($click) use ($date) {
                     $clickDate = \Carbon\Carbon::parse($click->created_at);
+
                     return $clickDate->isSameDay($date);
                 })->count();
 
                 $clicksOverTime[] = [
                     'date' => $date->format('Y-m-d'),
-                    'clicks' => $dailyClicks
+                    'clicks' => $dailyClicks,
                 ];
             }
 
@@ -268,7 +271,7 @@ class LinkController extends Controller
                 ->map(function ($countryClicks) {
                     return [
                         'country' => $countryClicks->first()->country,
-                        'clicks' => $countryClicks->count()
+                        'clicks' => $countryClicks->count(),
                     ];
                 })
                 ->values()
@@ -282,7 +285,7 @@ class LinkController extends Controller
                 ->map(function ($deviceClicks) {
                     return [
                         'device' => $deviceClicks->first()->device,
-                        'clicks' => $deviceClicks->count()
+                        'clicks' => $deviceClicks->count(),
                     ];
                 })
                 ->values()
@@ -291,21 +294,22 @@ class LinkController extends Controller
 
             // Cliques por referrer (dados reais)
             $clicksByReferer = $clicks->map(function ($click) {
-                    // Extrair domínio do referer ou marcar como Direct
-                    if (empty($click->referer) || $click->referer === '-') {
-                        return 'Direct';
-                    }
+                // Extrair domínio do referer ou marcar como Direct
+                if (empty($click->referer) || $click->referer === '-') {
+                    return 'Direct';
+                }
 
-                    $domain = parse_url($click->referer, PHP_URL_HOST);
-                    return $domain ?: 'Unknown';
-                })
+                $domain = parse_url($click->referer, PHP_URL_HOST);
+
+                return $domain ?: 'Unknown';
+            })
                 ->groupBy(function ($referer) {
                     return $referer;
                 })
                 ->map(function ($refererClicks, $referer) {
                     return [
                         'referer' => $referer,
-                        'clicks' => $refererClicks->count()
+                        'clicks' => $refererClicks->count(),
                     ];
                 })
                 ->values()
@@ -317,7 +321,7 @@ class LinkController extends Controller
                 'total_clicks' => $totalClicks,
                 'unique_visitors' => $uniqueVisitors,
                 'avg_daily_clicks' => $avgDailyClicks,
-                'conversion_rate' => $conversionRate . '%',
+                'conversion_rate' => $conversionRate.'%',
                 'clicks_over_time' => $clicksOverTime,
                 'clicks_by_country' => $clicksByCountry,
                 'clicks_by_device' => $clicksByDevice,
@@ -331,12 +335,12 @@ class LinkController extends Controller
                     'created_at' => $link->created_at,
                     'is_active' => $link->is_active,
                     'expires_at' => $link->expires_at,
-                ]
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -349,10 +353,10 @@ class LinkController extends Controller
         try {
             // Buscar link por ID e verificar ownership
             $link = \App\Models\Link::where('id', $id)
-                                  ->where('user_id', auth()->guard('api')->id())
-                                  ->first();
+                ->where('user_id', auth()->guard('api')->id())
+                ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
             }
 
@@ -361,7 +365,7 @@ class LinkController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -374,10 +378,10 @@ class LinkController extends Controller
         try {
             // Buscar link por ID e verificar ownership
             $link = \App\Models\Link::where('id', $id)
-                                  ->where('user_id', auth()->guard('api')->id())
-                                  ->first();
+                ->where('user_id', auth()->guard('api')->id())
+                ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
             }
 
@@ -396,7 +400,7 @@ class LinkController extends Controller
 
                 // Distribuição por hora nas últimas 24h
                 'clicks_by_hour' => $clicks->where('created_at', '>=', now()->subDay())
-                    ->groupBy(function($click) {
+                    ->groupBy(function ($click) {
                         return $click->created_at->format('H');
                     })
                     ->map->count()
@@ -418,14 +422,15 @@ class LinkController extends Controller
                     ->toArray(),
 
                 // Top referrers
-                'top_referrers' => $clicks->map(function($click) {
-                        if (empty($click->referer) || $click->referer === '-') {
-                            return 'Direct';
-                        }
-                        $domain = parse_url($click->referer, PHP_URL_HOST);
-                        return $domain ?: 'Unknown';
-                    })
-                    ->groupBy(function($referer) {
+                'top_referrers' => $clicks->map(function ($click) {
+                    if (empty($click->referer) || $click->referer === '-') {
+                        return 'Direct';
+                    }
+                    $domain = parse_url($click->referer, PHP_URL_HOST);
+
+                    return $domain ?: 'Unknown';
+                })
+                    ->groupBy(function ($referer) {
                         return $referer;
                     })
                     ->map->count()
@@ -434,18 +439,18 @@ class LinkController extends Controller
                     ->toArray(),
 
                 // Cliques com UTM
-                'utm_campaigns' => $clicks->filter(function($click) {
-                        return $click->utm !== null;
-                    })
-                    ->map(function($click) {
+                'utm_campaigns' => $clicks->filter(function ($click) {
+                    return $click->utm !== null;
+                })
+                    ->map(function ($click) {
                         return $click->utm->utm_campaign ?? 'No Campaign';
                     })
-                    ->groupBy(function($campaign) {
+                    ->groupBy(function ($campaign) {
                         return $campaign;
                     })
                     ->map->count()
                     ->sortDesc()
-                    ->toArray()
+                    ->toArray(),
             ];
 
             return response()->json([
@@ -455,10 +460,10 @@ class LinkController extends Controller
                     'title' => $link->title,
                     'original_url' => $link->original_url,
                     'created_at' => $link->created_at,
-                    'clicks' => $link->clicks
+                    'clicks' => $link->clicks,
                 ],
                 'stats' => $stats,
-                'recent_clicks' => $clicks->take(10)->map(function($click) {
+                'recent_clicks' => $clicks->take(10)->map(function ($click) {
                     return [
                         'id' => $click->id,
                         'ip' => $click->ip,
@@ -472,14 +477,14 @@ class LinkController extends Controller
                             'source' => $click->utm->utm_source,
                             'medium' => $click->utm->utm_medium,
                             'campaign' => $click->utm->utm_campaign,
-                        ] : null
+                        ] : null,
                     ];
-                })
+                }),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar dados de cliques.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -495,7 +500,7 @@ class LinkController extends Controller
     {
         try {
             $userId = auth()->guard('api')->id();
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
@@ -503,7 +508,7 @@ class LinkController extends Controller
                 ->where('user_id', $userId)
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
             }
 
@@ -523,7 +528,7 @@ class LinkController extends Controller
             $query = \App\Models\Click::where('link_id', $link->id)->with('utm');
 
             if ($search !== '') {
-                $needle = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $search) . '%';
+                $needle = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
                 $query->where(function ($q) use ($needle) {
                     $q->where('country', 'ilike', $needle)
                         ->orWhere('city', 'ilike', $needle)
@@ -614,17 +619,17 @@ class LinkController extends Controller
         try {
             // Validação adicional de ownership
             $userId = auth()->guard('api')->id();
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
             // Verifica se o link existe e pertence ao usuário
             $link = $this->linkService->getUserLink($id);
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
             }
 
-            $history = $this->auditService->getLinkHistory((int)$id, $userId);
+            $history = $this->auditService->getLinkHistory((int) $id, $userId);
 
             return response()->json([
                 'data' => $history->map(function ($audit) {
@@ -642,12 +647,12 @@ class LinkController extends Controller
                             'email' => $audit->user->email,
                         ] : null,
                     ];
-                })
+                }),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar histórico de auditoria.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -659,10 +664,10 @@ class LinkController extends Controller
     {
         try {
             $link = \App\Models\Link::where('slug', $slug)
-                                  ->where('is_active', true)
-                                  ->first();
+                ->where('is_active', true)
+                ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['message' => 'Link não encontrado ou inativo.'], 404);
             }
 
@@ -677,12 +682,12 @@ class LinkController extends Controller
             }
 
             return response()->json([
-                'data' => new LinkResource($link)
+                'data' => new LinkResource($link),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }

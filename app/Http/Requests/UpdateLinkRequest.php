@@ -3,10 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Services\Links\LinkSafetyService;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Contracts\Validation\Validator;
-use Illuminate\Validation\Rule;
 
 /**
  * Form Request para atualização de links
@@ -48,7 +47,7 @@ class UpdateLinkRequest extends FormRequest
                 'nullable',
                 'date',
                 'after:now',
-                'before:' . now()->addYears(5)->toDateString(),
+                'before:'.now()->addYears(5)->toDateString(),
             ],
             'starts_in' => [
                 'nullable',
@@ -123,7 +122,7 @@ class UpdateLinkRequest extends FormRequest
             response()->json([
                 'error' => 'Dados de validação inválidos',
                 'message' => 'Por favor, corrija os erros abaixo.',
-                'errors' => $validator->errors()
+                'errors' => $validator->errors(),
             ], 422)
         );
     }
@@ -131,18 +130,18 @@ class UpdateLinkRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function ($validator) {
-            if ($validator->errors()->has('original_url') || !$this->has('original_url')) {
+            if ($validator->errors()->has('original_url') || ! $this->has('original_url')) {
                 return;
             }
 
             $url = $this->input('original_url');
-            if (!$url) {
+            if (! $url) {
                 return;
             }
 
             $result = app(LinkSafetyService::class)->checkUrl($url);
 
-            if (!$result['safe']) {
+            if (! $result['safe']) {
                 $threats = implode(', ', $result['threats']);
                 $validator->errors()->add(
                     'original_url',
@@ -162,8 +161,8 @@ class UpdateLinkRequest extends FormRequest
             $url = trim($this->input('original_url'));
 
             // Adiciona https:// se não tiver protocolo
-            if (!preg_match('/^https?:\/\//', $url)) {
-                $url = 'https://' . $url;
+            if (! preg_match('/^https?:\/\//', $url)) {
+                $url = 'https://'.$url;
             }
 
             $this->merge(['original_url' => $url]);
@@ -178,7 +177,7 @@ class UpdateLinkRequest extends FormRequest
         $updateableFields = [
             'original_url', 'title', 'slug', 'description', 'expires_at',
             'starts_in', 'is_active', 'utm_source', 'utm_medium',
-            'utm_campaign', 'utm_term', 'utm_content'
+            'utm_campaign', 'utm_term', 'utm_content',
         ];
 
         foreach ($updateableFields as $field) {

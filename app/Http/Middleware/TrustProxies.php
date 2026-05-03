@@ -51,9 +51,6 @@ class TrustProxies extends Middleware
      * LÓGICA PERSONALIZADA:
      * - Sempre confiar em desenvolvimento
      * - Em produção, validar origem do proxy
-     *
-     * @param Request $request
-     * @return bool
      */
     protected function shouldTrustRequest(Request $request): bool
     {

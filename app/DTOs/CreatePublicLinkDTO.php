@@ -66,6 +66,6 @@ class CreatePublicLinkDTO
      */
     public function hasValidData(): bool
     {
-        return !empty($this->original_url) && $this->isValidUrl();
+        return ! empty($this->original_url) && $this->isValidUrl();
     }
 }

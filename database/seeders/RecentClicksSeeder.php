@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 
 class RecentClicksSeeder extends Seeder
 {
@@ -19,6 +19,7 @@ class RecentClicksSeeder extends Seeder
 
         if ($userLinks->isEmpty()) {
             $this->command->info('Nenhum link encontrado para o usuário 2');
+
             return;
         }
 
@@ -30,7 +31,7 @@ class RecentClicksSeeder extends Seeder
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-            'Mozilla/5.0 (Android 11; Mobile; rv:68.0) Gecko/68.0 Firefox/88.0'
+            'Mozilla/5.0 (Android 11; Mobile; rv:68.0) Gecko/68.0 Firefox/88.0',
         ];
 
         $totalClicks = 0;
@@ -77,7 +78,7 @@ class RecentClicksSeeder extends Seeder
             $link->update(['clicks' => $clickCount]);
         }
 
-        $this->command->info("✅ Contadores dos links atualizados!");
+        $this->command->info('✅ Contadores dos links atualizados!');
     }
 
     /**
@@ -132,6 +133,6 @@ class RecentClicksSeeder extends Seeder
      */
     private function generateRandomIP(): string
     {
-        return rand(1, 255) . '.' . rand(0, 255) . '.' . rand(0, 255) . '.' . rand(1, 255);
+        return rand(1, 255).'.'.rand(0, 255).'.'.rand(0, 255).'.'.rand(1, 255);
     }
 }

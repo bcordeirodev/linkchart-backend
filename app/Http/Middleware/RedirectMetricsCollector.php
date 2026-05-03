@@ -25,7 +25,7 @@ class RedirectMetricsCollector
         Log::info('RedirectMetricsCollector: Starting', [
             'slug' => $slug,
             'ip' => $ip,
-            'user_agent' => substr($userAgent, 0, 100) // Truncar para log
+            'user_agent' => substr($userAgent, 0, 100), // Truncar para log
         ]);
 
         // Processar redirecionamento
@@ -37,7 +37,7 @@ class RedirectMetricsCollector
         Log::info('RedirectMetricsCollector: Response processed', [
             'slug' => $slug,
             'status_code' => $statusCode,
-            'response_time' => $responseTime
+            'response_time' => $responseTime,
         ]);
 
         // Coletar métricas específicas de redirecionamento com try-catch
@@ -64,10 +64,10 @@ class RedirectMetricsCollector
                     'slug' => $slug,
                     'error' => $e->getMessage(),
                     'file' => $e->getFile(),
-                    'line' => $e->getLine()
+                    'line' => $e->getLine(),
                 ]);
             } catch (\Exception $logError) {
-                error_log("FALLBACK_LOG: RedirectMetricsCollector failed for slug: $slug, Error: " . $e->getMessage());
+                error_log("FALLBACK_LOG: RedirectMetricsCollector failed for slug: $slug, Error: ".$e->getMessage());
             }
             // Não falhar a requisição por causa das métricas
         }
@@ -81,13 +81,14 @@ class RedirectMetricsCollector
     private function collectRedirectMetrics(array $metrics): void
     {
         Log::info('RedirectMetricsCollector: collectRedirectMetrics called', [
-            'slug' => $metrics['slug'] ?? 'unknown'
+            'slug' => $metrics['slug'] ?? 'unknown',
         ]);
 
         try {
             // Verificar se Cache está disponível
-            if (!$this->isCacheAvailable()) {
+            if (! $this->isCacheAvailable()) {
                 Log::warning('RedirectMetricsCollector: Cache not available, skipping metrics collection');
+
                 return;
             }
 
@@ -98,7 +99,7 @@ class RedirectMetricsCollector
 
             Log::info('RedirectMetricsCollector: Time variables set', [
                 'hour' => $hour,
-                'day' => $day
+                'day' => $day,
             ]);
 
             // Métricas por hora de redirecionamentos
@@ -120,7 +121,7 @@ class RedirectMetricsCollector
 
             Log::info('RedirectMetricsCollector: Current hourly metrics', [
                 'total_redirects' => $hourMetrics['total_redirects'],
-                'unique_ips_count' => count($hourMetrics['unique_ips'])
+                'unique_ips_count' => count($hourMetrics['unique_ips']),
             ]);
 
             $hourMetrics['total_redirects']++;
@@ -163,7 +164,7 @@ class RedirectMetricsCollector
                 'key' => $hourKey,
                 'total_redirects' => $hourMetrics['total_redirects'],
                 'successful' => $hourMetrics['successful_redirects'],
-                'failed' => $hourMetrics['failed_redirects']
+                'failed' => $hourMetrics['failed_redirects'],
             ]);
 
             Cache::put($hourKey, $hourMetrics, 3600); // 1 hora
@@ -186,7 +187,7 @@ class RedirectMetricsCollector
             $dayMetrics['unique_ips_count'] = count($hourMetrics['unique_ips']);
 
             // Distribuição por hora do dia
-            $currentHour = (int)now()->format('H');
+            $currentHour = (int) now()->format('H');
             $dayMetrics['hourly_distribution'][$currentHour] =
                 ($dayMetrics['hourly_distribution'][$currentHour] ?? 0) + 1;
 
@@ -227,7 +228,7 @@ class RedirectMetricsCollector
         } catch (\Exception $e) {
             Log::error('Failed to collect redirect metrics', [
                 'error' => $e->getMessage(),
-                'metrics' => $metrics
+                'metrics' => $metrics,
             ]);
         }
     }
@@ -239,8 +240,9 @@ class RedirectMetricsCollector
     {
         Log::info('RedirectMetricsCollector: Getting country for IP', ['ip' => $ip]);
 
-        if (!$ip || in_array($ip, ['127.0.0.1', '::1'])) {
+        if (! $ip || in_array($ip, ['127.0.0.1', '::1'])) {
             Log::info('RedirectMetricsCollector: Localhost IP detected');
+
             return 'localhost';
         }
 
@@ -251,6 +253,7 @@ class RedirectMetricsCollector
 
             if ($cachedCountry !== null) {
                 Log::info('RedirectMetricsCollector: Country found in cache', ['country' => $cachedCountry]);
+
                 return $cachedCountry;
             }
 
@@ -261,10 +264,11 @@ class RedirectMetricsCollector
             $location = $geoip->getLocation($ip);
 
             // Verificar se a localização foi encontrada (não é default)
-            if (!$location->default && $location->country) {
+            if (! $location->default && $location->country) {
                 Log::info('RedirectMetricsCollector: Country found via GeoIP', ['country' => $location->country]);
                 // Cache por 24 horas
                 Cache::put($cacheKey, $location->country, 86400);
+
                 return $location->country;
             }
 
@@ -278,7 +282,7 @@ class RedirectMetricsCollector
                 'ip' => $ip,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
         }
 
@@ -290,7 +294,7 @@ class RedirectMetricsCollector
      */
     private function getDeviceType(?string $userAgent): string
     {
-        if (!$userAgent) {
+        if (! $userAgent) {
             return 'unknown';
         }
 
@@ -316,11 +320,12 @@ class RedirectMetricsCollector
      */
     private function extractDomain(?string $referer): string
     {
-        if (!$referer || $referer === '-') {
+        if (! $referer || $referer === '-') {
             return 'Direct';
         }
 
         $domain = parse_url($referer, PHP_URL_HOST);
+
         return $domain ?: 'Unknown';
     }
 
@@ -330,7 +335,7 @@ class RedirectMetricsCollector
     private function isCacheAvailable(): bool
     {
         try {
-            $testKey = 'cache_test_redirect_' . uniqid();
+            $testKey = 'cache_test_redirect_'.uniqid();
             Log::info('RedirectMetricsCollector: Testing cache availability', ['test_key' => $testKey]);
 
             // Testar operação de cache simples
@@ -343,17 +348,20 @@ class RedirectMetricsCollector
                 Log::info('RedirectMetricsCollector: Cache is available and working');
                 // Limpar teste
                 Cache::forget($testKey);
+
                 return true;
             } else {
                 Log::warning('RedirectMetricsCollector: Cache write succeeded but read failed');
+
                 return false;
             }
         } catch (\Exception $e) {
             Log::error('RedirectMetricsCollector: Cache not available', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
+
             return false;
         }
     }
@@ -376,8 +384,9 @@ class RedirectMetricsCollector
             if ($this->isValidIP($cleanIP)) {
                 Log::info('RedirectMetricsCollector: IP captured via real_ip query parameter', [
                     'ip' => $cleanIP,
-                    'source' => 'query_param'
+                    'source' => 'query_param',
                 ]);
+
                 return $cleanIP;
             }
         }
@@ -388,8 +397,9 @@ class RedirectMetricsCollector
             if ($this->isValidIP($cleanIP)) {
                 Log::info('RedirectMetricsCollector: IP captured via X-Real-IP header', [
                     'ip' => $cleanIP,
-                    'source' => 'X-Real-IP'
+                    'source' => 'X-Real-IP',
                 ]);
+
                 return $cleanIP;
             }
         }
@@ -404,8 +414,9 @@ class RedirectMetricsCollector
                 Log::info('RedirectMetricsCollector: IP captured via X-Forwarded-For header', [
                     'ip' => $clientIP,
                     'source' => 'X-Forwarded-For',
-                    'full_chain' => $forwardedFor
+                    'full_chain' => $forwardedFor,
                 ]);
+
                 return $clientIP;
             }
         }
@@ -416,8 +427,9 @@ class RedirectMetricsCollector
             if ($this->isValidIP($cleanIP)) {
                 Log::info('RedirectMetricsCollector: IP captured via CF-Connecting-IP header', [
                     'ip' => $cleanIP,
-                    'source' => 'Cloudflare'
+                    'source' => 'Cloudflare',
                 ]);
+
                 return $cleanIP;
             }
         }
@@ -428,7 +440,7 @@ class RedirectMetricsCollector
         Log::warning('RedirectMetricsCollector: Using fallback IP (may be proxy IP)', [
             'ip' => $fallbackIP,
             'source' => 'request->ip()',
-            'warning' => 'This might be proxy IP, not real user IP'
+            'warning' => 'This might be proxy IP, not real user IP',
         ]);
 
         return $fallbackIP;
@@ -440,7 +452,7 @@ class RedirectMetricsCollector
     private function isValidIP(string $ip): bool
     {
         // Validação básica de formato
-        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+        if (! filter_var($ip, FILTER_VALIDATE_IP)) {
             return false;
         }
 
@@ -449,6 +461,7 @@ class RedirectMetricsCollector
             if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                 return true;
             }
+
             return false;
         }
 

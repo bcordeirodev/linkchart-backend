@@ -12,15 +12,15 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
     {
         Link::findOrFail($linkId);
 
-        if (!Click::where('link_id', $linkId)->exists()) {
+        if (! Click::where('link_id', $linkId)->exists()) {
             return ['top_countries' => [], 'top_states' => [], 'top_cities' => []];
         }
 
         return [
-            'heatmap_data'  => $this->getHeatmapData($linkId),
+            'heatmap_data' => $this->getHeatmapData($linkId),
             'top_countries' => $this->getTopCountriesOptimized($linkId),
-            'top_states'    => $this->getTopStatesOptimized($linkId),
-            'top_cities'    => $this->getTopCitiesOptimized($linkId),
+            'top_states' => $this->getTopStatesOptimized($linkId),
+            'top_cities' => $this->getTopCitiesOptimized($linkId),
         ];
     }
 
@@ -33,17 +33,17 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->whereNotNull('country')->where('country', '!=', 'localhost')->where('country', '!=', '')
             ->groupBy('latitude', 'longitude', 'city', 'country', 'iso_code', 'currency', 'state_name', 'continent', 'timezone')
             ->orderBy('clicks', 'desc')->get()
-            ->map(fn($r) => [
-                'lat'        => (float) $r->latitude,
-                'lng'        => (float) $r->longitude,
-                'city'       => $r->city ?: 'Cidade Desconhecida',
-                'country'    => $r->country,
-                'clicks'     => (int) $r->clicks,
-                'iso_code'   => $r->iso_code,
-                'currency'   => $r->currency,
+            ->map(fn ($r) => [
+                'lat' => (float) $r->latitude,
+                'lng' => (float) $r->longitude,
+                'city' => $r->city ?: 'Cidade Desconhecida',
+                'country' => $r->country,
+                'clicks' => (int) $r->clicks,
+                'iso_code' => $r->iso_code,
+                'currency' => $r->currency,
                 'state_name' => $r->state_name,
-                'continent'  => $r->continent,
-                'timezone'   => $r->timezone,
+                'continent' => $r->continent,
+                'timezone' => $r->timezone,
                 'last_click' => $r->last_click,
             ])
             ->toArray();
@@ -57,7 +57,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->whereNotNull('country')->where('country', '!=', 'localhost')
             ->groupBy('country', 'iso_code', 'currency')
             ->orderBy('clicks', 'desc')->limit(10)->get()
-            ->map(fn($r) => ['country' => $r->country, 'iso_code' => $r->iso_code, 'clicks' => (int) $r->clicks, 'currency' => $r->currency])
+            ->map(fn ($r) => ['country' => $r->country, 'iso_code' => $r->iso_code, 'clicks' => (int) $r->clicks, 'currency' => $r->currency])
             ->toArray();
     }
 
@@ -68,7 +68,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->where('link_id', $linkId)->whereNotNull('state')
             ->groupBy('country', 'state', 'state_name')
             ->orderBy('clicks', 'desc')->limit(10)->get()
-            ->map(fn($r) => ['country' => $r->country, 'state' => $r->state, 'state_name' => $r->state_name, 'clicks' => (int) $r->clicks])
+            ->map(fn ($r) => ['country' => $r->country, 'state' => $r->state, 'state_name' => $r->state_name, 'clicks' => (int) $r->clicks])
             ->toArray();
     }
 
@@ -79,7 +79,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->where('link_id', $linkId)->whereNotNull('city')
             ->groupBy('city', 'country', 'state')
             ->orderBy('clicks', 'desc')->limit(10)->get()
-            ->map(fn($r) => ['city' => $r->city, 'country' => $r->country, 'state' => $r->state, 'clicks' => (int) $r->clicks])
+            ->map(fn ($r) => ['city' => $r->city, 'country' => $r->country, 'state' => $r->state, 'clicks' => (int) $r->clicks])
             ->toArray();
     }
 }

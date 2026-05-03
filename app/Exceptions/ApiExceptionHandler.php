@@ -57,7 +57,7 @@ class ApiExceptionHandler extends ExceptionHandler
                 'line' => $e->getLine(),
                 'status_code' => $statusCode,
                 'timestamp' => now()->toISOString(),
-                'trace_hash' => md5($e->getTraceAsString()) // Para agrupar erros similares
+                'trace_hash' => md5($e->getTraceAsString()), // Para agrupar erros similares
             ];
 
             // Atualizar contadores de erro por dia
@@ -66,7 +66,7 @@ class ApiExceptionHandler extends ExceptionHandler
                 'total_errors' => 0,
                 'by_status_code' => [],
                 'by_exception_class' => [],
-                'unique_errors' => []
+                'unique_errors' => [],
             ]);
 
             $dayErrors['total_errors']++;
@@ -77,7 +77,7 @@ class ApiExceptionHandler extends ExceptionHandler
 
             // Agrupar erros únicos por hash do trace
             $traceHash = $errorData['trace_hash'];
-            if (!isset($dayErrors['unique_errors'][$traceHash])) {
+            if (! isset($dayErrors['unique_errors'][$traceHash])) {
                 $dayErrors['unique_errors'][$traceHash] = [
                     'first_occurrence' => now()->toISOString(),
                     'count' => 0,
@@ -98,7 +98,7 @@ class ApiExceptionHandler extends ExceptionHandler
             $hourKey = "errors:hour:{$hour}";
             $hourErrors = Cache::get($hourKey, [
                 'total_errors' => 0,
-                'by_status_code' => []
+                'by_status_code' => [],
             ]);
 
             $hourErrors['total_errors']++;
@@ -111,7 +111,7 @@ class ApiExceptionHandler extends ExceptionHandler
             // Não deixar erro de coleta quebrar a aplicação
             Log::error('Failed to collect error metrics', [
                 'original_error' => $e->getMessage(),
-                'collection_error' => $collectionError->getMessage()
+                'collection_error' => $collectionError->getMessage(),
             ]);
         }
     }
@@ -148,7 +148,7 @@ class ApiExceptionHandler extends ExceptionHandler
                 'total_errors' => 0,
                 'by_endpoint' => [],
                 'by_user' => [],
-                'errors' => []
+                'errors' => [],
             ]);
 
             $apiErrors['total_errors']++;
@@ -171,7 +171,7 @@ class ApiExceptionHandler extends ExceptionHandler
         } catch (\Exception $collectionError) {
             Log::error('Failed to collect API error', [
                 'original_error' => $e->getMessage(),
-                'collection_error' => $collectionError->getMessage()
+                'collection_error' => $collectionError->getMessage(),
             ]);
         }
     }
@@ -197,6 +197,7 @@ class ApiExceptionHandler extends ExceptionHandler
         ];
 
         $exceptionClass = get_class($e);
+
         return $exceptionMap[$exceptionClass] ?? 500;
     }
 
@@ -215,7 +216,7 @@ class ApiExceptionHandler extends ExceptionHandler
         $method = $request->method();
 
         if (str_starts_with($path, 'api/auth/')) {
-            return 'auth.' . str_replace('api/auth/', '', $path);
+            return 'auth.'.str_replace('api/auth/', '', $path);
         }
 
         if (str_starts_with($path, 'api/link')) {
@@ -226,7 +227,7 @@ class ApiExceptionHandler extends ExceptionHandler
             return 'link.redirect';
         }
 
-        return $method . ':' . $path;
+        return $method.':'.$path;
     }
 
     /**
@@ -236,6 +237,7 @@ class ApiExceptionHandler extends ExceptionHandler
     {
         try {
             $user = auth()->guard('api')->user();
+
             return $user ? $user->id : null;
         } catch (\Exception $e) {
             return null;

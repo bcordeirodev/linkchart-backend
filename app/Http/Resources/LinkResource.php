@@ -15,38 +15,36 @@ class LinkResource extends JsonResource
     public function toArray($request)
     {
         return [
-            'id'              => $this->id,
-            'user_id'         => $this->user_id,
-            'slug'            => $this->slug,
-            'original_url'    => $this->original_url,
-            'title'           => $this->title,
-            'description'     => $this->description,
-            'expires_at'      => $this->formattedExpiresAt(),
-            'starts_in'       => $this->formattedStartsIn(),
-            'is_active'       => $this->is_active,
-            'created_at'      => $this->formattedCreatedAt(),
-            'updated_at'      => $this->updated_at->format('d/m/Y H:i:s'),
-            'is_expired'      => $this->isExpired(),
+            'id' => $this->id,
+            'user_id' => $this->user_id,
+            'slug' => $this->slug,
+            'original_url' => $this->original_url,
+            'title' => $this->title,
+            'description' => $this->description,
+            'expires_at' => $this->formattedExpiresAt(),
+            'starts_in' => $this->formattedStartsIn(),
+            'is_active' => $this->is_active,
+            'created_at' => $this->formattedCreatedAt(),
+            'updated_at' => $this->updated_at->format('d/m/Y H:i:s'),
+            'is_expired' => $this->isExpired(),
             'is_active_valid' => $this->isActiveAndNotExpired(),
-            'short_url'       => $this->getShortedUrl(),
-            'shorted_url'     => $this->getShortedUrl(), // Mantido para compatibilidade
-            'clicks'          => $this->clicks()->count(),
-            'utm_source'      => $this->utm_source,
-            'utm_medium'      => $this->utm_medium,
-            'utm_campaign'    => $this->utm_campaign,
-            'utm_term'        => $this->utm_term,
-            'utm_content'     => $this->utm_content,
+            'short_url' => $this->getShortedUrl(),
+            'shorted_url' => $this->getShortedUrl(), // Mantido para compatibilidade
+            'clicks' => $this->clicks()->count(),
+            'utm_source' => $this->utm_source,
+            'utm_medium' => $this->utm_medium,
+            'utm_campaign' => $this->utm_campaign,
+            'utm_term' => $this->utm_term,
+            'utm_content' => $this->utm_content,
         ];
     }
 
     /**
      * Check if the link is expired.
-     *
-     * @return bool
      */
     public function isExpired(): bool
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return false;
         }
 
@@ -61,8 +59,6 @@ class LinkResource extends JsonResource
 
     /**
      * Get the formatted creation date.
-     *
-     * @return string
      */
     public function formattedCreatedAt(): string
     {
@@ -71,12 +67,10 @@ class LinkResource extends JsonResource
 
     /**
      * Get the formatted expiration date.
-     *
-     * @return string|null
      */
     public function formattedExpiresAt(): ?string
     {
-        if (!$this->expires_at) {
+        if (! $this->expires_at) {
             return null;
         }
 
@@ -91,12 +85,10 @@ class LinkResource extends JsonResource
 
     /**
      * Get the formatted starts in date.
-     *
-     * @return string|null
      */
     public function formattedStartsIn(): ?string
     {
-        if (!$this->starts_in) {
+        if (! $this->starts_in) {
             return null;
         }
 
@@ -111,11 +103,9 @@ class LinkResource extends JsonResource
 
     /**
      * Check if the link is active and not expired.
-     *
-     * @return bool
      */
     public function isActiveAndNotExpired(): bool
     {
-        return $this->is_active && !$this->isExpired();
+        return $this->is_active && ! $this->isExpired();
     }
 }

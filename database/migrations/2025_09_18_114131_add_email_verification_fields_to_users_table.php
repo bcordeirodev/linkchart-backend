@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (!Schema::hasColumn('users', 'email_verified')) {
+            if (! Schema::hasColumn('users', 'email_verified')) {
                 $table->boolean('email_verified')->default(false)->after('email');
             }
-            if (!Schema::hasColumn('users', 'email_verification_sent_at')) {
+            if (! Schema::hasColumn('users', 'email_verification_sent_at')) {
                 $table->timestamp('email_verification_sent_at')->nullable()->after('email_verified');
             }
         });

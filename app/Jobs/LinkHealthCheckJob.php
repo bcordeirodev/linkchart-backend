@@ -16,16 +16,17 @@ class LinkHealthCheckJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 1;
+
     public int $timeout = 300;
 
     public function handle(): void
     {
         $http = new Client([
-            'timeout'         => 5,
+            'timeout' => 5,
             'connect_timeout' => 3,
             'allow_redirects' => ['max' => 5],
-            'verify'          => false,
-            'http_errors'     => false,
+            'verify' => false,
+            'http_errors' => false,
         ]);
 
         Link::where('is_active', true)
@@ -34,8 +35,8 @@ class LinkHealthCheckJob implements ShouldQueue
                 foreach ($links as $link) {
                     try {
                         $response = $http->head($link->original_url);
-                        $code     = $response->getStatusCode();
-                        $status   = ($code >= 200 && $code < 400) ? 'ok' : 'error';
+                        $code = $response->getStatusCode();
+                        $status = ($code >= 200 && $code < 400) ? 'ok' : 'error';
                     } catch (\Exception $e) {
                         $status = 'error';
                     }
@@ -43,7 +44,7 @@ class LinkHealthCheckJob implements ShouldQueue
                     DB::table('links')
                         ->where('id', $link->id)
                         ->update([
-                            'health_status'     => $status,
+                            'health_status' => $status,
                             'health_checked_at' => now(),
                         ]);
                 }

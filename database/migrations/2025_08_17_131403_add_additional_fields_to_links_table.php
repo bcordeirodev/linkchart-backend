@@ -29,11 +29,11 @@ return new class extends Migration
      */
     public function down(): void
     {
-                Schema::table('links', function (Blueprint $table) {
+        Schema::table('links', function (Blueprint $table) {
             $table->dropColumn([
                 'title', 'description',
                 'utm_source', 'utm_medium', 'utm_campaign',
-                'utm_term', 'utm_content'
+                'utm_term', 'utm_content',
             ]);
         });
     }

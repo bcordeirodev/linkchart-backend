@@ -2,11 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 
 class LinkFourClicksSeeder extends Seeder
 {
@@ -180,8 +179,9 @@ class LinkFourClicksSeeder extends Seeder
 
         // Verificar se o link existe
         $link = Link::find(4);
-        if (!$link) {
+        if (! $link) {
             $this->command->error('❌ Link com ID 4 não encontrado!');
+
             return;
         }
 
@@ -288,7 +288,7 @@ class LinkFourClicksSeeder extends Seeder
             6 => 4, 7 => 6, 8 => 9, 9 => 12, 10 => 14, 11 => 16,
             12 => 17, 13 => 18, 14 => 19, 15 => 20, 16 => 19,
             17 => 17, 18 => 16, 19 => 15, 20 => 13, 21 => 11,
-            22 => 8, 23 => 5
+            22 => 8, 23 => 5,
         ];
 
         return $this->weightedRandom($hourWeights);
@@ -321,12 +321,14 @@ class LinkFourClicksSeeder extends Seeder
         ];
 
         $index = $this->weightedRandom($weights);
+
         return $this->countries[$index];
     }
 
     private function getCityData(string $countryCode): array
     {
         $cities = $this->cities[$countryCode] ?? $this->cities['DEFAULT'];
+
         return $cities[array_rand($cities)];
     }
 
@@ -338,6 +340,7 @@ class LinkFourClicksSeeder extends Seeder
     private function getUserAgent(string $device): string
     {
         $agents = $this->userAgents[$device] ?? $this->userAgents['desktop'];
+
         return $agents[array_rand($agents)];
     }
 
@@ -382,7 +385,7 @@ class LinkFourClicksSeeder extends Seeder
         $ranges = $ipRanges[$countryCode] ?? $ipRanges['DEFAULT'];
         $prefix = $ranges[array_rand($ranges)];
 
-        return $prefix . mt_rand(1, 254) . '.' . mt_rand(1, 254);
+        return $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
     }
 
     private function weightedRandom(array $weights)
@@ -456,7 +459,7 @@ class LinkFourClicksSeeder extends Seeder
         $this->command->info("\n📱 DISTRIBUIÇÃO POR DISPOSITIVO:");
         foreach ($deviceStats as $device) {
             $percentage = round(($device->total / $total) * 100, 1);
-            $this->command->info("   " . ucfirst($device->device) . ": {$device->total} clicks ({$percentage}%)");
+            $this->command->info('   '.ucfirst($device->device).": {$device->total} clicks ({$percentage}%)");
         }
 
         // Clicks por continente
@@ -515,23 +518,22 @@ class LinkFourClicksSeeder extends Seeder
         }
 
         $directClicks = Click::where('link_id', 4)
-            ->where(function($q) {
+            ->where(function ($q) {
                 $q->whereNull('referer')
-                  ->orWhere('referer', '-')
-                  ->orWhere('referer', '');
+                    ->orWhere('referer', '-')
+                    ->orWhere('referer', '');
             })
             ->count();
         $directPercentage = round(($directClicks / $total) * 100, 1);
         $this->command->info("   Direct/Unknown: {$directClicks} clicks ({$directPercentage}%)");
 
         $this->command->info("\n🎯 Link ID 4 pronto para testar todos os endpoints de analytics!");
-        $this->command->info("🌐 URL de teste: http://localhost:3000/link/analytic/4");
-        $this->command->info("📡 Endpoints disponíveis:");
-        $this->command->info("   - GET /api/analytics/link/{id}");
-        $this->command->info("   - GET /api/analytics/link/{id}/dashboard");
-        $this->command->info("   - GET /api/analytics/link/{id}/geographic");
-        $this->command->info("   - GET /api/analytics/link/{id}/temporal");
-        $this->command->info("   - GET /api/analytics/link/{id}/audience");
+        $this->command->info('🌐 URL de teste: http://localhost:3000/link/analytic/4');
+        $this->command->info('📡 Endpoints disponíveis:');
+        $this->command->info('   - GET /api/analytics/link/{id}');
+        $this->command->info('   - GET /api/analytics/link/{id}/dashboard');
+        $this->command->info('   - GET /api/analytics/link/{id}/geographic');
+        $this->command->info('   - GET /api/analytics/link/{id}/temporal');
+        $this->command->info('   - GET /api/analytics/link/{id}/audience');
     }
 }
-

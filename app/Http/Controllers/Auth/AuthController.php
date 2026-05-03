@@ -2,14 +2,13 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Models\User;
+use App\Services\EmailVerificationService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
-use App\Models\User;
-use App\Models\EmailVerificationToken;
-use App\Services\EmailVerificationService;
 
 class AuthController extends Controller
 {
@@ -36,7 +35,7 @@ class AuthController extends Controller
                 return response()->json([
                     'error' => 'Validation Error',
                     'message' => 'Dados inválidos fornecidos',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -61,8 +60,8 @@ class AuthController extends Controller
                 'email_verification' => [
                     'sent' => $emailResult['success'],
                     'message' => $emailResult['message'],
-                    'email' => $user->email
-                ]
+                    'email' => $user->email,
+                ],
             ], 201);
 
         } catch (\Exception $e) {
@@ -70,13 +69,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'error' => 'Server Error',
                 'message' => 'Erro ao registrar usuário. Verifique os logs.',
-                'error_id' => uniqid('reg_')
+                'error_id' => uniqid('reg_'),
             ], 500);
         }
     }
@@ -96,16 +95,16 @@ class AuthController extends Controller
                 return response()->json([
                     'error' => 'Validation Error',
                     'message' => 'Dados inválidos fornecidos',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
             $credentials = $request->only('email', 'password');
 
-            if (!$token = JWTAuth::attempt($credentials)) {
+            if (! $token = JWTAuth::attempt($credentials)) {
                 return response()->json([
                     'error' => 'Unauthorized',
-                    'message' => 'Credenciais inválidas'
+                    'message' => 'Credenciais inválidas',
                 ], 401);
             }
 
@@ -113,7 +112,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Login realizado com sucesso',
                 'token' => $token,
-                'user' => auth()->user()
+                'user' => auth()->user(),
             ]);
 
         } catch (\Exception $e) {
@@ -121,13 +120,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'error' => 'Server Error',
                 'message' => 'Erro ao fazer login. Verifique os logs.',
-                'error_id' => uniqid('login_')
+                'error_id' => uniqid('login_'),
             ], 500);
         }
     }
@@ -142,13 +141,13 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Logout realizado com sucesso'
+                'message' => 'Logout realizado com sucesso',
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Server Error',
-                'message' => 'Erro ao fazer logout'
+                'message' => 'Erro ao fazer logout',
             ], 500);
         }
     }
@@ -161,12 +160,12 @@ class AuthController extends Controller
         try {
             return response()->json([
                 'success' => true,
-                'user' => auth()->user()
+                'user' => auth()->user(),
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Server Error',
-                'message' => 'Erro ao obter informações do usuário'
+                'message' => 'Erro ao obter informações do usuário',
             ], 500);
         }
     }
@@ -181,12 +180,12 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'token' => $token
+                'token' => $token,
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Server Error',
-                'message' => 'Erro ao renovar token'
+                'message' => 'Erro ao renovar token',
             ], 500);
         }
     }
@@ -199,14 +198,14 @@ class AuthController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
-                'email' => 'required|string|email|max:255|unique:users,email,' . auth()->id(),
+                'email' => 'required|string|email|max:255|unique:users,email,'.auth()->id(),
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'error' => 'Validation Error',
                     'message' => 'Dados inválidos fornecidos',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -216,7 +215,7 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Perfil atualizado com sucesso',
-                'user' => $user->fresh() // Retorna dados atualizados
+                'user' => $user->fresh(), // Retorna dados atualizados
             ]);
 
         } catch (\Exception $e) {
@@ -225,13 +224,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'error' => 'Server Error',
                 'message' => 'Erro ao atualizar perfil. Verifique os logs.',
-                'error_id' => uniqid('profile_')
+                'error_id' => uniqid('profile_'),
             ], 500);
         }
     }
@@ -251,28 +250,28 @@ class AuthController extends Controller
                 return response()->json([
                     'error' => 'Validation Error',
                     'message' => 'Dados inválidos fornecidos',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
             $user = auth()->user();
 
             // Verificar senha atual
-            if (!Hash::check($request->current_password, $user->password)) {
+            if (! Hash::check($request->current_password, $user->password)) {
                 return response()->json([
                     'error' => 'Invalid Password',
-                    'message' => 'Senha atual incorreta'
+                    'message' => 'Senha atual incorreta',
                 ], 422);
             }
 
             // Atualizar senha
             $user->update([
-                'password' => Hash::make($request->new_password)
+                'password' => Hash::make($request->new_password),
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Senha alterada com sucesso'
+                'message' => 'Senha alterada com sucesso',
             ]);
 
         } catch (\Exception $e) {
@@ -281,13 +280,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'error' => 'Server Error',
                 'message' => 'Erro ao alterar senha. Verifique os logs.',
-                'error_id' => uniqid('pwd_')
+                'error_id' => uniqid('pwd_'),
             ], 500);
         }
     }
@@ -299,14 +298,14 @@ class AuthController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'token' => 'required|string|size:64'
+                'token' => 'required|string|size:64',
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Token inválido',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -320,13 +319,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno ao verificar email',
-                'error_id' => uniqid('verify_')
+                'error_id' => uniqid('verify_'),
             ], 500);
         }
     }
@@ -339,10 +338,10 @@ class AuthController extends Controller
         try {
             $user = auth()->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuário não autenticado'
+                    'message' => 'Usuário não autenticado',
                 ], 401);
             }
 
@@ -350,7 +349,7 @@ class AuthController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Email já foi verificado',
-                    'type' => 'already_verified'
+                    'type' => 'already_verified',
                 ], 400);
             }
 
@@ -364,13 +363,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno ao reenviar email de verificação',
-                'error_id' => uniqid('resend_')
+                'error_id' => uniqid('resend_'),
             ], 500);
         }
     }
@@ -382,14 +381,14 @@ class AuthController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'email' => 'required|email|max:255'
+                'email' => 'required|email|max:255',
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Email inválido',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -406,13 +405,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno ao processar solicitação',
-                'error_id' => uniqid('forgot_')
+                'error_id' => uniqid('forgot_'),
             ], 500);
         }
     }
@@ -425,14 +424,14 @@ class AuthController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'token' => 'required|string|size:64',
-                'password' => 'required|string|min:6|confirmed'
+                'password' => 'required|string|min:6|confirmed',
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Dados inválidos',
-                    'errors' => $validator->errors()
+                    'errors' => $validator->errors(),
                 ], 422);
             }
 
@@ -449,13 +448,13 @@ class AuthController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
                 'message' => 'Erro interno ao redefinir senha',
-                'error_id' => uniqid('reset_')
+                'error_id' => uniqid('reset_'),
             ], 500);
         }
     }
@@ -468,10 +467,10 @@ class AuthController extends Controller
         try {
             $user = auth()->user();
 
-            if (!$user) {
+            if (! $user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Usuário não autenticado'
+                    'message' => 'Usuário não autenticado',
                 ], 401);
             }
 
@@ -479,14 +478,14 @@ class AuthController extends Controller
                 'success' => true,
                 'email_verified' => $user->hasVerifiedEmail(),
                 'email' => $user->email,
-                'can_resend' => !$user->hasVerifiedEmail() && $user->canResendVerificationEmail(),
-                'last_sent' => $user->email_verification_sent_at?->toISOString()
+                'can_resend' => ! $user->hasVerifiedEmail() && $user->canResendVerificationEmail(),
+                'last_sent' => $user->email_verification_sent_at?->toISOString(),
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erro ao verificar status'
+                'message' => 'Erro ao verificar status',
             ], 500);
         }
     }

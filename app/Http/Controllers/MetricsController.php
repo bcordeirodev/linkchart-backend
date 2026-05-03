@@ -26,7 +26,7 @@ class MetricsController
         try {
             $userId = auth()->guard('api')->id();
 
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['error' => 'Usuário não autenticado'], 401);
             }
 
@@ -47,7 +47,7 @@ class MetricsController
                         'total_links' => $basicMetrics['total_links'],
                         'active_links' => $basicMetrics['active_links'],
                         'total_clicks' => $basicMetrics['total_clicks'],
-                        'avg_clicks_per_link' => $basicMetrics['avg_clicks_per_link']
+                        'avg_clicks_per_link' => $basicMetrics['avg_clicks_per_link'],
                     ],
 
                     // Métricas para Analytics
@@ -55,7 +55,7 @@ class MetricsController
                         'total_clicks' => $basicMetrics['total_clicks'],
                         'unique_visitors' => $basicMetrics['unique_visitors'],
                         'conversion_rate' => $basicMetrics['conversion_rate'],
-                        'avg_daily_clicks' => round($basicMetrics['recent_clicks'] / max(1, $hours / 24), 1)
+                        'avg_daily_clicks' => round($basicMetrics['recent_clicks'] / max(1, $hours / 24), 1),
                     ],
 
                     // Métricas de Performance
@@ -63,19 +63,19 @@ class MetricsController
                         'total_redirects_24h' => $performanceMetrics['total_redirects_24h'],
                         'unique_visitors' => $performanceMetrics['unique_visitors'],
                         'avg_response_time' => $performanceMetrics['avg_response_time'],
-                        'success_rate' => $performanceMetrics['success_rate']
+                        'success_rate' => $performanceMetrics['success_rate'],
                     ],
 
                     // Métricas Geográficas
                     'geographic' => [
                         'countries_reached' => $geographicMetrics['countries_reached'],
-                        'cities_reached' => $geographicMetrics['cities_reached']
+                        'cities_reached' => $geographicMetrics['cities_reached'],
                     ],
 
                     // Métricas de Audiência
                     'audience' => [
-                        'device_types' => $audienceMetrics['device_types']
-                    ]
+                        'device_types' => $audienceMetrics['device_types'],
+                    ],
                 ],
 
                 // Summary geral (compatibilidade com frontend atual)
@@ -87,14 +87,14 @@ class MetricsController
                     'success_rate' => $performanceMetrics['success_rate'],
                     'avg_response_time' => $performanceMetrics['avg_response_time'],
                     'countries_reached' => $geographicMetrics['countries_reached'],
-                    'links_with_traffic' => $basicMetrics['links_with_traffic']
-                ]
+                    'links_with_traffic' => $basicMetrics['links_with_traffic'],
+                ],
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao carregar métricas unificadas',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -108,7 +108,7 @@ class MetricsController
         try {
             $userId = auth()->guard('api')->id();
 
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['error' => 'Usuário não autenticado'], 401);
             }
 
@@ -121,7 +121,7 @@ class MetricsController
                         'total_links' => $metrics['total_links'],
                         'active_links' => $metrics['active_links'],
                         'total_clicks' => $metrics['total_clicks'],
-                        'avg_clicks_per_link' => $metrics['avg_clicks_per_link']
+                        'avg_clicks_per_link' => $metrics['avg_clicks_per_link'],
                     ];
                     break;
 
@@ -131,7 +131,7 @@ class MetricsController
                         'total_clicks' => $metrics['total_clicks'],
                         'unique_visitors' => $metrics['unique_visitors'],
                         'conversion_rate' => $metrics['conversion_rate'],
-                        'avg_daily_clicks' => round($metrics['recent_clicks'] / max(1, $hours / 24), 1)
+                        'avg_daily_clicks' => round($metrics['recent_clicks'] / max(1, $hours / 24), 1),
                     ];
                     break;
 
@@ -155,13 +155,13 @@ class MetricsController
                 'success' => true,
                 'category' => $category,
                 'timeframe' => "{$hours}h",
-                'metrics' => $response
+                'metrics' => $response,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'error' => "Erro ao carregar métricas da categoria {$category}",
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -180,7 +180,7 @@ class MetricsController
                 ->where('user_id', $userId)
                 ->first();
 
-            if (!$link) {
+            if (! $link) {
                 return response()->json(['error' => 'Link não encontrado'], 404);
             }
 
@@ -189,13 +189,13 @@ class MetricsController
             return response()->json([
                 'success' => true,
                 'link_id' => $linkId,
-                'metrics' => $metrics
+                'metrics' => $metrics,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao carregar métricas do link',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -209,7 +209,7 @@ class MetricsController
         try {
             $userId = auth()->guard('api')->id();
 
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['error' => 'Usuário não autenticado'], 401);
             }
 
@@ -233,7 +233,7 @@ class MetricsController
                     'current' => $current,
                     'previous' => $previous,
                     'change_percent' => $change,
-                    'trend' => $change > 0 ? 'up' : ($change < 0 ? 'down' : 'stable')
+                    'trend' => $change > 0 ? 'up' : ($change < 0 ? 'down' : 'stable'),
                 ];
             }
 
@@ -241,13 +241,13 @@ class MetricsController
                 'success' => true,
                 'current_period' => "{$currentPeriod}h",
                 'previous_period' => "{$previousPeriod}h",
-                'comparison' => $comparison
+                'comparison' => $comparison,
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao comparar métricas',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
@@ -261,7 +261,7 @@ class MetricsController
         try {
             $userId = auth()->guard('api')->id();
 
-            if (!$userId) {
+            if (! $userId) {
                 return response()->json(['error' => 'Usuário não autenticado'], 401);
             }
 
@@ -269,13 +269,13 @@ class MetricsController
 
             return response()->json([
                 'success' => true,
-                'message' => 'Cache de métricas limpo com sucesso'
+                'message' => 'Cache de métricas limpo com sucesso',
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'error' => 'Erro ao limpar cache',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ], 500);
         }
     }

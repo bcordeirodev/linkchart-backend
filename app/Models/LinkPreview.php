@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 class LinkPreview extends Model
 {
     public $timestamps = false;
+
     protected $primaryKey = 'link_id';
+
     public $incrementing = false;
 
     protected $fillable = [

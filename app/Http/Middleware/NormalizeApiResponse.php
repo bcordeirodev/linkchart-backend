@@ -22,7 +22,7 @@ class NormalizeApiResponse
     {
         $response = $next($request);
 
-        if (!$response instanceof JsonResponse) {
+        if (! $response instanceof JsonResponse) {
             return $response;
         }
 
@@ -52,6 +52,7 @@ class NormalizeApiResponse
             if (array_key_exists('message', $payload)) {
                 $envelope['message'] = $payload['message'];
             }
+
             return $envelope;
         }
 
@@ -60,7 +61,7 @@ class NormalizeApiResponse
 
     private function normalizeError(mixed $payload, int $status): array
     {
-        if (!is_array($payload)) {
+        if (! is_array($payload)) {
             return ['error' => [
                 'code' => $this->codeForStatus($status),
                 'message' => (string) $payload,
@@ -89,7 +90,7 @@ class NormalizeApiResponse
         }
 
         $error = ['code' => $code, 'message' => $message];
-        if (!empty($details)) {
+        if (! empty($details)) {
             $error['details'] = $details;
         }
 
@@ -126,6 +127,7 @@ class NormalizeApiResponse
     private function slugifyCode(string $raw): string
     {
         $slug = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $raw));
+
         return trim($slug, '_');
     }
 }

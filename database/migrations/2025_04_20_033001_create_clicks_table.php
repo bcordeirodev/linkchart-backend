@@ -22,8 +22,7 @@ return new class extends Migration
             $table->string('device')->nullable(); // mobile/desktop/tablet
             $table->timestamps();
         });
-}
-
+    }
 
     /**
      * Reverse the migrations.

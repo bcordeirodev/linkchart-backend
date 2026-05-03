@@ -6,7 +6,6 @@ use App\Models\Click;
 use App\Models\Link;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Carbon;
 
 class ChartRepository
 {
@@ -16,9 +15,9 @@ class ChartRepository
      */
     public function totalClicks($userId = null, $linkId = null)
     {
-        return Click::when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-                    ->when($linkId, fn($query) => $query->where('link_id', $linkId))
-                    ->count();
+        return Click::when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
+            ->count();
     }
 
     /**
@@ -28,8 +27,8 @@ class ChartRepository
     public function clicksByDay($days = 30, $userId = null, $linkId = null)
     {
         return Click::select(DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('day')
             ->orderByDesc('day')
             ->limit($days)
@@ -42,8 +41,8 @@ class ChartRepository
     public function clicksByCountry($userId = null, $linkId = null)
     {
         return Click::select('country', DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('country')
             ->orderByDesc('total')
             ->get();
@@ -55,8 +54,8 @@ class ChartRepository
     public function clicksByCity($userId = null, $linkId = null)
     {
         return Click::select('city', DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('city')
             ->orderByDesc('total')
             ->get();
@@ -68,8 +67,8 @@ class ChartRepository
     public function clicksByDevice($userId = null, $linkId = null)
     {
         return Click::select('device', DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('device')
             ->orderByDesc('total')
             ->get();
@@ -81,8 +80,8 @@ class ChartRepository
     public function clicksByReferer($userId = null, $linkId = null)
     {
         return Click::select('referer', DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('referer')
             ->orderByDesc('total')
             ->get();
@@ -96,8 +95,8 @@ class ChartRepository
         return DB::table('link_utms')
             ->join('clicks', 'clicks.id', '=', 'link_utms.click_id')
             ->join('links', 'links.id', '=', 'clicks.link_id')
-            ->when($userId, fn($query) => $query->where('links.user_id', $userId))
-            ->when($linkId, fn($query) => $query->where('links.id', $linkId))
+            ->when($userId, fn ($query) => $query->where('links.user_id', $userId))
+            ->when($linkId, fn ($query) => $query->where('links.id', $linkId))
             ->select('link_utms.utm_campaign', DB::raw('COUNT(*) as total'))
             ->groupBy('link_utms.utm_campaign')
             ->orderByDesc('total')
@@ -110,7 +109,7 @@ class ChartRepository
     public function clicksPerLinkByDay($linkId = null, $days = 30)
     {
         return Click::select(DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as total'))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('day')
             ->orderByDesc('day')
             ->limit($days)
@@ -123,7 +122,7 @@ class ChartRepository
     public function topLinks($limit = 10, $userId = null)
     {
         return Link::withCount('clicks')
-            ->when($userId, fn($query) => $query->where('user_id', $userId))
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
             ->orderByDesc('clicks_count')
             ->limit($limit)
             ->get();
@@ -148,8 +147,8 @@ class ChartRepository
     public function clicksGroupedByLinkAndDay($userId = null, $linkId = null)
     {
         return Click::select('link_id', DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('link_id', 'day')
             ->orderByDesc('day')
             ->get();
@@ -161,23 +160,23 @@ class ChartRepository
     public function clicksByUserAgent($userId = null, $linkId = null)
     {
         return Click::select('user_agent', DB::raw('COUNT(*) as total'))
-            ->when($userId, fn($query) => $query->whereHas('link', fn($q) => $q->where('user_id', $userId)))
-            ->when($linkId, fn($query) => $query->where('link_id', $linkId))
+            ->when($userId, fn ($query) => $query->whereHas('link', fn ($q) => $q->where('user_id', $userId)))
+            ->when($linkId, fn ($query) => $query->where('link_id', $linkId))
             ->groupBy('user_agent')
             ->orderByDesc('total')
             ->get();
     }
 
     /**
- * Retorna a quantidade de links criados por dia.
- */
-public function linksCreatedByDay($userId = null, $days = 30)
-{
-    return Link::select(DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as total'))
-        ->when($userId, fn($query) => $query->where('user_id', $userId))
-        ->groupBy('day')
-        ->orderByDesc('day')
-        ->limit($days)
-        ->get();
-}
+     * Retorna a quantidade de links criados por dia.
+     */
+    public function linksCreatedByDay($userId = null, $days = 30)
+    {
+        return Link::select(DB::raw('DATE(created_at) as day'), DB::raw('COUNT(*) as total'))
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->groupBy('day')
+            ->orderByDesc('day')
+            ->limit($days)
+            ->get();
+    }
 }

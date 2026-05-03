@@ -2,10 +2,9 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Mail\Message;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use SendGrid;
 use SendGrid\Mail\Mail as SendGridMail;
 
@@ -24,7 +23,7 @@ class EmailService
             }
 
             $sendgrid = new SendGrid($apiKey);
-            $email = new SendGridMail();
+            $email = new SendGridMail;
 
             // Configurar remetente
             $email->setFrom(
@@ -37,10 +36,10 @@ class EmailService
 
             // Configurar assunto e conteúdo
             $email->setSubject($subject);
-            $email->addContent("text/html", $htmlContent);
+            $email->addContent('text/html', $htmlContent);
 
             if ($textContent) {
-                $email->addContent("text/plain", $textContent);
+                $email->addContent('text/plain', $textContent);
             }
 
             // Enviar email
@@ -50,7 +49,7 @@ class EmailService
                 'to' => $toEmail,
                 'subject' => $subject,
                 'status_code' => $response->statusCode(),
-                'method' => 'SendGrid API'
+                'method' => 'SendGrid API',
             ]);
 
             return [
@@ -58,7 +57,7 @@ class EmailService
                 'message' => 'Email enviado com sucesso via SendGrid API',
                 'to' => $toEmail,
                 'method' => 'SendGrid API',
-                'status_code' => $response->statusCode()
+                'status_code' => $response->statusCode(),
             ];
 
         } catch (\Exception $e) {
@@ -67,14 +66,14 @@ class EmailService
                 'subject' => $subject,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Erro ao enviar email via SendGrid API: ' . $e->getMessage(),
+                'message' => 'Erro ao enviar email via SendGrid API: '.$e->getMessage(),
                 'error' => $e->getMessage(),
-                'method' => 'SendGrid API'
+                'method' => 'SendGrid API',
             ];
         }
     }
@@ -90,7 +89,7 @@ class EmailService
             'timestamp' => now()->format('d/m/Y H:i:s'),
             'environment' => config('app.env'),
             'method' => 'SendGrid API',
-            'api_status' => 'Ativo'
+            'api_status' => 'Ativo',
         ];
 
         $htmlContent = $this->getSendGridTestEmailTemplate($data);
@@ -111,7 +110,7 @@ class EmailService
                 return [
                     'success' => false,
                     'message' => 'SendGrid API Key não configurada',
-                    'config' => $this->getSendGridConfiguration()
+                    'config' => $this->getSendGridConfiguration(),
                 ];
             }
 
@@ -121,20 +120,20 @@ class EmailService
             return [
                 'success' => true,
                 'message' => 'SendGrid API configurada corretamente',
-                'config' => $this->getSendGridConfiguration()
+                'config' => $this->getSendGridConfiguration(),
             ];
 
         } catch (\Exception $e) {
             Log::error('Erro ao testar SendGrid API', [
                 'error' => $e->getMessage(),
-                'config' => $this->getSendGridConfiguration()
+                'config' => $this->getSendGridConfiguration(),
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Erro na SendGrid API: ' . $e->getMessage(),
+                'message' => 'Erro na SendGrid API: '.$e->getMessage(),
                 'error' => $e->getMessage(),
-                'config' => $this->getSendGridConfiguration()
+                'config' => $this->getSendGridConfiguration(),
             ];
         }
     }
@@ -150,7 +149,7 @@ class EmailService
             'from_name' => config('services.sendgrid.from.name'),
             'method' => 'SendGrid API (HTTPS)',
             'port' => '443 (HTTPS)',
-            'smtp_bypass' => 'Sim - Não usa porta 587'
+            'smtp_bypass' => 'Sim - Não usa porta 587',
         ];
     }
 
@@ -167,7 +166,7 @@ class EmailService
                 'environment' => config('app.env'),
                 'smtp_host' => config('mail.mailers.smtp.host'),
                 'smtp_port' => config('mail.mailers.smtp.port'),
-                'encryption' => config('mail.mailers.smtp.port') == 465 ? 'SSL' : 'TLS'
+                'encryption' => config('mail.mailers.smtp.port') == 465 ? 'SSL' : 'TLS',
             ];
 
             Mail::send([], [], function (Message $message) use ($toEmail, $toName, $data) {
@@ -179,14 +178,14 @@ class EmailService
             Log::info('Email de teste enviado com sucesso via Laravel Mail', [
                 'to' => $toEmail,
                 'mailer' => config('mail.default'),
-                'host' => config('mail.mailers.smtp.host')
+                'host' => config('mail.mailers.smtp.host'),
             ]);
 
             return [
                 'success' => true,
                 'message' => 'Email enviado com sucesso via Laravel Mail',
                 'to' => $toEmail,
-                'mailer' => config('mail.default')
+                'mailer' => config('mail.default'),
             ];
 
         } catch (\Exception $e) {
@@ -200,15 +199,15 @@ class EmailService
                     'host' => config('mail.mailers.smtp.host'),
                     'port' => config('mail.mailers.smtp.port'),
                     'username' => config('mail.mailers.smtp.username'),
-                    'from_address' => config('mail.from.address')
-                ]
+                    'from_address' => config('mail.from.address'),
+                ],
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Erro ao enviar email: ' . $e->getMessage(),
+                'message' => 'Erro ao enviar email: '.$e->getMessage(),
                 'error' => $e->getMessage(),
-                'mailer' => config('mail.default')
+                'mailer' => config('mail.default'),
             ];
         }
     }
@@ -226,7 +225,7 @@ class EmailService
                 return [
                     'success' => false,
                     'message' => 'Configurações de email incompletas',
-                    'config' => $config
+                    'config' => $config,
                 ];
             }
 
@@ -239,20 +238,20 @@ class EmailService
             return [
                 'success' => true,
                 'message' => 'Configuração Laravel Mail válida',
-                'config' => $config
+                'config' => $config,
             ];
 
         } catch (\Exception $e) {
             Log::error('Erro na configuração Laravel Mail', [
                 'error' => $e->getMessage(),
-                'config' => $this->getMailConfiguration()
+                'config' => $this->getMailConfiguration(),
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Erro na configuração: ' . $e->getMessage(),
+                'message' => 'Erro na configuração: '.$e->getMessage(),
                 'error' => $e->getMessage(),
-                'config' => $this->getMailConfiguration()
+                'config' => $this->getMailConfiguration(),
             ];
         }
     }
@@ -272,7 +271,7 @@ class EmailService
             'from_address' => config('mail.from.address'),
             'from_name' => config('mail.from.name'),
             'timeout' => config('mail.mailers.smtp.timeout', 'padrão'),
-            'verify_peer' => config('mail.mailers.smtp.verify_peer', 'padrão')
+            'verify_peer' => config('mail.mailers.smtp.verify_peer', 'padrão'),
         ];
     }
 
@@ -294,26 +293,26 @@ class EmailService
 
             Log::info('Email personalizado enviado com sucesso', [
                 'to' => $toEmail,
-                'subject' => $subject
+                'subject' => $subject,
             ]);
 
             return [
                 'success' => true,
                 'message' => 'Email personalizado enviado com sucesso',
-                'to' => $toEmail
+                'to' => $toEmail,
             ];
 
         } catch (\Exception $e) {
             Log::error('Erro ao enviar email personalizado', [
                 'to' => $toEmail,
                 'subject' => $subject,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
 
             return [
                 'success' => false,
-                'message' => 'Erro ao enviar email: ' . $e->getMessage(),
-                'error' => $e->getMessage()
+                'message' => 'Erro ao enviar email: '.$e->getMessage(),
+                'error' => $e->getMessage(),
             ];
         }
     }

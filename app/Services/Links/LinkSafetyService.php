@@ -17,10 +17,10 @@ class LinkSafetyService
     ];
 
     private const THREAT_LABELS = [
-        'MALWARE'                        => 'malware',
-        'SOCIAL_ENGINEERING'             => 'phishing',
-        'UNWANTED_SOFTWARE'              => 'software indesejado',
-        'POTENTIALLY_HARMFUL_APPLICATION'=> 'aplicação prejudicial',
+        'MALWARE' => 'malware',
+        'SOCIAL_ENGINEERING' => 'phishing',
+        'UNWANTED_SOFTWARE' => 'software indesejado',
+        'POTENTIALLY_HARMFUL_APPLICATION' => 'aplicação prejudicial',
     ];
 
     public function checkUrl(string $url): array
@@ -29,28 +29,30 @@ class LinkSafetyService
 
         if (empty($apiKey)) {
             Log::warning('LinkSafetyService: GOOGLE_SAFE_BROWSING_KEY não configurada — verificação ignorada.');
+
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
 
         try {
-            $response = Http::timeout(5)->post(self::API_URL . '?key=' . $apiKey, [
+            $response = Http::timeout(5)->post(self::API_URL.'?key='.$apiKey, [
                 'client' => [
-                    'clientId'      => 'link-charts',
+                    'clientId' => 'link-charts',
                     'clientVersion' => '1.0.0',
                 ],
                 'threatInfo' => [
-                    'threatTypes'      => self::THREAT_TYPES,
-                    'platformTypes'    => ['ANY_PLATFORM'],
+                    'threatTypes' => self::THREAT_TYPES,
+                    'platformTypes' => ['ANY_PLATFORM'],
                     'threatEntryTypes' => ['URL'],
-                    'threatEntries'    => [['url' => $url]],
+                    'threatEntries' => [['url' => $url]],
                 ],
             ]);
 
             if ($response->failed()) {
                 Log::error('LinkSafetyService: erro na API', [
                     'status' => $response->status(),
-                    'url'    => $url,
+                    'url' => $url,
                 ]);
+
                 return ['safe' => true, 'threats' => [], 'api_available' => false];
             }
 
@@ -61,7 +63,7 @@ class LinkSafetyService
             }
 
             $threats = array_values(array_unique(array_map(
-                fn($m) => self::THREAT_LABELS[$m['threatType']] ?? strtolower($m['threatType']),
+                fn ($m) => self::THREAT_LABELS[$m['threatType']] ?? strtolower($m['threatType']),
                 $matches
             )));
 
@@ -69,8 +71,9 @@ class LinkSafetyService
         } catch (\Throwable $e) {
             Log::error('LinkSafetyService: exceção ao verificar URL', [
                 'message' => $e->getMessage(),
-                'url'     => $url,
+                'url' => $url,
             ]);
+
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
     }

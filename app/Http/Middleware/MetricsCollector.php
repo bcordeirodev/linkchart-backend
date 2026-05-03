@@ -65,7 +65,7 @@ class MetricsCollector
             Log::warning('MetricsCollector failed but request continued', [
                 'error' => $e->getMessage(),
                 'path' => $request->path(),
-                'method' => $request->method()
+                'method' => $request->method(),
             ]);
         }
 
@@ -78,7 +78,7 @@ class MetricsCollector
     private function identifyEndpoint(Request $request): string
     {
         $route = $request->route();
-        if (!$route) {
+        if (! $route) {
             return 'unknown';
         }
 
@@ -110,10 +110,10 @@ class MetricsCollector
             'GET:rate-limit/status' => 'rate-limit.status',
         ];
 
-        $key = $method . ':' . $path;
+        $key = $method.':'.$path;
 
         foreach ($patterns as $pattern => $endpoint) {
-            if (preg_match('#^' . str_replace('\d+', '\d+', $pattern) . '$#', $key)) {
+            if (preg_match('#^'.str_replace('\d+', '\d+', $pattern).'$#', $key)) {
                 return $endpoint;
             }
         }
@@ -128,6 +128,7 @@ class MetricsCollector
     {
         try {
             $user = auth()->guard('api')->user();
+
             return $user ? $user->id : null;
         } catch (\Exception $e) {
             return null;
@@ -141,8 +142,9 @@ class MetricsCollector
     {
         try {
             // Verificar se Cache está disponível antes de usar
-            if (!$this->isCacheAvailable()) {
+            if (! $this->isCacheAvailable()) {
                 Log::info('Cache not available, skipping metrics collection');
+
                 return;
             }
 
@@ -226,7 +228,7 @@ class MetricsCollector
         } catch (\Exception $e) {
             Log::error('Failed to collect metrics', [
                 'error' => $e->getMessage(),
-                'metrics' => $metrics
+                'metrics' => $metrics,
             ]);
         }
     }
@@ -243,10 +245,11 @@ class MetricsCollector
             if ($cacheDriver === 'redis') {
                 // Testar Redis primeiro
                 try {
-                    Cache::store('redis')->put('cache_test_redis_' . uniqid(), 'test', 1);
+                    Cache::store('redis')->put('cache_test_redis_'.uniqid(), 'test', 1);
+
                     return true;
                 } catch (\Exception $redisError) {
-                    Log::warning('Redis cache not available, falling back to file cache: ' . $redisError->getMessage());
+                    Log::warning('Redis cache not available, falling back to file cache: '.$redisError->getMessage());
                     $cacheDriver = 'file'; // Fallback para file
                 }
             }
@@ -255,10 +258,11 @@ class MetricsCollector
                 $cachePath = env('CACHE_PATH', storage_path('framework/cache/data'));
 
                 // Verificar se diretório existe e é gravável
-                if (!is_dir($cachePath)) {
+                if (! is_dir($cachePath)) {
                     // Tentar criar com permissões corretas
-                    if (!mkdir($cachePath, 0777, true) && !is_dir($cachePath)) {
-                        Log::warning('Cache directory could not be created: ' . $cachePath);
+                    if (! mkdir($cachePath, 0777, true) && ! is_dir($cachePath)) {
+                        Log::warning('Cache directory could not be created: '.$cachePath);
+
                         return false;
                     }
                     // Garantir ownership correto após criação
@@ -266,22 +270,24 @@ class MetricsCollector
                     @chgrp($cachePath, 'www-data');
                 }
 
-                if (!is_writable($cachePath)) {
-                    Log::warning('Cache directory not writable: ' . $cachePath);
+                if (! is_writable($cachePath)) {
+                    Log::warning('Cache directory not writable: '.$cachePath);
                     // Tentar corrigir permissões
                     @chmod($cachePath, 0777);
-                    if (!is_writable($cachePath)) {
+                    if (! is_writable($cachePath)) {
                         return false;
                     }
                 }
             }
 
             // Testar operação de cache final
-            Cache::put('cache_test_' . uniqid(), 'test', 1);
+            Cache::put('cache_test_'.uniqid(), 'test', 1);
+
             return true;
 
         } catch (\Exception $e) {
-            Log::warning('Cache completely unavailable: ' . $e->getMessage());
+            Log::warning('Cache completely unavailable: '.$e->getMessage());
+
             return false;
         }
     }
@@ -291,7 +297,7 @@ class MetricsCollector
      */
     private function collectUserMetrics(int $userId, array $metrics): void
     {
-        if (!$this->isCacheAvailable()) {
+        if (! $this->isCacheAvailable()) {
             return;
         }
 
@@ -304,7 +310,7 @@ class MetricsCollector
             'link_views' => 0,
             'avg_response_time' => 0,
             'unique_ips' => [],
-            'endpoints' => []
+            'endpoints' => [],
         ]);
 
         $userMetrics['api_requests']++;
@@ -331,8 +337,9 @@ class MetricsCollector
     private function collectError(array $errorData): void
     {
         try {
-            if (!$this->isCacheAvailable()) {
+            if (! $this->isCacheAvailable()) {
                 Log::warning('Cache not available, logging error directly', $errorData);
+
                 return;
             }
 
@@ -346,7 +353,7 @@ class MetricsCollector
                 'by_status_code' => [],
                 'by_endpoint' => [],
                 'by_user' => [],
-                'errors' => []
+                'errors' => [],
             ]);
 
             $dayErrors['total_errors']++;
@@ -387,7 +394,7 @@ class MetricsCollector
         } catch (\Exception $e) {
             Log::error('Failed to collect error data', [
                 'error' => $e->getMessage(),
-                'error_data' => $errorData
+                'error_data' => $errorData,
             ]);
         }
     }
@@ -401,6 +408,7 @@ class MetricsCollector
             $content = $response->getContent();
             if ($content) {
                 $data = json_decode($content, true);
+
                 return $data['message'] ?? $data['error'] ?? null;
             }
         } catch (\Exception $e) {

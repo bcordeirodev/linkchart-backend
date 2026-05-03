@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
-use Carbon\Carbon;
 
 class EmailVerificationToken extends Model
 {
@@ -19,17 +18,18 @@ class EmailVerificationToken extends Model
         'used',
         'used_at',
         'ip_address',
-        'user_agent'
+        'user_agent',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
         'used_at' => 'datetime',
-        'used' => 'boolean'
+        'used' => 'boolean',
     ];
 
     // Tipos de token
     const TYPE_EMAIL_VERIFICATION = 'email_verification';
+
     const TYPE_PASSWORD_RESET = 'password_reset';
 
     /**
@@ -45,8 +45,8 @@ class EmailVerificationToken extends Model
      */
     public static function createEmailVerificationToken(
         string $email,
-        string $ipAddress = null,
-        string $userAgent = null
+        ?string $ipAddress = null,
+        ?string $userAgent = null
     ): self {
         // Invalidar tokens anteriores do mesmo tipo
         self::where('email', $email)
@@ -60,7 +60,7 @@ class EmailVerificationToken extends Model
             'type' => self::TYPE_EMAIL_VERIFICATION,
             'expires_at' => now()->addHours(24), // 24 horas para verificação
             'ip_address' => $ipAddress,
-            'user_agent' => $userAgent
+            'user_agent' => $userAgent,
         ]);
     }
 
@@ -69,8 +69,8 @@ class EmailVerificationToken extends Model
      */
     public static function createPasswordResetToken(
         string $email,
-        string $ipAddress = null,
-        string $userAgent = null
+        ?string $ipAddress = null,
+        ?string $userAgent = null
     ): self {
         // Invalidar tokens anteriores do mesmo tipo
         self::where('email', $email)
@@ -84,7 +84,7 @@ class EmailVerificationToken extends Model
             'type' => self::TYPE_PASSWORD_RESET,
             'expires_at' => now()->addHours(1), // 1 hora para reset de senha
             'ip_address' => $ipAddress,
-            'user_agent' => $userAgent
+            'user_agent' => $userAgent,
         ]);
     }
 
@@ -93,7 +93,7 @@ class EmailVerificationToken extends Model
      */
     public function isValid(): bool
     {
-        return !$this->used &&
+        return ! $this->used &&
                $this->expires_at->isFuture();
     }
 
@@ -104,7 +104,7 @@ class EmailVerificationToken extends Model
     {
         $this->update([
             'used' => true,
-            'used_at' => now()
+            'used_at' => now(),
         ]);
     }
 
@@ -114,10 +114,10 @@ class EmailVerificationToken extends Model
     public static function findValidToken(string $token, string $type): ?self
     {
         return self::where('token', $token)
-                   ->where('type', $type)
-                   ->where('used', false)
-                   ->where('expires_at', '>', now())
-                   ->first();
+            ->where('type', $type)
+            ->where('used', false)
+            ->where('expires_at', '>', now())
+            ->first();
     }
 
     /**
@@ -126,8 +126,8 @@ class EmailVerificationToken extends Model
     public static function cleanExpiredTokens(): int
     {
         return self::where('expires_at', '<', now())
-                   ->orWhere('used', true)
-                   ->delete();
+            ->orWhere('used', true)
+            ->delete();
     }
 
     /**

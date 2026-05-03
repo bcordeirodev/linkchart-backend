@@ -14,18 +14,31 @@ use Illuminate\Support\Facades\Auth;
 class CreateLinkDTO
 {
     public readonly string $original_url;
+
     public readonly int $user_id;
+
     public readonly ?string $title;
+
     public readonly ?string $description;
+
     public readonly ?string $expires_at;
+
     public readonly bool $is_active;
+
     public readonly ?string $starts_in;
+
     public readonly ?string $custom_slug;
+
     public readonly ?int $click_limit;
+
     public readonly ?string $utm_source;
+
     public readonly ?string $utm_medium;
+
     public readonly ?string $utm_campaign;
+
     public readonly ?string $utm_term;
+
     public readonly ?string $utm_content;
 
     public function __construct(
@@ -103,7 +116,7 @@ class CreateLinkDTO
             'utm_campaign' => $this->utm_campaign,
             'utm_term' => $this->utm_term,
             'utm_content' => $this->utm_content,
-        ], fn($value) => $value !== null);
+        ], fn ($value) => $value !== null);
     }
 
     /**

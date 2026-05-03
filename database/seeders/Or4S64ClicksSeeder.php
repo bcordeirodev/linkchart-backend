@@ -2,11 +2,10 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
 
 class Or4S64ClicksSeeder extends Seeder
 {
@@ -135,8 +134,9 @@ class Or4S64ClicksSeeder extends Seeder
 
         // Verificar se o link existe
         $link = Link::where('slug', 'or4S64')->first();
-        if (!$link) {
+        if (! $link) {
             $this->command->error('❌ Link com slug or4S64 não encontrado!');
+
             return;
         }
 
@@ -245,7 +245,7 @@ class Or4S64ClicksSeeder extends Seeder
             6 => 4, 7 => 6, 8 => 9, 9 => 12, 10 => 14, 11 => 15,
             12 => 16, 13 => 17, 14 => 18, 15 => 19, 16 => 18,
             17 => 16, 18 => 15, 19 => 14, 20 => 13, 21 => 11,
-            22 => 8, 23 => 5
+            22 => 8, 23 => 5,
         ];
 
         return $this->weightedRandom($hourWeights);
@@ -270,12 +270,14 @@ class Or4S64ClicksSeeder extends Seeder
         ];
 
         $index = $this->weightedRandom($weights);
+
         return $this->countries[$index];
     }
 
     private function getCityData(string $countryCode): array
     {
         $cities = $this->cities[$countryCode] ?? $this->cities['DEFAULT'];
+
         return $cities[array_rand($cities)];
     }
 
@@ -287,6 +289,7 @@ class Or4S64ClicksSeeder extends Seeder
     private function getUserAgent(string $device): string
     {
         $agents = $this->userAgents[$device] ?? $this->userAgents['desktop'];
+
         return $agents[array_rand($agents)];
     }
 
@@ -323,7 +326,7 @@ class Or4S64ClicksSeeder extends Seeder
         $ranges = $ipRanges[$countryCode] ?? $ipRanges['DEFAULT'];
         $prefix = $ranges[array_rand($ranges)];
 
-        return $prefix . mt_rand(1, 254) . '.' . mt_rand(1, 254);
+        return $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
     }
 
     private function weightedRandom(array $weights)
@@ -415,6 +418,6 @@ class Or4S64ClicksSeeder extends Seeder
         }
 
         $this->command->info("\n🎯 Link or4S64 pronto para teste no front-end!");
-        $this->command->info("🌐 Acesse: /analytics/or4S64");
+        $this->command->info('🌐 Acesse: /analytics/or4S64');
     }
 }

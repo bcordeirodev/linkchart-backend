@@ -2,9 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\Link;
-use App\Models\Click;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -14,10 +11,10 @@ class DatabaseSeeder extends Seeder
         \App\Models\User::updateOrCreate(
             ['email' => 'usuario2@example.com'],
             [
-                'id'                => 2,
-                'name'              => 'Usuário Teste',
-                'password'          => bcrypt('password'),
-                'email_verified'    => true,
+                'id' => 2,
+                'name' => 'Usuário Teste',
+                'password' => bcrypt('password'),
+                'email_verified' => true,
                 'email_verified_at' => now(),
             ]
         );

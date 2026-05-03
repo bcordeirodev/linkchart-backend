@@ -65,4 +65,3 @@ class Click extends Model
         return $this->hasOne(LinkUtm::class);
     }
 }
-

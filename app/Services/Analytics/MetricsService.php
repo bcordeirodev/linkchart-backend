@@ -2,11 +2,10 @@
 
 namespace App\Services\Analytics;
 
-use App\Models\Link;
 use App\Models\Click;
+use App\Models\Link;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Collection;
 
 /**
  * Serviço unificado para cálculo de métricas
@@ -19,11 +18,12 @@ class MetricsService
      * Cache key patterns para métricas
      */
     private const CACHE_TTL = 300; // 5 minutos
+
     private const CACHE_KEYS = [
         'user_metrics' => 'metrics:user:{userId}',
         'link_metrics' => 'metrics:link:{linkId}',
         'daily_metrics' => 'metrics:daily:{date}',
-        'hourly_metrics' => 'metrics:hourly:{hour}'
+        'hourly_metrics' => 'metrics:hourly:{hour}',
     ];
 
     /**
@@ -33,7 +33,7 @@ class MetricsService
     {
         $cacheKey = "metrics:user:{$userId}:basic:{$hours}h";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($userId, $hours) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($userId, $hours) {
             // Buscar links do usuário
             $userLinks = Link::where('user_id', $userId)->get();
             $linkIds = $userLinks->pluck('id')->toArray();
@@ -82,7 +82,7 @@ class MetricsService
                 'avg_clicks_per_link' => $avgClicksPerLink,
                 'conversion_rate' => $conversionRate,
                 'success_rate' => $successRate,
-                'timeframe_hours' => $hours
+                'timeframe_hours' => $hours,
             ];
         });
     }
@@ -94,7 +94,7 @@ class MetricsService
     {
         $cacheKey = "metrics:user:{$userId}:performance:{$hours}h";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($userId, $hours) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($userId, $hours) {
             $userLinks = Link::where('user_id', $userId)->get();
             $linkIds = $userLinks->pluck('id')->toArray();
 
@@ -126,7 +126,7 @@ class MetricsService
                 'avg_response_time' => $avgResponseTime,
                 'success_rate' => $successRate,
                 'total_links_with_traffic' => $userLinks->where('clicks', '>', 0)->count(),
-                'timeframe_hours' => $hours
+                'timeframe_hours' => $hours,
             ];
         });
     }
@@ -138,10 +138,10 @@ class MetricsService
     {
         $cacheKey = "metrics:link:{$linkId}";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($linkId) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($linkId) {
             $link = Link::find($linkId);
 
-            if (!$link) {
+            if (! $link) {
                 return $this->getEmptyLinkMetrics();
             }
 
@@ -177,8 +177,8 @@ class MetricsService
                     'id' => $link->id,
                     'slug' => $link->slug,
                     'title' => $link->title,
-                    'is_active' => $link->is_active
-                ]
+                    'is_active' => $link->is_active,
+                ],
             ];
         });
     }
@@ -190,7 +190,7 @@ class MetricsService
     {
         $cacheKey = "metrics:user:{$userId}:geographic";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($userId) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($userId) {
             $userLinks = Link::where('user_id', $userId)->get();
             $linkIds = $userLinks->pluck('id')->toArray();
 
@@ -212,19 +212,19 @@ class MetricsService
 
             return [
                 'countries_reached' => $countriesReached,
-                'cities_reached' => $citiesReached
+                'cities_reached' => $citiesReached,
             ];
         });
     }
 
-        /**
+    /**
      * Calcula métricas de audiência para um usuário
      */
     public function getUserAudienceMetrics(int $userId): array
     {
         $cacheKey = "metrics:user:{$userId}:audience";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($userId) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($userId) {
             $userLinks = Link::where('user_id', $userId)->get();
             $linkIds = $userLinks->pluck('id')->toArray();
 
@@ -239,7 +239,7 @@ class MetricsService
                 ->count();
 
             return [
-                'device_types' => $deviceTypes
+                'device_types' => $deviceTypes,
             ];
         });
     }
@@ -251,7 +251,7 @@ class MetricsService
     {
         $patterns = [
             "metrics:user:{$userId}:*",
-            "metrics:link:*", // Limpar também cache de links do usuário
+            'metrics:link:*', // Limpar também cache de links do usuário
         ];
 
         foreach ($patterns as $pattern) {
@@ -271,7 +271,7 @@ class MetricsService
             $hour = now()->subHours($i)->format('Y-m-d-H');
             $metrics = Cache::get("redirect_metrics:hour:{$hour}", []);
 
-            if (!empty($metrics)) {
+            if (! empty($metrics)) {
                 $requests = $metrics['total_redirects'] ?? 0;
                 $responseTime = $metrics['avg_response_time'] ?? 0;
 
@@ -290,7 +290,7 @@ class MetricsService
     {
         // Buscar tentativas bloqueadas do cache
         $blockedAttempts = 0;
-        $violationsToday = Cache::get('rate_limit:violations:' . now()->format('Y-m-d'), []);
+        $violationsToday = Cache::get('rate_limit:violations:'.now()->format('Y-m-d'), []);
 
         foreach ($violationsToday as $violation) {
             if (isset($violation['user_id']) && $violation['user_id'] == $userId) {
@@ -315,7 +315,7 @@ class MetricsService
             'links_with_traffic' => 0,
             'avg_clicks_per_link' => 0,
             'conversion_rate' => 0,
-            'success_rate' => 100
+            'success_rate' => 100,
         ];
     }
 
@@ -329,7 +329,7 @@ class MetricsService
             'unique_visitors' => 0,
             'avg_response_time' => 0,
             'success_rate' => 100,
-            'total_links_with_traffic' => 0
+            'total_links_with_traffic' => 0,
         ];
     }
 
@@ -345,7 +345,7 @@ class MetricsService
             'conversion_rate' => 0,
             'clicks_24h' => 0,
             'unique_visitors_24h' => 0,
-            'days_since_creation' => 0
+            'days_since_creation' => 0,
         ];
     }
 
@@ -356,7 +356,7 @@ class MetricsService
     {
         $cacheKey = "metrics:user:{$userId}:top_links:{$limit}";
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function() use ($userId, $limit) {
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($userId, $limit) {
             $topLinks = Link::where('user_id', $userId)
                 ->where('is_active', true)
                 ->orderByDesc('clicks')
@@ -370,7 +370,7 @@ class MetricsService
                         'original_url' => $link->original_url,
                         'clicks' => $link->clicks ?? 0,
                         'is_active' => $link->is_active,
-                        'created_at' => $link->created_at->toISOString()
+                        'created_at' => $link->created_at->toISOString(),
                     ];
                 })
                 ->toArray();
@@ -392,15 +392,15 @@ class MetricsService
                 return [
                     'temporal' => [
                         'clicks_by_hour' => [],
-                        'clicks_by_day_of_week' => []
+                        'clicks_by_day_of_week' => [],
                     ],
                     'geographic' => [
                         'top_countries' => [],
-                        'top_cities' => []
+                        'top_cities' => [],
                     ],
                     'audience' => [
-                        'device_breakdown' => []
-                    ]
+                        'device_breakdown' => [],
+                    ],
                 ];
             }
 
@@ -418,24 +418,24 @@ class MetricsService
             return [
                 'temporal' => $temporalData,
                 'geographic' => $geographicData,
-                'audience' => $audienceData
+                'audience' => $audienceData,
             ];
 
         } catch (\Exception $e) {
-            \Log::error('Erro ao buscar dados de gráficos: ' . $e->getMessage());
+            \Log::error('Erro ao buscar dados de gráficos: '.$e->getMessage());
 
             return [
                 'temporal' => [
                     'clicks_by_hour' => [],
-                    'clicks_by_day_of_week' => []
+                    'clicks_by_day_of_week' => [],
                 ],
                 'geographic' => [
                     'top_countries' => [],
-                    'top_cities' => []
+                    'top_cities' => [],
                 ],
                 'audience' => [
-                    'device_breakdown' => []
-                ]
+                    'device_breakdown' => [],
+                ],
             ];
         }
     }
@@ -463,7 +463,7 @@ class MetricsService
             $hourlyData[] = [
                 'hour' => $i,
                 'clicks' => $clicksByHour->get($i)->clicks ?? 0,
-                'label' => sprintf('%02d:00', $i)
+                'label' => sprintf('%02d:00', $i),
             ];
         }
 
@@ -482,13 +482,13 @@ class MetricsService
             $dailyData[] = [
                 'day' => $i,
                 'day_name' => $dayNames[$i],
-                'clicks' => $clicksByDay->get($i)->clicks ?? 0
+                'clicks' => $clicksByDay->get($i)->clicks ?? 0,
             ];
         }
 
         return [
             'clicks_by_hour' => $hourlyData,
-            'clicks_by_day_of_week' => $dailyData
+            'clicks_by_day_of_week' => $dailyData,
         ];
     }
 
@@ -510,7 +510,7 @@ class MetricsService
             ->map(function ($item) {
                 return [
                     'country' => $item->country,
-                    'clicks' => $item->clicks
+                    'clicks' => $item->clicks,
                 ];
             })
             ->toArray();
@@ -528,14 +528,14 @@ class MetricsService
             ->map(function ($item) {
                 return [
                     'city' => $item->city,
-                    'clicks' => $item->clicks
+                    'clicks' => $item->clicks,
                 ];
             })
             ->toArray();
 
         return [
             'top_countries' => $topCountries,
-            'top_cities' => $topCities
+            'top_cities' => $topCities,
         ];
     }
 
@@ -555,13 +555,13 @@ class MetricsService
             ->map(function ($item) {
                 return [
                     'device' => ucfirst($item->device),
-                    'clicks' => $item->clicks
+                    'clicks' => $item->clicks,
                 ];
             })
             ->toArray();
 
         return [
-            'device_breakdown' => $deviceData
+            'device_breakdown' => $deviceData,
         ];
     }
 
@@ -587,10 +587,11 @@ class MetricsService
             for ($i = $days - 1; $i >= 0; $i--) {
                 $date = now()->subDays($i)->format('Y-m-d');
                 $result[] = [
-                    'date'   => $date,
+                    'date' => $date,
                     'clicks' => (int) ($rows->get($date)?->clicks ?? 0),
                 ];
             }
+
             return $result;
         });
     }
@@ -629,10 +630,10 @@ class MetricsService
                 ->value('created_at');
 
             return [
-                'current'        => $current,
-                'previous'       => $previous,
+                'current' => $current,
+                'previous' => $previous,
                 'percent_change' => $percentChange,
-                'last_click_at'  => $lastClick,
+                'last_click_at' => $lastClick,
             ];
         });
     }

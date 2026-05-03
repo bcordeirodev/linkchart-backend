@@ -23,12 +23,12 @@ return [
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'https://linkcharts.com.br',
-        'https://www.linkcharts.com.br'
+        'https://www.linkcharts.com.br',
     ],
 
     'allowed_origins_patterns' => [
         '#^https?://localhost:\d+$#',
-        '#^https?://127\.0\.0\.1:\d+$#'
+        '#^https?://127\.0\.0\.1:\d+$#',
     ],
 
     'allowed_headers' => [
@@ -40,7 +40,7 @@ return [
         'X-Forwarded-For',
         'Origin',
         'User-Agent',
-        'Referer'
+        'Referer',
     ],
 
     'exposed_headers' => [],

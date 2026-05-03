@@ -14,7 +14,7 @@ class LinkFactory extends Factory
     {
         return [
             'user_id' => 2, // Relacionar ao usuário 2
-            'slug' => Str::slug($this->faker->unique()->words(2, true)) . '-' . Str::random(5),
+            'slug' => Str::slug($this->faker->unique()->words(2, true)).'-'.Str::random(5),
             'original_url' => $this->faker->url(),
             'title' => $this->faker->sentence(3),
             'description' => $this->faker->optional()->sentence(6),

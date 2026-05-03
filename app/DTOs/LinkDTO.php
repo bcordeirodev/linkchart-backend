@@ -8,11 +8,17 @@ use Illuminate\Http\Request;
 class LinkDTO
 {
     public ?string $id;
+
     public string $original_url;
+
     public string $expires_at;
+
     public bool $is_active;
+
     public string $created_at;
+
     public string $updated_at;
+
     public string $starts_in;
 
     /**
