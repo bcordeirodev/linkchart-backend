@@ -135,6 +135,8 @@ class LinkThreeClicksSeeder extends Seeder
 
     public function run(): void
     {
+        Click::where('link_id', 3)->delete();
+
         $this->command->info('🚀 Iniciando criação de 8.500 clicks para o link ID 3...');
 
         // Verificar se o link existe

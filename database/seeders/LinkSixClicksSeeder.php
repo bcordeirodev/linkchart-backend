@@ -103,6 +103,8 @@ class LinkSixClicksSeeder extends Seeder
 
     public function run(): void
     {
+        Click::where('link_id', 6)->delete();
+
         $this->command->info('🚀 Criando Link ID 6 (Tech Blog International)...');
 
         $clicks = [];

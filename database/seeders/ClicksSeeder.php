@@ -118,6 +118,8 @@ class ClicksSeeder extends Seeder
 
     public function run(): void
     {
+        Click::where('link_id', 2)->delete();
+
         $this->command->info('🚀 Iniciando criação de 6000 clicks para o link ID 2...');
 
         // Verificar se o link existe

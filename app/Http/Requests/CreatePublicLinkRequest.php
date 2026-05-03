@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Links\LinkSafetyService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Contracts\Validation\Validator;
@@ -38,32 +39,14 @@ class CreatePublicLinkRequest extends FormRequest
                 'max:2048',
                 'regex:/^https?:\/\//',
                 function ($attribute, $value, $fail) {
-                    // Validação mais rigorosa para URLs públicas
-                    $blockedDomains = [
-                        'malware.com', 'phishing.net', 'spam.org',
-                        'localhost', '127.0.0.1', '192.168.',
-                        'file://', 'ftp://', 'data:'
-                    ];
-
+                    // Bloquear IPs privados (sem dependência de API externa)
                     $domain = parse_url($value, PHP_URL_HOST);
-                    $fullUrl = strtolower($value);
-
-                    // Bloquear domínios maliciosos
-                    foreach ($blockedDomains as $blocked) {
-                        if (strpos($fullUrl, $blocked) !== false) {
-                            $fail('Esta URL não é permitida por questões de segurança.');
-                            return;
-                        }
-                    }
-
-                    // Bloquear IPs privados
                     if (filter_var($domain, FILTER_VALIDATE_IP)) {
                         if (!filter_var($domain, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                             $fail('URLs com IPs privados não são permitidas.');
-                            return;
                         }
                     }
-                }
+                },
             ],
             'title' => [
                 'nullable',
@@ -127,6 +110,30 @@ class CreatePublicLinkRequest extends FormRequest
                 'errors' => $validator->errors()
             ], 422)
         );
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            if ($validator->errors()->has('original_url')) {
+                return;
+            }
+
+            $url = $this->input('original_url');
+            if (!$url) {
+                return;
+            }
+
+            $result = app(LinkSafetyService::class)->checkUrl($url);
+
+            if (!$result['safe']) {
+                $threats = implode(', ', $result['threats']);
+                $validator->errors()->add(
+                    'original_url',
+                    "Esta URL foi identificada como insegura ({$threats}) e não pode ser encurtada."
+                );
+            }
+        });
     }
 
     /**

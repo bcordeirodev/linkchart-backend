@@ -84,6 +84,8 @@ class LinkFiveClicksSeeder extends Seeder
 
     public function run(): void
     {
+        Click::where('link_id', 5)->delete();
+
         $this->command->info('🚀 Criando Link ID 5 (E-commerce Campaign)...');
 
         $clicks = [];

@@ -31,8 +31,8 @@ fi
 echo "✅ Container '$SERVICE' está rodando"
 echo ""
 
-echo "🧪 php artisan test (PHPUnit)"
-docker compose exec -T "$SERVICE" php artisan test
+echo "🧪 PHPUnit (via composer run test — faz config:clear para limpar cache)"
+docker compose exec -T "$SERVICE" composer run test
 
 echo ""
 echo "✅ [pre-push] backend OK — push liberado"

@@ -20,6 +20,12 @@ class AppServiceProvider extends ServiceProvider
             \App\Contracts\Services\LinkServiceInterface::class,
             \App\Services\Links\LinkService::class
         );
+
+        $this->app->bind(\App\Contracts\Analytics\DashboardAnalyticsInterface::class,  \App\Services\Analytics\DashboardAnalyticsService::class);
+        $this->app->bind(\App\Contracts\Analytics\GeographicAnalyticsInterface::class, \App\Services\Analytics\GeographicAnalyticsService::class);
+        $this->app->bind(\App\Contracts\Analytics\TemporalAnalyticsInterface::class,   \App\Services\Analytics\TemporalAnalyticsService::class);
+        $this->app->bind(\App\Contracts\Analytics\AudienceAnalyticsInterface::class,   \App\Services\Analytics\AudienceAnalyticsService::class);
+        $this->app->bind(\App\Contracts\Analytics\InsightsAnalyticsInterface::class,   \App\Services\Analytics\InsightsAnalyticsService::class);
     }
 
     public function boot(): void
