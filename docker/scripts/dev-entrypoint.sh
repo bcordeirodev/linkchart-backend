@@ -52,13 +52,6 @@ fi
 echo "🗄️ Executando migrações..."
 php artisan migrate --force
 
-# Executar seeders apenas se o banco estiver completamente vazio (sem usuários)
-USER_COUNT=$(php artisan tinker --execute="echo App\Models\User::count();" 2>/dev/null | tail -1 || echo "0")
-if [ "$USER_COUNT" -eq 0 ]; then
-    echo "🌱 Banco vazio — executando seeders de desenvolvimento..."
-    php artisan db:seed --force
-fi
-
 # Criar link simbólico para storage
 if [ ! -L /var/www/public/storage ]; then
     echo "🔗 Criando link simbólico para storage..."

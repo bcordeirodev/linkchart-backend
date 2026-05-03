@@ -174,6 +174,8 @@ class LinkFourClicksSeeder extends Seeder
 
     public function run(): void
     {
+        Click::where('link_id', 4)->delete();
+
         $this->command->info('🚀 Iniciando criação de clicks para o Link ID 4 (Analytics Dashboard)...');
 
         // Verificar se o link existe
