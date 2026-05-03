@@ -23,6 +23,7 @@ class Link extends Model
         'expires_at',
         'starts_in',
         'is_active',
+        'is_demo',
         'clicks',
         'click_limit',
         'utm_source',
@@ -40,6 +41,7 @@ class Link extends Model
         'expires_at' => 'datetime',
         'starts_in' => 'datetime',
         'is_active' => 'boolean',
+        'is_demo' => 'boolean',
         'health_checked_at' => 'datetime',
     ];
 
