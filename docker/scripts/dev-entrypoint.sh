@@ -52,10 +52,10 @@ fi
 echo "🗄️ Executando migrações..."
 php artisan migrate --force
 
-# Verificar se há dados na tabela de links
-LINK_COUNT=$(php artisan tinker --execute="echo App\Models\Link::count();" 2>/dev/null | tail -1 || echo "0")
-if [ "$LINK_COUNT" -eq 0 ]; then
-    echo "🌱 Executando seeders..."
+# Executar seeders apenas se o banco estiver completamente vazio (sem usuários)
+USER_COUNT=$(php artisan tinker --execute="echo App\Models\User::count();" 2>/dev/null | tail -1 || echo "0")
+if [ "$USER_COUNT" -eq 0 ]; then
+    echo "🌱 Banco vazio — executando seeders de desenvolvimento..."
     php artisan db:seed --force
 fi
 
