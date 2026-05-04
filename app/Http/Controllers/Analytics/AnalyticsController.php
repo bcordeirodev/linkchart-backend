@@ -36,10 +36,7 @@ class AnalyticsController extends BaseController
                 'data' => $analytics,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar analytics do link.', $e);
         }
     }
 
@@ -79,10 +76,7 @@ class AnalyticsController extends BaseController
                 ],
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar dados do mapa de calor.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar dados do mapa de calor.', $e);
         }
     }
 
@@ -111,10 +105,7 @@ class AnalyticsController extends BaseController
                 'total_locations' => count($heatmapData),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar dados em tempo real.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar dados em tempo real.', $e);
         }
     }
 
@@ -134,10 +125,7 @@ class AnalyticsController extends BaseController
                 'data' => $analytics,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics geográficos.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar analytics geográficos.', $e);
         }
     }
 
@@ -161,10 +149,7 @@ class AnalyticsController extends BaseController
                 'data' => $insights,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar insights de negócio.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar insights de negócio.', $e);
         }
     }
 
@@ -202,10 +187,7 @@ class AnalyticsController extends BaseController
                 'data' => $unifiedData,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics temporais.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar analytics temporais.', $e);
         }
     }
 
@@ -225,10 +207,7 @@ class AnalyticsController extends BaseController
                 'data' => $analytics,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics de audiência.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar analytics de audiência.', $e);
         }
     }
 
@@ -269,10 +248,7 @@ class AnalyticsController extends BaseController
                 'data' => $summary,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar resumo executivo.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar resumo executivo.', $e);
         }
     }
 
@@ -304,10 +280,7 @@ class AnalyticsController extends BaseController
                 'data' => $analytics,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar dados do dashboard do link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar dados do dashboard do link.', $e);
         }
     }
 

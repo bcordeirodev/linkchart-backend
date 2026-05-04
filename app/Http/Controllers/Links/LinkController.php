@@ -44,10 +44,7 @@ class LinkController extends BaseController
 
             return response()->json(LinkResource::collection($links));
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar links.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar links.', $e);
         }
     }
 
@@ -73,10 +70,7 @@ class LinkController extends BaseController
                 'data' => new LinkResource($link),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar link.', $e);
         }
     }
 
@@ -102,10 +96,7 @@ class LinkController extends BaseController
                 'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao criar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao criar link.', $e);
         }
     }
 
@@ -158,10 +149,7 @@ class LinkController extends BaseController
                 'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao atualizar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao atualizar link.', $e);
         }
     }
 
@@ -194,10 +182,7 @@ class LinkController extends BaseController
 
             return response()->json(['message' => 'Link removido com sucesso.']);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao remover link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao remover link.', $e);
         }
     }
 
@@ -333,10 +318,7 @@ class LinkController extends BaseController
                 ],
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar analytics do link.', $e);
         }
     }
 
@@ -353,10 +335,7 @@ class LinkController extends BaseController
             // Reutilizar a lógica do método analytics passando o slug
             return $this->analytics($link->slug);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar analytics do link.', $e);
         }
     }
 
@@ -467,10 +446,7 @@ class LinkController extends BaseController
                 }),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar dados de cliques.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar dados de cliques.', $e);
         }
     }
 
@@ -584,10 +560,7 @@ class LinkController extends BaseController
                 ],
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao listar cliques.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao listar cliques.', $e);
         }
     }
 
@@ -630,10 +603,7 @@ class LinkController extends BaseController
                 }),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar histórico de auditoria.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar histórico de auditoria.', $e);
         }
     }
 
@@ -665,10 +635,7 @@ class LinkController extends BaseController
                 'data' => new LinkResource($link),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar link.', $e);
         }
     }
 }
