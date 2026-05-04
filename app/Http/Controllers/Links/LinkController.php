@@ -12,6 +12,7 @@ use App\Http\Resources\LinkResource;
 use App\Services\Links\LinkAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Controller para gerenciamento de Links
@@ -351,6 +352,11 @@ class LinkController extends BaseController
 
             $base = fn () => \App\Models\Click::where('link_id', $link->id);
 
+            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+            $hourExpr = $isSqlite
+                ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
+                : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
+
             // Estatísticas agregadas via SQL — sem carregar todos os cliques em memória
             $stats = [
                 'total_clicks' => $base()->count(),
@@ -361,8 +367,8 @@ class LinkController extends BaseController
                 // Distribuição por hora nas últimas 24h
                 'clicks_by_hour' => $base()
                     ->where('created_at', '>=', now()->subDay())
-                    ->selectRaw('CAST(strftime("%H", created_at) AS INTEGER) AS hour, COUNT(*) AS total')
-                    ->groupByRaw('strftime("%H", created_at)')
+                    ->selectRaw("$hourExpr AS hour, COUNT(*) AS total")
+                    ->groupByRaw($hourExpr)
                     ->orderBy('hour')
                     ->pluck('total', 'hour'),
 
@@ -381,10 +387,11 @@ class LinkController extends BaseController
                     ->selectRaw('device, COUNT(*) AS total')
                     ->groupBy('device')
                     ->orderByDesc('total')
+                    ->limit(10)
                     ->pluck('total', 'device'),
 
                 // Top referrers: agrupa por referer bruto no SQL (limit 50),
-                // depois reagrega por host em PHP no conjunto pequeno — OOM-safe
+                // depois reagrega por host em PHP somando totais — sem perder dados de hosts repetidos
                 'top_referrers' => $base()
                     ->whereNotNull('referer')
                     ->where('referer', '!=', '-')
@@ -394,18 +401,21 @@ class LinkController extends BaseController
                     ->orderByDesc('total')
                     ->limit(50)
                     ->pluck('total', 'referer')
-                    ->mapWithKeys(function ($total, $referer) {
-                        $host = parse_url($referer, PHP_URL_HOST) ?: 'Unknown';
-                        return [$host => $total];
-                    })
-                    ->sortDesc()
-                    ->take(5),
+                    ->pipe(function ($collection) {
+                        $hostTotals = [];
+                        foreach ($collection as $referer => $total) {
+                            $host = parse_url($referer, PHP_URL_HOST) ?: 'Unknown';
+                            $hostTotals[$host] = ($hostTotals[$host] ?? 0) + $total;
+                        }
+                        arsort($hostTotals);
+                        return collect($hostTotals)->take(5);
+                    }),
 
                 // Cliques com UTM
                 'utm_campaigns' => \App\Models\Click::where('link_id', $link->id)
                     ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
                     ->whereNotNull('link_utms.utm_campaign')
-                    ->selectRaw('COALESCE(link_utms.utm_campaign, ?) AS campaign, COUNT(*) AS total', ['No Campaign'])
+                    ->selectRaw('link_utms.utm_campaign AS campaign, COUNT(*) AS total')
                     ->groupBy('link_utms.utm_campaign')
                     ->orderByDesc('total')
                     ->pluck('total', 'campaign'),
