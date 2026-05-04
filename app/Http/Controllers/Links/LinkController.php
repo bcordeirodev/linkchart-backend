@@ -349,101 +349,102 @@ class LinkController extends BaseController
             $link = $this->findOwnedLink($id);
             if (! $link) return $this->linkNotFound();
 
-            // Buscar todos os cliques com dados relacionados
-            $clicks = \App\Models\Click::where('link_id', $link->id)
-                ->with('utm')
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $base = fn () => \App\Models\Click::where('link_id', $link->id);
 
-            // Estatísticas em tempo real
+            // Estatísticas agregadas via SQL — sem carregar todos os cliques em memória
             $stats = [
-                'total_clicks' => $clicks->count(),
-                'unique_ips' => $clicks->unique('ip')->count(),
-                'last_click' => $clicks->first()?->created_at,
-                'first_click' => $clicks->last()?->created_at,
+                'total_clicks' => $base()->count(),
+                'unique_ips'   => $base()->distinct('ip')->count('ip'),
+                'last_click'   => $base()->max('created_at'),
+                'first_click'  => $base()->min('created_at'),
 
                 // Distribuição por hora nas últimas 24h
-                'clicks_by_hour' => $clicks->where('created_at', '>=', now()->subDay())
-                    ->groupBy(function ($click) {
-                        return $click->created_at->format('H');
-                    })
-                    ->map->count()
-                    ->toArray(),
+                'clicks_by_hour' => $base()
+                    ->where('created_at', '>=', now()->subDay())
+                    ->selectRaw('CAST(strftime("%H", created_at) AS INTEGER) AS hour, COUNT(*) AS total')
+                    ->groupByRaw('strftime("%H", created_at)')
+                    ->orderBy('hour')
+                    ->pluck('total', 'hour'),
 
                 // Top países
-                'top_countries' => $clicks->whereNotNull('country')
+                'top_countries' => $base()
+                    ->whereNotNull('country')
+                    ->selectRaw('country, COUNT(*) AS total')
                     ->groupBy('country')
-                    ->map->count()
-                    ->sortDesc()
-                    ->take(5)
-                    ->toArray(),
+                    ->orderByDesc('total')
+                    ->limit(5)
+                    ->pluck('total', 'country'),
 
                 // Top dispositivos
-                'top_devices' => $clicks->whereNotNull('device')
+                'top_devices' => $base()
+                    ->whereNotNull('device')
+                    ->selectRaw('device, COUNT(*) AS total')
                     ->groupBy('device')
-                    ->map->count()
-                    ->sortDesc()
-                    ->toArray(),
+                    ->orderByDesc('total')
+                    ->pluck('total', 'device'),
 
-                // Top referrers
-                'top_referrers' => $clicks->map(function ($click) {
-                    if (empty($click->referer) || $click->referer === '-') {
-                        return 'Direct';
-                    }
-                    $domain = parse_url($click->referer, PHP_URL_HOST);
-
-                    return $domain ?: 'Unknown';
-                })
-                    ->groupBy(function ($referer) {
-                        return $referer;
+                // Top referrers: agrupa por referer bruto no SQL (limit 50),
+                // depois reagrega por host em PHP no conjunto pequeno — OOM-safe
+                'top_referrers' => $base()
+                    ->whereNotNull('referer')
+                    ->where('referer', '!=', '-')
+                    ->where('referer', '!=', '')
+                    ->selectRaw('referer, COUNT(*) AS total')
+                    ->groupBy('referer')
+                    ->orderByDesc('total')
+                    ->limit(50)
+                    ->pluck('total', 'referer')
+                    ->mapWithKeys(function ($total, $referer) {
+                        $host = parse_url($referer, PHP_URL_HOST) ?: 'Unknown';
+                        return [$host => $total];
                     })
-                    ->map->count()
                     ->sortDesc()
-                    ->take(5)
-                    ->toArray(),
+                    ->take(5),
 
                 // Cliques com UTM
-                'utm_campaigns' => $clicks->filter(function ($click) {
-                    return $click->utm !== null;
-                })
-                    ->map(function ($click) {
-                        return $click->utm->utm_campaign ?? 'No Campaign';
-                    })
-                    ->groupBy(function ($campaign) {
-                        return $campaign;
-                    })
-                    ->map->count()
-                    ->sortDesc()
-                    ->toArray(),
+                'utm_campaigns' => \App\Models\Click::where('link_id', $link->id)
+                    ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
+                    ->whereNotNull('link_utms.utm_campaign')
+                    ->selectRaw('COALESCE(link_utms.utm_campaign, ?) AS campaign, COUNT(*) AS total', ['No Campaign'])
+                    ->groupBy('link_utms.utm_campaign')
+                    ->orderByDesc('total')
+                    ->pluck('total', 'campaign'),
             ];
 
-            return response()->json([
-                'link_info' => [
-                    'id' => $link->id,
-                    'slug' => $link->slug,
-                    'title' => $link->title,
-                    'original_url' => $link->original_url,
-                    'created_at' => $link->created_at,
-                    'clicks' => $link->clicks,
-                ],
-                'stats' => $stats,
-                'recent_clicks' => $clicks->take(10)->map(function ($click) {
+            $recent_clicks = $base()
+                ->with('utm')
+                ->orderByDesc('created_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($click) {
                     return [
-                        'id' => $click->id,
-                        'ip' => $click->ip,
-                        'country' => $click->country,
-                        'city' => $click->city,
-                        'device' => $click->device,
-                        'referer' => $click->referer,
+                        'id'         => $click->id,
+                        'ip'         => $click->ip,
+                        'country'    => $click->country,
+                        'city'       => $click->city,
+                        'device'     => $click->device,
+                        'referer'    => $click->referer,
                         'user_agent' => $click->user_agent,
                         'created_at' => $click->created_at,
-                        'utm' => $click->utm ? [
-                            'source' => $click->utm->utm_source,
-                            'medium' => $click->utm->utm_medium,
+                        'utm'        => $click->utm ? [
+                            'source'   => $click->utm->utm_source,
+                            'medium'   => $click->utm->utm_medium,
                             'campaign' => $click->utm->utm_campaign,
                         ] : null,
                     ];
-                }),
+                });
+
+            return response()->json([
+                'link_info' => [
+                    'id'           => $link->id,
+                    'slug'         => $link->slug,
+                    'title'        => $link->title,
+                    'original_url' => $link->original_url,
+                    'created_at'   => $link->created_at,
+                    'clicks'       => $link->clicks,
+                ],
+                'stats'         => $stats,
+                'recent_clicks' => $recent_clicks,
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar dados de cliques.', $e);
