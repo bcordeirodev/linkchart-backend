@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Link;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -13,7 +14,7 @@ class LinkFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => 2, // Relacionar ao usuário 2
+            'user_id' => User::factory(),
             'slug' => Str::slug($this->faker->unique()->words(2, true)).'-'.Str::random(5),
             'original_url' => $this->faker->url(),
             'title' => $this->faker->sentence(3),
