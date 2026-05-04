@@ -1,7 +1,5 @@
 name: 🧪 CI
-# Nota: Laravel Pint está disponível no projeto mas não é executado no CI
-# porque o código legado ainda não passou por uma normalização completa.
-# Para normalizar: `docker compose exec app ./vendor/bin/pint`
+# Nota: Laravel Pint executa no CI em modo --test (verifica formatação sem alterar arquivos).
 
 on:
   pull_request:
@@ -42,5 +40,11 @@ jobs:
         with:
           composer-options: "--prefer-dist --no-progress"
 
+      - name: 🧹 Clear config cache before tests
+        run: php artisan config:clear
+
       - name: ✅ Run tests
         run: php artisan test
+
+      - name: 🎨 Check code style (Pint)
+        run: ./vendor/bin/pint --test
