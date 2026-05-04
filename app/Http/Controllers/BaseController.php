@@ -24,4 +24,12 @@ abstract class BaseController extends Controller
             404
         );
     }
+
+    protected function serverError(string $message, \Throwable $e): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'detail'  => config('app.debug') ? $e->getMessage() : null,
+        ], 500);
+    }
 }
