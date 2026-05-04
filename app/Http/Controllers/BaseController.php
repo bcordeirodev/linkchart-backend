@@ -27,9 +27,17 @@ abstract class BaseController extends Controller
 
     protected function serverError(string $message, \Throwable $e): JsonResponse
     {
-        return response()->json([
-            'message' => $message,
-            'detail'  => config('app.debug') ? $e->getMessage() : null,
-        ], 500);
+        \Log::error($message, [
+            'exception' => $e->getMessage(),
+            'file'      => $e->getFile(),
+            'line'      => $e->getLine(),
+        ]);
+
+        $body = ['message' => $message];
+        if (config('app.debug')) {
+            $body['detail'] = $e->getMessage();
+        }
+
+        return response()->json($body, 500);
     }
 }
