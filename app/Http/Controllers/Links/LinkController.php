@@ -5,13 +5,14 @@ namespace App\Http\Controllers\Links;
 use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreateLinkDTO;
 use App\DTOs\UpdateLinkDTO;
+use App\Http\Controllers\BaseController;
 use App\Http\Requests\CreateLinkRequest;
 use App\Http\Requests\UpdateLinkRequest;
 use App\Http\Resources\LinkResource;
 use App\Services\Links\LinkAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Controller para gerenciamento de Links
@@ -20,7 +21,7 @@ use Illuminate\Routing\Controller;
  * - SRP: Responsável apenas por receber requisições HTTP e retornar respostas
  * - DIP: Depende da abstração LinkServiceInterface
  */
-class LinkController extends Controller
+class LinkController extends BaseController
 {
     protected LinkServiceInterface $linkService;
 
@@ -44,10 +45,7 @@ class LinkController extends Controller
 
             return response()->json(LinkResource::collection($links));
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar links.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar links.', $e);
         }
     }
 
@@ -73,10 +71,7 @@ class LinkController extends Controller
                 'data' => new LinkResource($link),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar link.', $e);
         }
     }
 
@@ -102,10 +97,7 @@ class LinkController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao criar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao criar link.', $e);
         }
     }
 
@@ -158,10 +150,7 @@ class LinkController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao atualizar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao atualizar link.', $e);
         }
     }
 
@@ -194,179 +183,7 @@ class LinkController extends Controller
 
             return response()->json(['message' => 'Link removido com sucesso.']);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao remover link.',
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Obtém analytics detalhados de um link específico.
-     */
-    public function analytics(string $slug): JsonResponse
-    {
-        try {
-            // Buscar link por slug primeiro
-            $link = \App\Models\Link::where('slug', $slug)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
-
-            // Gerar dados de analytics baseados nos cliques reais
-            $totalClicks = $link->clicks;
-
-            // REGRA MVP: Se não há cliques, retornar indicação de que não há dados suficientes
-            if ($totalClicks == 0) {
-                return response()->json([
-                    'has_sufficient_data' => false,
-                    'message' => 'Analytics disponíveis após o primeiro clique no link',
-                    'total_clicks' => 0,
-                    'link_info' => [
-                        'id' => $link->id,
-                        'slug' => $link->slug,
-                        'title' => $link->title,
-                        'original_url' => $link->original_url,
-                        'shorted_url' => $link->shorted_url,
-                        'created_at' => $link->created_at,
-                        'is_active' => $link->is_active,
-                        'expires_at' => $link->expires_at,
-                    ],
-                ]);
-            }
-
-            // Buscar dados reais da tabela clicks
-            $clicks = \App\Models\Click::where('link_id', $link->id)->get();
-
-            // Calcular métricas reais
-            $uniqueVisitors = $clicks->unique('ip')->count();
-            $avgDailyClicks = $totalClicks > 0 ? round($totalClicks / max(1, now()->diffInDays($link->created_at)), 1) : 0;
-
-            // Taxa de conversão baseada em visitantes únicos vs total de cliques
-            $conversionRate = $uniqueVisitors > 0 ? round(($totalClicks / $uniqueVisitors) * 100, 1) : 0;
-
-            // Cliques ao longo do tempo (dados reais dos últimos 30 dias)
-            $clicksOverTime = [];
-            for ($i = 29; $i >= 0; $i--) {
-                $date = now()->subDays($i);
-
-                $dailyClicks = $clicks->filter(function ($click) use ($date) {
-                    $clickDate = \Carbon\Carbon::parse($click->created_at);
-
-                    return $clickDate->isSameDay($date);
-                })->count();
-
-                $clicksOverTime[] = [
-                    'date' => $date->format('Y-m-d'),
-                    'clicks' => $dailyClicks,
-                ];
-            }
-
-            // Cliques por país (dados reais)
-            $clicksByCountry = $clicks->whereNotNull('country')
-                ->groupBy('country')
-                ->map(function ($countryClicks) {
-                    return [
-                        'country' => $countryClicks->first()->country,
-                        'clicks' => $countryClicks->count(),
-                    ];
-                })
-                ->values()
-                ->sortByDesc('clicks')
-                ->take(10)
-                ->toArray();
-
-            // Cliques por dispositivo (dados reais)
-            $clicksByDevice = $clicks->whereNotNull('device')
-                ->groupBy('device')
-                ->map(function ($deviceClicks) {
-                    return [
-                        'device' => $deviceClicks->first()->device,
-                        'clicks' => $deviceClicks->count(),
-                    ];
-                })
-                ->values()
-                ->sortByDesc('clicks')
-                ->toArray();
-
-            // Cliques por referrer (dados reais)
-            $clicksByReferer = $clicks->map(function ($click) {
-                // Extrair domínio do referer ou marcar como Direct
-                if (empty($click->referer) || $click->referer === '-') {
-                    return 'Direct';
-                }
-
-                $domain = parse_url($click->referer, PHP_URL_HOST);
-
-                return $domain ?: 'Unknown';
-            })
-                ->groupBy(function ($referer) {
-                    return $referer;
-                })
-                ->map(function ($refererClicks, $referer) {
-                    return [
-                        'referer' => $referer,
-                        'clicks' => $refererClicks->count(),
-                    ];
-                })
-                ->values()
-                ->sortByDesc('clicks')
-                ->take(10)
-                ->toArray();
-
-            return response()->json([
-                'total_clicks' => $totalClicks,
-                'unique_visitors' => $uniqueVisitors,
-                'avg_daily_clicks' => $avgDailyClicks,
-                'conversion_rate' => $conversionRate.'%',
-                'clicks_over_time' => $clicksOverTime,
-                'clicks_by_country' => $clicksByCountry,
-                'clicks_by_device' => $clicksByDevice,
-                'clicks_by_referer' => $clicksByReferer,
-                'link_info' => [
-                    'id' => $link->id,
-                    'slug' => $link->slug,
-                    'title' => $link->title,
-                    'original_url' => $link->original_url,
-                    'shorted_url' => $link->shorted_url,
-                    'created_at' => $link->created_at,
-                    'is_active' => $link->is_active,
-                    'expires_at' => $link->expires_at,
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-    }
-
-    /**
-     * Obtém analytics de um link específico por ID.
-     */
-    public function analyticsByLinkId(string $id): JsonResponse
-    {
-        try {
-            // Buscar link por ID e verificar ownership
-            $link = \App\Models\Link::where('id', $id)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
-
-            // Reutilizar a lógica do método analytics passando o slug
-            return $this->analytics($link->slug);
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar analytics do link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao remover link.', $e);
         }
     }
 
@@ -377,115 +194,117 @@ class LinkController extends Controller
     {
         try {
             // Buscar link por ID e verificar ownership
-            $link = \App\Models\Link::where('id', $id)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
+            $link = $this->findOwnedLink($id);
+            if (! $link) return $this->linkNotFound();
 
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
+            $base = fn () => \App\Models\Click::where('link_id', $link->id);
 
-            // Buscar todos os cliques com dados relacionados
-            $clicks = \App\Models\Click::where('link_id', $link->id)
-                ->with('utm')
-                ->orderBy('created_at', 'desc')
-                ->get();
+            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+            $hourExpr = $isSqlite
+                ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
+                : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
 
-            // Estatísticas em tempo real
+            // Estatísticas agregadas via SQL — sem carregar todos os cliques em memória
             $stats = [
-                'total_clicks' => $clicks->count(),
-                'unique_ips' => $clicks->unique('ip')->count(),
-                'last_click' => $clicks->first()?->created_at,
-                'first_click' => $clicks->last()?->created_at,
+                'total_clicks' => $base()->count(),
+                'unique_ips'   => $base()->distinct('ip')->count('ip'),
+                'last_click'   => $base()->max('created_at'),
+                'first_click'  => $base()->min('created_at'),
 
                 // Distribuição por hora nas últimas 24h
-                'clicks_by_hour' => $clicks->where('created_at', '>=', now()->subDay())
-                    ->groupBy(function ($click) {
-                        return $click->created_at->format('H');
-                    })
-                    ->map->count()
-                    ->toArray(),
+                'clicks_by_hour' => $base()
+                    ->where('created_at', '>=', now()->subDay())
+                    ->selectRaw("$hourExpr AS hour, COUNT(*) AS total")
+                    ->groupByRaw($hourExpr)
+                    ->orderBy('hour')
+                    ->pluck('total', 'hour'),
 
                 // Top países
-                'top_countries' => $clicks->whereNotNull('country')
+                'top_countries' => $base()
+                    ->whereNotNull('country')
+                    ->selectRaw('country, COUNT(*) AS total')
                     ->groupBy('country')
-                    ->map->count()
-                    ->sortDesc()
-                    ->take(5)
-                    ->toArray(),
+                    ->orderByDesc('total')
+                    ->limit(5)
+                    ->pluck('total', 'country'),
 
                 // Top dispositivos
-                'top_devices' => $clicks->whereNotNull('device')
+                'top_devices' => $base()
+                    ->whereNotNull('device')
+                    ->selectRaw('device, COUNT(*) AS total')
                     ->groupBy('device')
-                    ->map->count()
-                    ->sortDesc()
-                    ->toArray(),
+                    ->orderByDesc('total')
+                    ->limit(10)
+                    ->pluck('total', 'device'),
 
-                // Top referrers
-                'top_referrers' => $clicks->map(function ($click) {
-                    if (empty($click->referer) || $click->referer === '-') {
-                        return 'Direct';
-                    }
-                    $domain = parse_url($click->referer, PHP_URL_HOST);
-
-                    return $domain ?: 'Unknown';
-                })
-                    ->groupBy(function ($referer) {
-                        return $referer;
-                    })
-                    ->map->count()
-                    ->sortDesc()
-                    ->take(5)
-                    ->toArray(),
+                // Top referrers: agrupa por referer bruto no SQL (limit 50),
+                // depois reagrega por host em PHP somando totais — sem perder dados de hosts repetidos
+                'top_referrers' => $base()
+                    ->whereNotNull('referer')
+                    ->where('referer', '!=', '-')
+                    ->where('referer', '!=', '')
+                    ->selectRaw('referer, COUNT(*) AS total')
+                    ->groupBy('referer')
+                    ->orderByDesc('total')
+                    ->limit(50)
+                    ->pluck('total', 'referer')
+                    ->pipe(function ($collection) {
+                        $hostTotals = [];
+                        foreach ($collection as $referer => $total) {
+                            $host = parse_url($referer, PHP_URL_HOST) ?: 'Unknown';
+                            $hostTotals[$host] = ($hostTotals[$host] ?? 0) + $total;
+                        }
+                        arsort($hostTotals);
+                        return collect($hostTotals)->take(5);
+                    }),
 
                 // Cliques com UTM
-                'utm_campaigns' => $clicks->filter(function ($click) {
-                    return $click->utm !== null;
-                })
-                    ->map(function ($click) {
-                        return $click->utm->utm_campaign ?? 'No Campaign';
-                    })
-                    ->groupBy(function ($campaign) {
-                        return $campaign;
-                    })
-                    ->map->count()
-                    ->sortDesc()
-                    ->toArray(),
+                'utm_campaigns' => \App\Models\Click::where('link_id', $link->id)
+                    ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
+                    ->whereNotNull('link_utms.utm_campaign')
+                    ->selectRaw('link_utms.utm_campaign AS campaign, COUNT(*) AS total')
+                    ->groupBy('link_utms.utm_campaign')
+                    ->orderByDesc('total')
+                    ->pluck('total', 'campaign'),
             ];
 
-            return response()->json([
-                'link_info' => [
-                    'id' => $link->id,
-                    'slug' => $link->slug,
-                    'title' => $link->title,
-                    'original_url' => $link->original_url,
-                    'created_at' => $link->created_at,
-                    'clicks' => $link->clicks,
-                ],
-                'stats' => $stats,
-                'recent_clicks' => $clicks->take(10)->map(function ($click) {
+            $recent_clicks = $base()
+                ->with('utm')
+                ->orderByDesc('created_at')
+                ->limit(10)
+                ->get()
+                ->map(function ($click) {
                     return [
-                        'id' => $click->id,
-                        'ip' => $click->ip,
-                        'country' => $click->country,
-                        'city' => $click->city,
-                        'device' => $click->device,
-                        'referer' => $click->referer,
+                        'id'         => $click->id,
+                        'ip'         => $click->ip,
+                        'country'    => $click->country,
+                        'city'       => $click->city,
+                        'device'     => $click->device,
+                        'referer'    => $click->referer,
                         'user_agent' => $click->user_agent,
                         'created_at' => $click->created_at,
-                        'utm' => $click->utm ? [
-                            'source' => $click->utm->utm_source,
-                            'medium' => $click->utm->utm_medium,
+                        'utm'        => $click->utm ? [
+                            'source'   => $click->utm->utm_source,
+                            'medium'   => $click->utm->utm_medium,
                             'campaign' => $click->utm->utm_campaign,
                         ] : null,
                     ];
-                }),
+                });
+
+            return response()->json([
+                'link_info' => [
+                    'id'           => $link->id,
+                    'slug'         => $link->slug,
+                    'title'        => $link->title,
+                    'original_url' => $link->original_url,
+                    'created_at'   => $link->created_at,
+                    'clicks'       => $link->clicks,
+                ],
+                'stats'         => $stats,
+                'recent_clicks' => $recent_clicks,
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar dados de cliques.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar dados de cliques.', $e);
         }
     }
 
@@ -504,13 +323,8 @@ class LinkController extends Controller
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
-            $link = \App\Models\Link::where('id', $id)
-                ->where('user_id', $userId)
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
+            $link = $this->findOwnedLink($id);
+            if (! $link) return $this->linkNotFound();
 
             $perPage = (int) min(max($request->input('per_page', 25), 1), 100);
             $page = (int) max($request->input('page', 1), 1);
@@ -604,10 +418,7 @@ class LinkController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao listar cliques.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao listar cliques.', $e);
         }
     }
 
@@ -650,10 +461,7 @@ class LinkController extends Controller
                 }),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar histórico de auditoria.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar histórico de auditoria.', $e);
         }
     }
 
@@ -685,10 +493,7 @@ class LinkController extends Controller
                 'data' => new LinkResource($link),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage(),
-            ], 500);
+            return $this->serverError('Erro ao buscar link.', $e);
         }
     }
 }

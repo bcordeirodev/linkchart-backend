@@ -94,7 +94,7 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{id}', 'show')->where('id', '[0-9]+');            // ✅ USADO: LinkService.findOne()
         Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
         Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
-        Route::get('/{id}/analytics', 'analyticsByLinkId')->where('id', '[0-9]+'); // ✅ USADO: LinkService.getAnalytics()
+        Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkLegacyAnalytics'])->where('id', '[0-9]+'); // moved to AnalyticsController
     });
 
     // === META-DADOS DE LINKS (sparkline, trend, preview, health) ===
