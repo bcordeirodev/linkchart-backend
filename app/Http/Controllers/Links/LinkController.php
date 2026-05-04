@@ -5,13 +5,13 @@ namespace App\Http\Controllers\Links;
 use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreateLinkDTO;
 use App\DTOs\UpdateLinkDTO;
+use App\Http\Controllers\BaseController;
 use App\Http\Requests\CreateLinkRequest;
 use App\Http\Requests\UpdateLinkRequest;
 use App\Http\Resources\LinkResource;
 use App\Services\Links\LinkAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 
 /**
  * Controller para gerenciamento de Links
@@ -20,7 +20,7 @@ use Illuminate\Routing\Controller;
  * - SRP: Responsável apenas por receber requisições HTTP e retornar respostas
  * - DIP: Depende da abstração LinkServiceInterface
  */
-class LinkController extends Controller
+class LinkController extends BaseController
 {
     protected LinkServiceInterface $linkService;
 
@@ -208,13 +208,8 @@ class LinkController extends Controller
     {
         try {
             // Buscar link por slug primeiro
-            $link = \App\Models\Link::where('slug', $slug)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
+            $link = $this->findOwnedLink($slug, 'slug');
+            if (! $link) return $this->linkNotFound();
 
             // Gerar dados de analytics baseados nos cliques reais
             $totalClicks = $link->clicks;
@@ -352,13 +347,8 @@ class LinkController extends Controller
     {
         try {
             // Buscar link por ID e verificar ownership
-            $link = \App\Models\Link::where('id', $id)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
+            $link = $this->findOwnedLink($id);
+            if (! $link) return $this->linkNotFound();
 
             // Reutilizar a lógica do método analytics passando o slug
             return $this->analytics($link->slug);
@@ -377,13 +367,8 @@ class LinkController extends Controller
     {
         try {
             // Buscar link por ID e verificar ownership
-            $link = \App\Models\Link::where('id', $id)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
+            $link = $this->findOwnedLink($id);
+            if (! $link) return $this->linkNotFound();
 
             // Buscar todos os cliques com dados relacionados
             $clicks = \App\Models\Click::where('link_id', $link->id)
@@ -504,13 +489,8 @@ class LinkController extends Controller
                 return response()->json(['message' => 'Usuário não autenticado.'], 401);
             }
 
-            $link = \App\Models\Link::where('id', $id)
-                ->where('user_id', $userId)
-                ->first();
-
-            if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou você não tem permissão para acessá-lo.'], 404);
-            }
+            $link = $this->findOwnedLink($id);
+            if (! $link) return $this->linkNotFound();
 
             $perPage = (int) min(max($request->input('per_page', 25), 1), 100);
             $page = (int) max($request->input('page', 1), 1);
