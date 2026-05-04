@@ -38,7 +38,8 @@ class LinkCrudTest extends TestCase
             'title'        => 'Test Link',
         ], $this->auth());
 
-        $response->assertStatus(201);
+        $response->assertStatus(201)
+                 ->assertJsonStructure(['data' => ['id', 'slug', 'original_url']]);
         $this->assertDatabaseHas('links', [
             'original_url' => 'https://example.com',
             'user_id'      => $this->user->id,
@@ -83,6 +84,17 @@ class LinkCrudTest extends TestCase
              ->assertOk();
 
         $this->assertDatabaseHas('links', ['id' => $link->id, 'title' => 'New Title']);
+    }
+
+    public function test_update_denies_access_to_other_user_link(): void
+    {
+        $other = User::factory()->create();
+        $link  = Link::factory()->create(['user_id' => $other->id]);
+
+        $this->putJson("/api/links/{$link->id}", ['title' => 'Hacked'], $this->auth())
+             ->assertStatus(404);
+
+        $this->assertDatabaseHas('links', ['id' => $link->id, 'title' => $link->title]);
     }
 
     public function test_destroy_deletes_owned_link(): void
