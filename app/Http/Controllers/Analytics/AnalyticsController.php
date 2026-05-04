@@ -295,7 +295,7 @@ class AnalyticsController extends BaseController
             $link = $this->findOwnedLink((int) $id);
             if (! $link) return $this->linkNotFound();
 
-            $totalClicks = $link->clicks;
+            $totalClicks = (int) $link->getAttribute('clicks');
 
             if ($totalClicks == 0) {
                 return response()->json([
@@ -307,7 +307,7 @@ class AnalyticsController extends BaseController
                         'slug'         => $link->slug,
                         'title'        => $link->title,
                         'original_url' => $link->original_url,
-                        'shorted_url'  => $link->shorted_url,
+                        'shorted_url'  => $link->getShortedUrl(),
                         'created_at'   => $link->created_at,
                         'is_active'    => $link->is_active,
                         'expires_at'   => $link->expires_at,
@@ -332,14 +332,14 @@ class AnalyticsController extends BaseController
             $dateExpr   = $isSqlite ? "strftime('%Y-%m-%d', created_at)" : "TO_CHAR(created_at, 'YYYY-MM-DD')";
 
             $clicksRaw = $base()
-                ->where('created_at', '>=', now()->subDays(29)->startOfDay())
+                ->where('created_at', '>=', now()->utc()->subDays(29)->startOfDay())
                 ->selectRaw("$dateExpr AS day, COUNT(*) AS total")
                 ->groupByRaw($dateExpr)
                 ->pluck('total', 'day');
 
             $clicksOverTime = [];
             for ($i = 29; $i >= 0; $i--) {
-                $date             = now()->subDays($i)->format('Y-m-d');
+                $date             = now()->utc()->subDays($i)->format('Y-m-d');
                 $clicksOverTime[] = ['date' => $date, 'clicks' => (int) ($clicksRaw[$date] ?? 0)];
             }
 
@@ -416,7 +416,7 @@ class AnalyticsController extends BaseController
                     'slug'         => $link->slug,
                     'title'        => $link->title,
                     'original_url' => $link->original_url,
-                    'shorted_url'  => $link->shorted_url,
+                    'shorted_url'  => $link->getShortedUrl(),
                     'created_at'   => $link->created_at,
                     'is_active'    => $link->is_active,
                     'expires_at'   => $link->expires_at,
