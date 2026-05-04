@@ -3,17 +3,17 @@
 namespace App\Http\Controllers\Analytics;
 
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
+use App\Http\Controllers\BaseController;
 use App\Models\Link;
 use App\Services\Analytics\LinkAnalyticsOrchestrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controller;
 
 /**
  * Controller para Analytics Avançados
  * Focado em valor de negócio e insights acionáveis
  */
-class AnalyticsController extends Controller
+class AnalyticsController extends BaseController
 {
     public function __construct(
         private LinkAnalyticsOrchestrator $analyticsService,
@@ -26,16 +26,8 @@ class AnalyticsController extends Controller
     public function getLinkAnalytics(int $linkId): JsonResponse
     {
         try {
-            // Verificar permissão do usuário
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json([
-                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.',
-                ], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
 
@@ -57,13 +49,8 @@ class AnalyticsController extends Controller
     public function getHeatmapData(int $linkId): JsonResponse
     {
         try {
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado.'], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $heatmapData = $this->analyticsService->getHeatmapData($linkId);
 
@@ -137,13 +124,8 @@ class AnalyticsController extends Controller
     public function getGeographicAnalytics(int $linkId): JsonResponse
     {
         try {
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado.'], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $analytics = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
@@ -169,13 +151,8 @@ class AnalyticsController extends Controller
     public function getBusinessInsights(int $linkId): JsonResponse
     {
         try {
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado.'], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $insights = $this->analyticsService->getLinkInsightsAnalytics($linkId);
 
@@ -198,13 +175,8 @@ class AnalyticsController extends Controller
     public function getTemporalAnalytics(int $linkId): JsonResponse
     {
         try {
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado.'], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             // 1. Buscar dados base (clicks_by_hour, clicks_by_day_of_week, etc.)
             $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId);
@@ -243,13 +215,8 @@ class AnalyticsController extends Controller
     public function getAudienceAnalytics(int $linkId): JsonResponse
     {
         try {
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado.'], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $analytics = $this->analyticsService->getLinkAudienceAnalytics($linkId);
 
@@ -271,13 +238,8 @@ class AnalyticsController extends Controller
     public function getExecutiveSummary(int $linkId): JsonResponse
     {
         try {
-            $link = Link::where('id', $linkId)
-                ->where('user_id', auth()->guard('api')->id())
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado.'], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
 
@@ -327,16 +289,8 @@ class AnalyticsController extends Controller
                 return response()->json(['error' => 'Usuário não autenticado.'], 401);
             }
 
-            // Verificar permissão do usuário
-            $link = Link::where('id', $linkId)
-                ->where('user_id', $userId)
-                ->first();
-
-            if (! $link) {
-                return response()->json([
-                    'error' => 'Link não encontrado ou você não tem permissão para acessá-lo.',
-                ], 404);
-            }
+            $link = $this->findOwnedLink($linkId);
+            if (! $link) return $this->linkNotFound();
 
             $validHours = [1, 24, 168, 720];
             $hours = in_array((int) $request->query('hours'), $validHours, true)
