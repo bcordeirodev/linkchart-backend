@@ -115,13 +115,19 @@ class ProcessLinkClickJobTest extends TestCase
 
     public function test_missing_link_is_logged_without_creating_click(): void
     {
-        Log::spy();
+        // Grab a real null-channel logger before the spy replaces the facade,
+        // then configure channel() on the spy to return it.  This lets
+        // AppLogger::write() (which calls Log::channel('jobs')->info(...))
+        // succeed while Log::warning() calls are still captured for assertion.
+        $nullChannel = new \Psr\Log\NullLogger();
+        $spy = Log::spy();
+        $spy->shouldReceive('channel')->andReturn($nullChannel);
 
         (new ProcessLinkClickJob(99999, $this->payload()))
             ->handle(app(\App\Services\Links\LinkTrackingService::class));
 
         $this->assertSame(0, Click::count());
-        Log::shouldHaveReceived('warning')
+        $spy->shouldHaveReceived('warning')
             ->with('Tracking job: link not found', ['link_id' => 99999]);
     }
 
@@ -134,5 +140,47 @@ class ProcessLinkClickJobTest extends TestCase
 
         $this->assertSame(42, $restored->linkId);
         $this->assertSame($payload, $restored->payload);
+    }
+
+    public function test_handle_populates_request_context_from_payload(): void
+    {
+        $link = $this->makeLink();
+        \App\Logging\Context\RequestContext::clear();
+
+        $spy = new class extends \App\Services\Links\LinkTrackingService {
+            public ?\App\Logging\Context\RequestContext $capturedContext = null;
+
+            public function registrarCliqueFromPayload(int $linkId, array $payload): void
+            {
+                $this->capturedContext = \App\Logging\Context\RequestContext::current();
+            }
+        };
+
+        (new ProcessLinkClickJob($link->id, $this->payload(['request_id' => 'req_propagated_xy'])))
+            ->handle($spy);
+
+        $this->assertNotNull($spy->capturedContext);
+        $this->assertSame('req_propagated_xy', $spy->capturedContext->requestId);
+        $this->assertNull(\App\Logging\Context\RequestContext::current(), 'context must be cleared after handle()');
+    }
+
+    public function test_handle_generates_fallback_request_id_when_payload_lacks_one(): void
+    {
+        $link = $this->makeLink();
+        \App\Logging\Context\RequestContext::clear();
+
+        $spy = new class extends \App\Services\Links\LinkTrackingService {
+            public ?\App\Logging\Context\RequestContext $capturedContext = null;
+
+            public function registrarCliqueFromPayload(int $linkId, array $payload): void
+            {
+                $this->capturedContext = \App\Logging\Context\RequestContext::current();
+            }
+        };
+
+        (new ProcessLinkClickJob($link->id, $this->payload()))->handle($spy);
+
+        $this->assertNotNull($spy->capturedContext);
+        $this->assertStringStartsWith('job_', $spy->capturedContext->requestId);
     }
 }
