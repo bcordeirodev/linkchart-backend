@@ -62,4 +62,28 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         $result = $this->service->getLinkAudienceAnalytics($this->link->id);
         $this->assertSame([], $result['navigation_context_breakdown']);
     }
+
+    public function test_return_visitor_stats_calculates_rate_correctly(): void
+    {
+        Click::factory()->count(34)->create(['link_id' => $this->link->id, 'is_return_visitor' => true,  'session_clicks' => 3]);
+        Click::factory()->count(66)->create(['link_id' => $this->link->id, 'is_return_visitor' => false, 'session_clicks' => 1]);
+
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $stats  = $result['return_visitor_stats'];
+
+        $this->assertEquals(34.0, $stats['return_rate']);
+        $this->assertEquals(66.0, $stats['new_rate']);
+        // avg: (34*3 + 66*1) / 100 = (102+66)/100 = 1.68
+        $this->assertEquals(1.68, $stats['avg_session_clicks']);
+    }
+
+    public function test_return_visitor_stats_zeros_when_no_clicks(): void
+    {
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $stats  = $result['return_visitor_stats'];
+
+        $this->assertSame(0.0, $stats['return_rate']);
+        $this->assertSame(0.0, $stats['new_rate']);
+        $this->assertSame(0.0, $stats['avg_session_clicks']);
+    }
 }

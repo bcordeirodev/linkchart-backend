@@ -30,6 +30,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'connection_type_breakdown'    => [],
                 'rendering_engine'             => [],
                 'navigation_context_breakdown' => [],
+                'return_visitor_stats'         => ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0],
             ];
         }
 
@@ -47,6 +48,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'connection_type_breakdown'    => $this->getConnectionTypeBreakdown($linkId),
             'rendering_engine'             => $this->getRenderingEngineBreakdown($linkId),
             'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId),
+            'return_visitor_stats'         => $this->getReturnVisitorStats($linkId),
         ];
     }
 
@@ -342,6 +344,36 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ])
             ->values()
             ->toArray();
+    }
+
+    /**
+     * Returns the return visitor rate and average session depth for a link.
+     *
+     * is_return_visitor is set when the same IP+UA fingerprint was seen before (Phase 2).
+     * session_clicks counts how many clicks occurred in the visitor's session.
+     *
+     * @param  int  $linkId
+     * @return array{return_rate: float, new_rate: float, avg_session_clicks: float}
+     */
+    private function getReturnVisitorStats(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        if ($total === 0) {
+            return ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0];
+        }
+
+        $returnCount = Click::where('link_id', $linkId)->where('is_return_visitor', true)->count();
+        $avgSession  = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('session_clicks')
+            ->avg('session_clicks');
+
+        return [
+            'return_rate'        => round($returnCount / $total * 100, 2),
+            'new_rate'           => round(($total - $returnCount) / $total * 100, 2),
+            'avg_session_clicks' => round((float) ($avgSession ?? 0), 2),
+        ];
     }
 
     /**
