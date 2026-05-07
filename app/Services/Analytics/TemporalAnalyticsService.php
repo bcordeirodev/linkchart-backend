@@ -13,15 +13,22 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         Link::findOrFail($linkId);
 
         if (! Click::where('link_id', $linkId)->exists()) {
-            return ['clicks_by_hour' => [], 'clicks_by_day_of_week' => []];
+            return [
+                'clicks_by_hour'        => [],
+                'clicks_by_day_of_week' => [],
+                'holiday_impact'        => ['holiday_clicks' => 0, 'non_holiday_clicks' => 0, 'holiday_percentage' => 0, 'top_holidays' => []],
+                'seasonal_distribution' => [],
+            ];
         }
 
         return [
-            'clicks_by_hour' => $this->getClicksByHour($linkId),
+            'clicks_by_hour'        => $this->getClicksByHour($linkId),
             'clicks_by_day_of_week' => $this->getClicksByDayOfWeek($linkId),
             'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId),
-            'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId),
+            'weekend_vs_weekday'    => $this->getWeekendVsWeekday($linkId),
             'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId),
+            'holiday_impact'        => $this->getHolidayImpact($linkId),
+            'seasonal_distribution' => $this->getSeasonalDistribution($linkId),
         ];
     }
 
@@ -30,15 +37,17 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         $clicks = Click::where('link_id', $linkId)->get();
 
         return [
-            'hourly_patterns'  => $this->getHourlyPatterns($clicks),
-            'daily_patterns'   => $this->getDailyPatterns($clicks),
-            'weekly_trends'    => $this->getWeeklyTrends($clicks),
-            'monthly_trends'   => $this->getMonthlyTrends($clicks),
-            'peak_analysis'    => $this->getPeakAnalysis($clicks),
-            'timezone_analysis'=> $this->getTimezoneAnalysis($clicks),
-            'heatmap_data'     => $this->getHourDayHeatmap($clicks),
-            'daily_timeline'   => $this->getDailyTimeline($linkId),
-            'device_by_period' => $this->getDeviceByPeriod($clicks),
+            'hourly_patterns'       => $this->getHourlyPatterns($clicks),
+            'daily_patterns'        => $this->getDailyPatterns($clicks),
+            'weekly_trends'         => $this->getWeeklyTrends($clicks),
+            'monthly_trends'        => $this->getMonthlyTrends($clicks),
+            'peak_analysis'         => $this->getPeakAnalysis($clicks),
+            'timezone_analysis'     => $this->getTimezoneAnalysis($clicks),
+            'heatmap_data'          => $this->getHourDayHeatmap($clicks),
+            'daily_timeline'        => $this->getDailyTimeline($linkId),
+            'device_by_period'      => $this->getDeviceByPeriod($clicks),
+            'holiday_impact'        => $this->getHolidayImpact($linkId),
+            'seasonal_distribution' => $this->getSeasonalDistribution($linkId),
         ];
     }
 
@@ -280,6 +289,72 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             'clicks'           => (int) $r->clicks,
             'unique_visitors'  => (int) $r->unique_visitors,
         ])->toArray();
+    }
+
+    /**
+     * Returns a summary of click volume on national holidays vs non-holidays.
+     *
+     * Only includes clicks where is_holiday is explicitly true (populated after Phase 2
+     * migration). Clicks recorded before the migration have null and are excluded.
+     *
+     * @param  int  $linkId
+     * @return array{holiday_clicks: int, non_holiday_clicks: int, holiday_percentage: float, top_holidays: array}
+     */
+    private function getHolidayImpact(int $linkId): array
+    {
+        $total   = Click::where('link_id', $linkId)->count();
+        $holiday = DB::table('clicks')
+            ->selectRaw('holiday_name, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->where('is_holiday', true)
+            ->whereNotNull('holiday_name')
+            ->groupBy('holiday_name')
+            ->orderBy('clicks', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn ($r) => [
+                'holiday'    => $r->holiday_name,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+
+        $holidayTotal = array_sum(array_column($holiday, 'clicks'));
+
+        return [
+            'holiday_clicks'     => $holidayTotal,
+            'non_holiday_clicks' => $total - $holidayTotal,
+            'holiday_percentage' => $total > 0 ? round($holidayTotal / $total * 100, 2) : 0,
+            'top_holidays'       => $holiday,
+        ];
+    }
+
+    /**
+     * Returns click distribution grouped by calendar season.
+     *
+     * Seasons are computed server-side in Phase 2 accounting for hemisphere.
+     * Only includes clicks where season is populated (after Phase 2 migration).
+     *
+     * @param  int  $linkId
+     * @return array<int, array{season: string, clicks: int, percentage: float}>
+     */
+    private function getSeasonalDistribution(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw('season, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('season')
+            ->groupBy('season')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'season'     => $r->season,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
     }
 
     private function getDeviceByPeriod($clicks): array

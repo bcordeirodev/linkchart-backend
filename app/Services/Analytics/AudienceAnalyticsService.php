@@ -17,30 +17,34 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
 
         if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'device_breakdown'   => [],
-                'browser_breakdown'  => [],
-                'os_breakdown'       => [],
-                'browsers'           => [],
-                'operating_systems'  => [],
-                'device_performance' => [],
-                'languages'          => [],
-                'language_breakdown' => [],
-                'platform_breakdown' => [],
-                'data_saver'         => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
+                'device_breakdown'          => [],
+                'browser_breakdown'         => [],
+                'os_breakdown'              => [],
+                'browsers'                  => [],
+                'operating_systems'         => [],
+                'device_performance'        => [],
+                'languages'                 => [],
+                'language_breakdown'        => [],
+                'platform_breakdown'        => [],
+                'data_saver'                => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
+                'connection_type_breakdown' => [],
+                'rendering_engine'          => [],
             ];
         }
 
         return [
-            'device_breakdown'   => $this->getDeviceBreakdown($linkId),
-            'browser_breakdown'  => $this->getBrowserBreakdown($linkId),
-            'os_breakdown'       => $this->getOSBreakdown($linkId),
-            'browsers'           => $this->getBrowserDistribution($linkId),
-            'operating_systems'  => $this->getOSDistribution($linkId),
-            'device_performance' => $this->getDevicePerformance($linkId),
-            'languages'          => $this->getLanguageDistribution($linkId),
-            'language_breakdown' => $this->getLanguageBreakdown($linkId),
-            'platform_breakdown' => $this->getPlatformBreakdown($linkId),
-            'data_saver'         => $this->getDataSaverStats($linkId),
+            'device_breakdown'          => $this->getDeviceBreakdown($linkId),
+            'browser_breakdown'         => $this->getBrowserBreakdown($linkId),
+            'os_breakdown'              => $this->getOSBreakdown($linkId),
+            'browsers'                  => $this->getBrowserDistribution($linkId),
+            'operating_systems'         => $this->getOSDistribution($linkId),
+            'device_performance'        => $this->getDevicePerformance($linkId),
+            'languages'                 => $this->getLanguageDistribution($linkId),
+            'language_breakdown'        => $this->getLanguageBreakdown($linkId),
+            'platform_breakdown'        => $this->getPlatformBreakdown($linkId),
+            'data_saver'                => $this->getDataSaverStats($linkId),
+            'connection_type_breakdown' => $this->getConnectionTypeBreakdown($linkId),
+            'rendering_engine'          => $this->getRenderingEngineBreakdown($linkId),
         ];
     }
 
@@ -241,6 +245,60 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->get()
             ->map(fn ($r) => [
                 'platform'   => $r->platform,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Returns click distribution grouped by ISP connection type.
+     *
+     * Populated from Phase 2 ISP keyword classification. Clicks before Phase 2
+     * have null connection_type and are coalesced to 'unknown'.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{type: string, clicks: int, percentage: float}>
+     */
+    private function getConnectionTypeBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw("COALESCE(connection_type, 'unknown') as type, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->groupBy('connection_type')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'type'       => $r->type,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Returns click distribution grouped by browser rendering engine.
+     *
+     * Derived from browser name in Phase 2. Clicks before Phase 2 have null
+     * rendering_engine and are coalesced to 'unknown'.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{engine: string, clicks: int, percentage: float}>
+     */
+    private function getRenderingEngineBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw("COALESCE(rendering_engine, 'unknown') as engine, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->groupBy('rendering_engine')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'engine'     => $r->engine,
                 'clicks'     => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
