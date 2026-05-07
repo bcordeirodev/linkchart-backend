@@ -36,7 +36,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             'link_info' => [
                 'id' => $link->id,
                 'title' => $link->title,
-                'short_url' => $link->short_url,
+                'short_url' => $link->getShortedUrl(),
                 'original_url' => $link->original_url,
                 'clicks' => $totalClicks,
                 'is_active' => $link->is_active,
