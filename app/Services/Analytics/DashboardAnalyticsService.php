@@ -33,6 +33,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'countries_reached' => $countries,
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
                 'viral_rank' => $this->getViralRankSummary($linkId, $since),
+                'quality' => $this->getQualitySummary($linkId, $since),
             ],
             'link_info' => [
                 'id' => $link->id,
@@ -81,6 +82,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'countries_reached' => 0,
                 'links_with_traffic' => 0,
                 'viral_rank' => ['current_rank' => 'cold', 'distribution' => []],
+                'quality' => ['organic' => 0, 'suspicious' => 0, 'likely_fraud' => 0, 'unscored' => 0, 'organic_percentage' => 0],
             ],
             'link_info' => null,
             'temporal_data' => [
@@ -470,6 +472,47 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         ];
 
         return $languageMap[$primaryLang] ?? $primaryLang;
+    }
+
+    /**
+     * Returns a summary of click quality tiers for the given link and time window.
+     *
+     * Provides counts per tier (organic, suspicious, likely_fraud) plus organic
+     * percentage — used by the dashboard "Qualidade" card.
+     *
+     * @param  int          $linkId
+     * @param  Carbon|null  $since   Time window start, or null for all time
+     * @return array{organic: int, suspicious: int, likely_fraud: int, unscored: int, organic_percentage: float}
+     */
+    private function getQualitySummary(int $linkId, ?Carbon $since): array
+    {
+        $total = $this->countClicks($linkId, $since);
+
+        $organic = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->where('quality_tier', 'organic')
+            ->count();
+
+        $suspicious = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->where('quality_tier', 'suspicious')
+            ->count();
+
+        $fraud = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->where('quality_tier', 'likely_fraud')
+            ->count();
+
+        return [
+            'organic'            => $organic,
+            'suspicious'         => $suspicious,
+            'likely_fraud'       => $fraud,
+            'unscored'           => $total - $organic - $suspicious - $fraud,
+            'organic_percentage' => $total > 0 ? round($organic / $total * 100, 1) : 0,
+        ];
     }
 
     private function getHourlyPatternsLocal(int $linkId, ?Carbon $since): array

@@ -47,9 +47,11 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             'traffic_sources'    => $this->getTrafficSourceAnalysis($linkId),
             'navigation_context' => $this->getNavigationContextBreakdown($linkId),
             'http_protocol'      => $this->getHttpProtocolBreakdown($linkId),
+            'quality'            => $this->getQualityBreakdown($linkId),
         ];
 
         if ($totalClicks === 0) {
+            $analyticsData['quality'] = ['avg_quality_score' => null, 'tier_breakdown' => [], 'organic_percentage' => 0];
             return [
                 'insights' => [],
                 'summary' => [
@@ -381,5 +383,45 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
+    }
+
+    /**
+     * Returns a quality tier breakdown with average quality score.
+     *
+     * Groups clicks by quality_tier and computes per-tier click count, percentage,
+     * and average quality_score. Only includes clicks scored after the Phase 3
+     * migration (null values are coalesced to 'unknown').
+     *
+     * @param  int  $linkId
+     * @return array{avg_quality_score: float|null, tier_breakdown: array, organic_percentage: float}
+     */
+    private function getQualityBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        $tiers = DB::table('clicks')
+            ->selectRaw("COALESCE(quality_tier, 'unknown') as tier, COUNT(*) as clicks, ROUND(AVG(quality_score), 1) as avg_score")
+            ->where('link_id', $linkId)
+            ->groupBy('quality_tier')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'tier'       => $r->tier,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+                'avg_score'  => (float) ($r->avg_score ?? 0),
+            ])
+            ->toArray();
+
+        $avgScore = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('quality_score')
+            ->avg('quality_score');
+
+        return [
+            'avg_quality_score'  => $avgScore ? round((float) $avgScore, 1) : null,
+            'tier_breakdown'     => $tiers,
+            'organic_percentage' => collect($tiers)->firstWhere('tier', 'organic')['percentage'] ?? 0,
+        ];
     }
 }
