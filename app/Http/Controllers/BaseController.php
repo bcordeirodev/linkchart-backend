@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Logging\AppLogger;
 use App\Models\Link;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
@@ -27,11 +28,7 @@ abstract class BaseController extends Controller
 
     protected function serverError(string $message, \Throwable $e): JsonResponse
     {
-        \Log::error($message, [
-            'exception' => $e->getMessage(),
-            'file'      => $e->getFile(),
-            'line'      => $e->getLine(),
-        ]);
+        AppLogger::httpServerError($message, $e, optional(request()?->user())->id ?? null);
 
         $body = ['message' => $message];
         if (config('app.debug')) {
