@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Logging\AppLogger;
 use App\Models\User;
 use App\Services\EmailVerificationService;
 use Illuminate\Http\Request;
@@ -52,6 +53,8 @@ class AuthController extends Controller
             // Gerar token JWT mesmo sem verificação (usuário pode usar o sistema)
             $token = JWTAuth::fromUser($user);
 
+            AppLogger::authRegistration($user->id, $user->email);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Usuário registrado com sucesso! Verifique seu email para ativar sua conta.',
@@ -65,12 +68,7 @@ class AuthController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Registration Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('registration', $e);
 
             return response()->json([
                 'error' => 'Server Error',
@@ -108,20 +106,18 @@ class AuthController extends Controller
                 ], 401);
             }
 
+            $user = auth()->user();
+            AppLogger::authLoginSuccess($user->id, $request->ip());
+
             return response()->json([
                 'success' => true,
                 'message' => 'Login realizado com sucesso',
                 'token' => $token,
-                'user' => auth()->user(),
+                'user' => $user,
             ]);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Login Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('login', $e);
 
             return response()->json([
                 'error' => 'Server Error',
@@ -219,13 +215,7 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Update Profile Error', [
-                'user_id' => auth()->id(),
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('update_profile', $e);
 
             return response()->json([
                 'error' => 'Server Error',
@@ -275,13 +265,7 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Change Password Error', [
-                'user_id' => auth()->id(),
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('change_password', $e);
 
             return response()->json([
                 'error' => 'Server Error',
@@ -314,13 +298,7 @@ class AuthController extends Controller
             return response()->json($result, $result['success'] ? 200 : 400);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Email Verification Error', [
-                'token' => $request->token,
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('email_verification', $e);
 
             return response()->json([
                 'success' => false,
@@ -358,13 +336,7 @@ class AuthController extends Controller
             return response()->json($result, $result['success'] ? 200 : 400);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Resend Verification Email Error', [
-                'user_id' => auth()->id(),
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('resend_verification', $e);
 
             return response()->json([
                 'success' => false,
@@ -400,13 +372,7 @@ class AuthController extends Controller
             return response()->json($result, 200); // Sempre 200 por segurança
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Forgot Password Error', [
-                'email' => $request->email,
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('forgot_password', $e);
 
             return response()->json([
                 'success' => false,
@@ -443,13 +409,7 @@ class AuthController extends Controller
             return response()->json($result, $result['success'] ? 200 : 400);
 
         } catch (\Exception $e) {
-            \Log::channel('api_errors')->error('Reset Password Error', [
-                'token' => $request->token,
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            AppLogger::authError('reset_password', $e);
 
             return response()->json([
                 'success' => false,
