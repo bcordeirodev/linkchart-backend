@@ -17,24 +17,30 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
 
         if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'device_breakdown' => [],
-                'browser_breakdown' => [],
-                'os_breakdown' => [],
-                'browsers' => [],
-                'operating_systems' => [],
+                'device_breakdown'   => [],
+                'browser_breakdown'  => [],
+                'os_breakdown'       => [],
+                'browsers'           => [],
+                'operating_systems'  => [],
                 'device_performance' => [],
-                'languages' => [],
+                'languages'          => [],
+                'language_breakdown' => [],
+                'platform_breakdown' => [],
+                'data_saver'         => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
             ];
         }
 
         return [
-            'device_breakdown' => $this->getDeviceBreakdown($linkId),
-            'browser_breakdown' => $this->getBrowserBreakdown($linkId),
-            'os_breakdown' => $this->getOSBreakdown($linkId),
-            'browsers' => $this->getBrowserDistribution($linkId),
-            'operating_systems' => $this->getOSDistribution($linkId),
+            'device_breakdown'   => $this->getDeviceBreakdown($linkId),
+            'browser_breakdown'  => $this->getBrowserBreakdown($linkId),
+            'os_breakdown'       => $this->getOSBreakdown($linkId),
+            'browsers'           => $this->getBrowserDistribution($linkId),
+            'operating_systems'  => $this->getOSDistribution($linkId),
             'device_performance' => $this->getDevicePerformance($linkId),
-            'languages' => $this->getLanguageDistribution($linkId),
+            'languages'          => $this->getLanguageDistribution($linkId),
+            'language_breakdown' => $this->getLanguageBreakdown($linkId),
+            'platform_breakdown' => $this->getPlatformBreakdown($linkId),
+            'data_saver'         => $this->getDataSaverStats($linkId),
         ];
     }
 
@@ -180,5 +186,87 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             0,
             10
         );
+    }
+
+    /**
+     * Returns a breakdown of clicks grouped by parsed primary language and region.
+     *
+     * Uses the pre-parsed `primary_language` and `language_region` columns (Phase 1),
+     * so results only include clicks recorded after the Phase 1 migration.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{language: string, region: ?string, clicks: int, percentage: float}>
+     */
+    private function getLanguageBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw("COALESCE(primary_language, 'unknown') as language, language_region, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->whereNotNull('primary_language')
+            ->groupBy('primary_language', 'language_region')
+            ->orderBy('clicks', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn ($r) => [
+                'language'   => $r->language,
+                'region'     => $r->language_region,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Returns a breakdown of clicks by Client Hints platform (ch_platform column).
+     *
+     * The ch_platform column is populated from the Sec-CH-UA-Platform header (Phase 1).
+     * Results only include clicks from Chromium-based browsers that send this header.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{platform: string, clicks: int, percentage: float}>
+     */
+    private function getPlatformBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw('ch_platform as platform, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('ch_platform')
+            ->groupBy('ch_platform')
+            ->orderBy('clicks', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(fn ($r) => [
+                'platform'   => $r->platform,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Returns the count and percentage of clicks where the visitor had data-saver mode active.
+     *
+     * The is_data_saver flag is derived from the Save-Data: on HTTP header (Phase 1).
+     *
+     * @param  int  $linkId
+     * @return array{clicks: int, total: int, percentage: float}
+     */
+    private function getDataSaverStats(int $linkId): array
+    {
+        $total     = Click::where('link_id', $linkId)->count();
+        $dataSaver = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->where('is_data_saver', true)
+            ->count();
+
+        return [
+            'clicks'     => $dataSaver,
+            'total'      => $total,
+            'percentage' => $total > 0 ? round($dataSaver / $total * 100, 2) : 0,
+        ];
     }
 }
