@@ -33,6 +33,9 @@ use Illuminate\Database\Eloquent\Model;
  * @property int|null $seconds_since_last_click  Phase 2: seconds elapsed since the previous click on this link
  * @property string|null $connection_type  Phase 2: ISP category (datacenter|mobile|education|residential|unknown)
  * @property string|null $rendering_engine Phase 2: browser rendering engine (blink|gecko|webkit|trident|unknown)
+ * @property int|null $quality_score      Phase 3: composite click quality score (0–100)
+ * @property string|null $quality_tier    Phase 3: quality classification (organic|suspicious|likely_fraud)
+ * @property int $fingerprint_score       Phase 3: count of detected header inconsistencies (0–3)
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  *
@@ -100,6 +103,10 @@ class Click extends Model
         'seconds_since_last_click',
         'connection_type',
         'rendering_engine',
+        // Phase 3 — quality scoring
+        'quality_score',
+        'quality_tier',
+        'fingerprint_score',
         // Campos de performance
         'response_time',
         'accept_language',

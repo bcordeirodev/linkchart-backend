@@ -80,6 +80,10 @@ class LinkTrackingService
         $connectionData = ['connection_type' => $this->classifyConnectionType($locationData['isp'] ?? null)];
         $engineData     = ['rendering_engine' => $this->deriveRenderingEngine($deviceData['browser'] ?? null)];
 
+        // Phase 3 — quality scoring
+        $allFields   = array_merge($deviceData, $behaviorData, $navigationData, $velocityData, $connectionData);
+        $qualityData = $this->calculateQualityScore($allFields);
+
         $click = Click::create(array_merge([
             'link_id'      => $link->id,
             'ip'           => $ip,
@@ -99,7 +103,8 @@ class LinkTrackingService
             'currency'     => $locationData['currency'],
         ], $deviceData, $temporalData, $behaviorData, $performanceData,
            $navigationData, $languageData,
-           $velocityData, $holidayData, $seasonData, $connectionData, $engineData));
+           $velocityData, $holidayData, $seasonData, $connectionData, $engineData,
+           $qualityData));
 
         DB::table('links')->where('id', $link->id)->increment('clicks');
 
@@ -637,5 +642,83 @@ class LinkTrackingService
         } catch (\Throwable) {
             return ['is_holiday' => null, 'holiday_name' => null];
         }
+    }
+
+    /**
+     * Calculates a composite click quality score from server-side signals.
+     *
+     * Starts from 100 and applies deductions for each fraud/bot indicator found
+     * in the merged click fields. All signals are derived from data already
+     * collected in Phases 1 and 2 — no external API calls are made.
+     *
+     * Returns quality_score (0–100), quality_tier (organic|suspicious|likely_fraud),
+     * and fingerprint_score (count of header inconsistencies 0–3).
+     *
+     * @param  array<string, mixed>  $fields  Merged click data (device + behavior + navigation)
+     * @return array{quality_score: int, quality_tier: string, fingerprint_score: int}
+     */
+    private function calculateQualityScore(array $fields): array
+    {
+        if ($fields['is_bot'] ?? false) {
+            return ['quality_score' => 0, 'quality_tier' => 'likely_fraud', 'fingerprint_score' => 0];
+        }
+
+        $score       = 100;
+        $fingerprint = 0;
+
+        if (($fields['connection_type'] ?? 'unknown') === 'datacenter') {
+            $score -= 25;
+        }
+
+        if (($fields['navigation_context'] ?? null) === 'api_programmatic') {
+            $score -= 15;
+        }
+
+        if (empty($fields['ch_platform'])) {
+            $score -= 10;
+        }
+
+        $secsSince = $fields['seconds_since_last_click'] ?? null;
+        if ($secsSince !== null && $secsSince < 2) {
+            $score -= 20;
+        }
+
+        if (($fields['session_clicks'] ?? 1) > 10) {
+            $score -= 15;
+        }
+
+        if (($fields['session_clicks'] ?? 1) > 5 && ($fields['is_return_visitor'] ?? false)) {
+            $score -= 5;
+        }
+
+        if (empty($fields['accept_language'])) {
+            $score -= 5;
+        }
+
+        $chMobile = $fields['ch_is_mobile'] ?? null;
+        $uaMobile = $fields['is_mobile']    ?? false;
+        if ($chMobile !== null && (bool) $chMobile !== (bool) $uaMobile) {
+            $fingerprint++;
+            $score -= 10;
+        }
+
+        $browser    = $fields['browser']     ?? null;
+        $chPlatform = $fields['ch_platform'] ?? null;
+        if (in_array($browser, ['Chrome', 'Edge'], true) && empty($chPlatform)) {
+            $fingerprint++;
+        }
+
+        $score       = max(0, $score);
+        $qualityTier = match(true) {
+            $score >= 80 => 'organic',
+            $score >= 50 => 'suspicious',
+            default      => 'likely_fraud',
+        };
+
+        return [
+            'quality_score'     => $score,
+            'quality_tier'      => $qualityTier,
+            'fingerprint_score' => $fingerprint,
+        ];
     }
 }
