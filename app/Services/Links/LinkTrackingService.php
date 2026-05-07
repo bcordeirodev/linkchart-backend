@@ -435,6 +435,7 @@ class LinkTrackingService
      * Parses the Accept-Language header into primary language code and region.
      *
      * Extracts the highest-priority language tag from the quality-weighted list.
+     * Correctly handles complex subtags like script codes (e.g. zh-Hant-TW → language=zh, region=TW).
      * Example: "pt-BR,pt;q=0.9,en;q=0.8" → ['primary_language' => 'pt', 'language_region' => 'BR']
      *
      * @param  string|null $raw  Raw Accept-Language header value
@@ -445,12 +446,18 @@ class LinkTrackingService
         if (!$raw) {
             return ['primary_language' => null, 'language_region' => null];
         }
-        $first = trim(explode(';', explode(',', $raw)[0])[0]);
-        $parts  = explode('-', $first, 2);
-        return [
-            'primary_language' => strtolower($parts[0]) ?: null,
-            'language_region'  => isset($parts[1]) ? strtoupper($parts[1]) : null,
-        ];
+        $first  = trim(explode(';', explode(',', $raw)[0])[0]);
+        $parts  = explode('-', $first);
+        $lang   = strtolower($parts[0]) ?: null;
+        // Skip script subtags (e.g. "Hant" in zh-Hant-TW) — only take 2-letter region codes
+        $region = null;
+        foreach (array_slice($parts, 1) as $subtag) {
+            if (strlen($subtag) === 2) {
+                $region = strtoupper($subtag);
+                break;
+            }
+        }
+        return ['primary_language' => $lang, 'language_region' => $region];
     }
 
     private function isValidIP(string $ip): bool
