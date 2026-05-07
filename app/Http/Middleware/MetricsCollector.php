@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Logging\AppLogger;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -62,10 +63,8 @@ class MetricsCollector
             }
         } catch (\Exception $e) {
             // Falha na coleta de métricas não deve quebrar a aplicação
-            Log::warning('MetricsCollector failed but request continued', [
+            AppLogger::event('app', 'warning', 'metrics.collector_failed', [
                 'error' => $e->getMessage(),
-                'path' => $request->path(),
-                'method' => $request->method(),
             ]);
         }
 
@@ -143,7 +142,7 @@ class MetricsCollector
         try {
             // Verificar se Cache está disponível antes de usar
             if (! $this->isCacheAvailable()) {
-                Log::info('Cache not available, skipping metrics collection');
+                Log::debug('Cache not available, skipping metrics collection');
 
                 return;
             }
@@ -226,9 +225,10 @@ class MetricsCollector
             Cache::put($dashboardKey, $dashboardMetrics, 3600);
 
         } catch (\Exception $e) {
-            Log::error('Failed to collect metrics', [
+            AppLogger::event('app', 'error', 'metrics.collect_failed', [
                 'error' => $e->getMessage(),
-                'metrics' => $metrics,
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
         }
     }
@@ -249,7 +249,7 @@ class MetricsCollector
 
                     return true;
                 } catch (\Exception $redisError) {
-                    Log::warning('Redis cache not available, falling back to file cache: '.$redisError->getMessage());
+                    Log::debug('Redis cache not available, falling back to file cache: '.$redisError->getMessage());
                     $cacheDriver = 'file'; // Fallback para file
                 }
             }
@@ -261,7 +261,7 @@ class MetricsCollector
                 if (! is_dir($cachePath)) {
                     // Tentar criar com permissões corretas
                     if (! mkdir($cachePath, 0777, true) && ! is_dir($cachePath)) {
-                        Log::warning('Cache directory could not be created: '.$cachePath);
+                        Log::debug('Cache directory could not be created: '.$cachePath);
 
                         return false;
                     }
@@ -271,7 +271,7 @@ class MetricsCollector
                 }
 
                 if (! is_writable($cachePath)) {
-                    Log::warning('Cache directory not writable: '.$cachePath);
+                    Log::debug('Cache directory not writable: '.$cachePath);
                     // Tentar corrigir permissões
                     @chmod($cachePath, 0777);
                     if (! is_writable($cachePath)) {
@@ -286,7 +286,7 @@ class MetricsCollector
             return true;
 
         } catch (\Exception $e) {
-            Log::warning('Cache completely unavailable: '.$e->getMessage());
+            Log::debug('Cache completely unavailable: '.$e->getMessage());
 
             return false;
         }
@@ -338,7 +338,7 @@ class MetricsCollector
     {
         try {
             if (! $this->isCacheAvailable()) {
-                Log::warning('Cache not available, logging error directly', $errorData);
+                Log::debug('Cache not available, logging error directly', $errorData);
 
                 return;
             }
@@ -389,12 +389,11 @@ class MetricsCollector
             Cache::put($hourKey, $hourErrors, 3600);
 
             // Log do erro
-            Log::warning('API Error Collected', $errorData);
+            AppLogger::event('app', 'warning', 'metrics.api_error_collected', $errorData);
 
         } catch (\Exception $e) {
-            Log::error('Failed to collect error data', [
+            AppLogger::event('app', 'error', 'metrics.error_collect_failed', [
                 'error' => $e->getMessage(),
-                'error_data' => $errorData,
             ]);
         }
     }
