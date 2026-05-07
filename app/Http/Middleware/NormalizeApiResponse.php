@@ -49,6 +49,9 @@ class NormalizeApiResponse
             if (array_key_exists('meta', $payload)) {
                 $envelope['meta'] = $payload['meta'];
             }
+            if (array_key_exists('metadata', $payload)) {
+                $envelope['metadata'] = $payload['metadata'];
+            }
             if (array_key_exists('message', $payload)) {
                 $envelope['message'] = $payload['message'];
             }

@@ -41,47 +41,7 @@ class AnalyticsController extends BaseController
     }
 
     /**
-     * Dados específicos para mapa de calor com informações enriquecidas
-     */
-    public function getHeatmapData(int $linkId): JsonResponse
-    {
-        try {
-            $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
-
-            $heatmapData = $this->analyticsService->getHeatmapData($linkId);
-
-            // Adicionar metadados úteis
-            $totalClicks = array_sum(array_column($heatmapData, 'clicks'));
-            $uniqueCountries = count(array_unique(array_column($heatmapData, 'country')));
-            $uniqueCities = count(array_unique(array_column($heatmapData, 'city')));
-            $maxClicks = $heatmapData ? max(array_column($heatmapData, 'clicks')) : 0;
-
-            return response()->json([
-                'success' => true,
-                'data' => $heatmapData,
-                'metadata' => [
-                    'total_clicks' => $totalClicks,
-                    'unique_countries' => $uniqueCountries,
-                    'unique_cities' => $uniqueCities,
-                    'max_clicks' => $maxClicks,
-                    'total_locations' => count($heatmapData),
-                    'last_updated' => now()->toISOString(),
-                    'link_info' => [
-                        'id' => $link->id,
-                        'title' => $link->title,
-                        'short_url' => $link->getShortedUrl(),
-                        'is_active' => $link->is_active,
-                    ],
-                ],
-            ]);
-        } catch (\Exception $e) {
-            return $this->serverError('Erro ao buscar dados do mapa de calor.', $e);
-        }
-    }
-
-    /**
-     * Analytics geográficos detalhados
+     * Analytics geográficos detalhados — payload unificado (data + metadata)
      */
     public function getGeographicAnalytics(int $linkId): JsonResponse
     {
@@ -89,11 +49,12 @@ class AnalyticsController extends BaseController
             $link = $this->findOwnedLink($linkId);
             if (! $link) return $this->linkNotFound();
 
-            $analytics = $this->analyticsService->getLinkGeographicAnalytics($linkId);
+            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
             return response()->json([
-                'success' => true,
-                'data' => $analytics,
+                'success'  => true,
+                'data'     => $payload['data'],
+                'metadata' => $payload['metadata'],
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar analytics geográficos.', $e);
