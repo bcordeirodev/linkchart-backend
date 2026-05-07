@@ -9,7 +9,7 @@ use Illuminate\Database\Seeder;
 class LinkEightClicksSeeder extends Seeder
 {
     /**
-     * Seeder para o Link ID 30 - Tutorial YouTube
+     * Seeder para o Link ID 8 - Tutorial YouTube
      * Foco: Mobile-first, forte BR, tráfego via YouTube e social
      */
     private array $countries = [
@@ -87,9 +87,9 @@ class LinkEightClicksSeeder extends Seeder
 
     public function run(): void
     {
-        Click::where('link_id', 30)->delete();
+        Click::where('link_id', 8)->delete();
 
-        $this->command->info('🚀 Criando Link ID 30 (Tutorial YouTube)...');
+        $this->command->info('🚀 Criando Link ID 8 (Tutorial YouTube)...');
 
         $clicks = [];
         $totalClicks = 5800;
@@ -112,7 +112,7 @@ class LinkEightClicksSeeder extends Seeder
             $referer = $this->getReferer();
 
             $clicks[] = [
-                'link_id' => 30,
+                'link_id' => 8,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
                 'referer' => $referer,
@@ -144,7 +144,7 @@ class LinkEightClicksSeeder extends Seeder
             Click::insert($clicks);
         }
 
-        $this->command->info("🎉 {$totalClicks} clicks criados para Link ID 30!");
+        $this->command->info("🎉 {$totalClicks} clicks criados para Link ID 8!");
     }
 
     private function generateRandomDate(Carbon $start, Carbon $end): Carbon

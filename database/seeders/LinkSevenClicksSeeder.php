@@ -9,7 +9,7 @@ use Illuminate\Database\Seeder;
 class LinkSevenClicksSeeder extends Seeder
 {
     /**
-     * Seeder para o Link ID 29 - Newsletter Lançamento de Produto
+     * Seeder para o Link ID 7 - Newsletter Lançamento de Produto
      * Foco: Tráfego via email, desktop dominante, público BR concentrado
      */
     private array $countries = [
@@ -81,9 +81,9 @@ class LinkSevenClicksSeeder extends Seeder
 
     public function run(): void
     {
-        Click::where('link_id', 29)->delete();
+        Click::where('link_id', 7)->delete();
 
-        $this->command->info('🚀 Criando Link ID 29 (Newsletter - Lançamento de Produto)...');
+        $this->command->info('🚀 Criando Link ID 7 (Newsletter - Lançamento de Produto)...');
 
         $clicks = [];
         $totalClicks = 2100;
@@ -106,7 +106,7 @@ class LinkSevenClicksSeeder extends Seeder
             $referer = $this->getReferer();
 
             $clicks[] = [
-                'link_id' => 29,
+                'link_id' => 7,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
                 'referer' => $referer,
@@ -138,7 +138,7 @@ class LinkSevenClicksSeeder extends Seeder
             Click::insert($clicks);
         }
 
-        $this->command->info("🎉 {$totalClicks} clicks criados para Link ID 29!");
+        $this->command->info("🎉 {$totalClicks} clicks criados para Link ID 7!");
     }
 
     private function generateRandomDate(Carbon $start, Carbon $end): Carbon
