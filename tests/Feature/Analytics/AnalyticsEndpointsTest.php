@@ -1,0 +1,83 @@
+<?php
+
+namespace Tests\Feature\Analytics;
+
+use App\Models\Link;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class AnalyticsEndpointsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $user;
+    private string $token;
+    private Link $link;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->user = User::factory()->create([
+            'email_verified'    => true,
+            'email_verified_at' => now(),
+        ]);
+        $this->token = auth()->guard('api')->login($this->user);
+        $this->link  = Link::factory()->create(['user_id' => $this->user->id]);
+    }
+
+    private function auth(): array
+    {
+        return ['Authorization' => "Bearer {$this->token}"];
+    }
+
+    /** @return array<string, array{string}> */
+    public static function analyticsEndpoints(): array
+    {
+        return [
+            'dashboard'    => ['/api/analytics/link/%d/dashboard'],
+            'comprehensive' => ['/api/analytics/link/%d/comprehensive'],
+            'heatmap'      => ['/api/analytics/link/%d/heatmap'],
+            'geographic'   => ['/api/analytics/link/%d/geographic'],
+            'insights'     => ['/api/analytics/link/%d/insights'],
+            'temporal'     => ['/api/analytics/link/%d/temporal'],
+            'audience'     => ['/api/analytics/link/%d/audience'],
+        ];
+    }
+
+    /**
+     * @dataProvider analyticsEndpoints
+     */
+    public function test_returns_401_without_token(string $pattern): void
+    {
+        auth()->guard('api')->logout();
+
+        $url = sprintf($pattern, $this->link->id);
+        $this->getJson($url)->assertStatus(401);
+    }
+
+    /**
+     * @dataProvider analyticsEndpoints
+     */
+    public function test_returns_404_for_link_owned_by_another_user(string $pattern): void
+    {
+        $other = User::factory()->create();
+        $foreignLink = Link::factory()->create(['user_id' => $other->id]);
+
+        $url = sprintf($pattern, $foreignLink->id);
+        $this->getJson($url, $this->auth())->assertStatus(404);
+    }
+
+    /**
+     * @dataProvider analyticsEndpoints
+     */
+    public function test_returns_200_with_success_for_owned_link(string $pattern): void
+    {
+        $url = sprintf($pattern, $this->link->id);
+
+        $this->getJson($url, $this->auth())
+            ->assertOk()
+            ->assertJsonStructure(['data']);
+    }
+}
