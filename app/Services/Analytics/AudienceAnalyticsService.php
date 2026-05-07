@@ -31,6 +31,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'rendering_engine'             => [],
                 'navigation_context_breakdown' => [],
                 'return_visitor_stats'         => ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0],
+                'quality_breakdown'            => ['tiers' => [], 'bot_clicks' => 0, 'bot_percentage' => 0.0, 'avg_fingerprint_score' => 0.0],
             ];
         }
 
@@ -49,6 +50,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'rendering_engine'             => $this->getRenderingEngineBreakdown($linkId),
             'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId),
             'return_visitor_stats'         => $this->getReturnVisitorStats($linkId),
+            'quality_breakdown'            => $this->getQualityBreakdown($linkId),
         ];
     }
 
@@ -373,6 +375,46 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'return_rate'        => round($returnCount / $total * 100, 2),
             'new_rate'           => round(($total - $returnCount) / $total * 100, 2),
             'avg_session_clicks' => round((float) ($avgSession ?? 0), 2),
+        ];
+    }
+
+    /**
+     * Returns quality tier distribution, bot rate and average fingerprint score.
+     *
+     * Clicks with null quality_tier (before Phase 3) are excluded from the tiers array
+     * but still counted in the bot_percentage denominator.
+     *
+     * @param  int  $linkId
+     * @return array{tiers: array, bot_clicks: int, bot_percentage: float, avg_fingerprint_score: float}
+     */
+    private function getQualityBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        $tiers = DB::table('clicks')
+            ->selectRaw('quality_tier, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('quality_tier')
+            ->groupBy('quality_tier')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'tier'       => $r->quality_tier,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
+            ])
+            ->toArray();
+
+        $botClicks      = Click::where('link_id', $linkId)->where('is_bot', true)->count();
+        $avgFingerprint = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->avg('fingerprint_score');
+
+        return [
+            'tiers'                 => $tiers,
+            'bot_clicks'            => $botClicks,
+            'bot_percentage'        => $total > 0 ? round($botClicks / $total * 100, 2) : 0.0,
+            'avg_fingerprint_score' => round((float) ($avgFingerprint ?? 0), 2),
         ];
     }
 
