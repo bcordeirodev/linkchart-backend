@@ -1,10 +1,5 @@
 <?php
 
-use Monolog\Handler\NullHandler;
-use Monolog\Handler\StreamHandler;
-use Monolog\Handler\SyslogUdpHandler;
-use Monolog\Processor\PsrLogMessageProcessor;
-
 return [
 
     /*
@@ -54,34 +49,119 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', env('LOG_STACK', 'single')),
+            'channels' => explode(',', env('LOG_STACK', 'app')),
             'ignore_exceptions' => false,
         ],
 
-        // Canal personalizado para produção com logs detalhados
-        'production' => [
+        // ===== Domain channels (each writes to its file + mirrors errors) =====
+
+        'app' => [
             'driver' => 'stack',
-            'channels' => ['daily', 'stderr'],
+            'channels' => ['app_file', 'errors'],
             'ignore_exceptions' => false,
         ],
-
-        // Canal específico para erros de API
-        'api_errors' => [
+        'app_file' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/api-errors.log'),
-            'level' => env('LOG_LEVEL', 'error'),
-            'days' => 30,
-            'replace_placeholders' => true,
+            'path'   => storage_path('logs/app.log'),
+            'level'  => env('LOG_LEVEL', 'info'),
+            'days'   => env('LOG_APP_DAYS', 14),
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
         ],
 
-        // Canal para debug em produção (quando necessário)
-        'debug_production' => [
-            'driver' => 'daily',
-            'path' => storage_path('logs/debug.log'),
-            'level' => 'debug',
-            'days' => 7,
-            'replace_placeholders' => true,
+        'redirect' => [
+            'driver' => 'stack',
+            'channels' => ['redirect_file', 'errors'],
+            'ignore_exceptions' => false,
         ],
+        'redirect_file' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/redirect.log'),
+            'level'  => env('LOG_REDIRECT_LEVEL', 'info'),
+            'days'   => env('LOG_REDIRECT_DAYS', 7),
+            'sample_rate' => env('LOG_REDIRECT_SAMPLE_RATE', 1.0),
+            'tap'    => [
+                App\Logging\Taps\ChannelTap::class,
+                App\Logging\Taps\SampleRateTap::class,
+            ],
+        ],
+
+        'tracking' => [
+            'driver' => 'stack',
+            'channels' => ['tracking_file', 'errors'],
+            'ignore_exceptions' => false,
+        ],
+        'tracking_file' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/tracking.log'),
+            'level'  => env('LOG_TRACKING_LEVEL', 'info'),
+            'days'   => env('LOG_TRACKING_DAYS', 14),
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        'jobs' => [
+            'driver' => 'stack',
+            'channels' => ['jobs_file', 'errors'],
+            'ignore_exceptions' => false,
+        ],
+        'jobs_file' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/jobs.log'),
+            'level'  => env('LOG_JOBS_LEVEL', 'info'),
+            'days'   => env('LOG_JOBS_DAYS', 14),
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        // auth and audit channels skip PII redaction (compliance/incident response)
+        'auth' => [
+            'driver' => 'stack',
+            'channels' => ['auth_file', 'errors'],
+            'ignore_exceptions' => false,
+        ],
+        'auth_file' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/auth.log'),
+            'level'  => env('LOG_AUTH_LEVEL', 'info'),
+            'days'   => env('LOG_AUTH_DAYS', 4),
+            'skip_redaction' => true,
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        'audit' => [
+            'driver' => 'stack',
+            'channels' => ['audit_file', 'errors'],
+            'ignore_exceptions' => false,
+        ],
+        'audit_file' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/audit.log'),
+            'level'  => 'info',
+            'days'   => env('LOG_AUDIT_DAYS', 10),
+            'skip_redaction' => true,
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        'http' => [
+            'driver' => 'stack',
+            'channels' => ['http_file', 'errors'],
+            'ignore_exceptions' => false,
+        ],
+        'http_file' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/http.log'),
+            'level'  => env('LOG_HTTP_LEVEL', 'warning'),
+            'days'   => env('LOG_HTTP_DAYS', 14),
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        'errors' => [
+            'driver' => 'daily',
+            'path'   => storage_path('logs/errors.log'),
+            'level'  => 'error',
+            'days'   => env('LOG_ERRORS_DAYS', 14),
+            'tap'    => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        // ===== Standard channels (kept for compatibility/fallback) =====
 
         'single' => [
             'driver' => 'single',
@@ -110,24 +190,24 @@ return [
         'papertrail' => [
             'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),
-            'handler' => env('LOG_PAPERTRAIL_HANDLER', SyslogUdpHandler::class),
+            'handler' => env('LOG_PAPERTRAIL_HANDLER', \Monolog\Handler\SyslogUdpHandler::class),
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
                 'port' => env('PAPERTRAIL_PORT'),
                 'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
             ],
-            'processors' => [PsrLogMessageProcessor::class],
+            'processors' => [\Monolog\Processor\PsrLogMessageProcessor::class],
         ],
 
         'stderr' => [
             'driver' => 'monolog',
             'level' => env('LOG_LEVEL', 'debug'),
-            'handler' => StreamHandler::class,
+            'handler' => \Monolog\Handler\StreamHandler::class,
             'formatter' => env('LOG_STDERR_FORMATTER'),
             'with' => [
                 'stream' => 'php://stderr',
             ],
-            'processors' => [PsrLogMessageProcessor::class],
+            'processors' => [\Monolog\Processor\PsrLogMessageProcessor::class],
         ],
 
         'syslog' => [
@@ -145,7 +225,7 @@ return [
 
         'null' => [
             'driver' => 'monolog',
-            'handler' => NullHandler::class,
+            'handler' => \Monolog\Handler\NullHandler::class,
         ],
 
         'emergency' => [
