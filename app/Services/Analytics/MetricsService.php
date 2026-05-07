@@ -422,7 +422,7 @@ class MetricsService
             ];
 
         } catch (\Exception $e) {
-            \Log::error('Erro ao buscar dados de gráficos: '.$e->getMessage());
+            \App\Logging\AppLogger::analyticsError($e, ['source' => 'metrics_service.charts']);
 
             return [
                 'temporal' => [
