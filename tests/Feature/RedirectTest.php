@@ -210,4 +210,47 @@ class RedirectTest extends TestCase
         $this->assertInstanceOf(Link::class, $cached);
         $this->assertSame($link->id, $cached->id);
     }
+
+    public function test_response_carries_x_request_id_header(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink();
+
+        $response = $this->withHeaders(['User-Agent' => self::HUMAN_UA])->get('/r/'.$link->slug);
+
+        $this->assertNotEmpty($response->headers->get('X-Request-Id'));
+        $this->assertStringStartsWith('req_', $response->headers->get('X-Request-Id'));
+    }
+
+    public function test_x_request_id_is_propagated_to_dispatched_job_payload(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink();
+
+        $response = $this->withHeaders(['User-Agent' => self::HUMAN_UA])->get('/r/'.$link->slug);
+        $rid = $response->headers->get('X-Request-Id');
+
+        Queue::assertPushed(ProcessLinkClickJob::class, function (ProcessLinkClickJob $job) use ($rid) {
+            $this->assertSame($rid, $job->payload['request_id'] ?? null);
+            return true;
+        });
+    }
+
+    public function test_inbound_x_request_id_header_is_reused(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink();
+
+        $response = $this->withHeaders([
+            'User-Agent' => self::HUMAN_UA,
+            'X-Request-Id' => 'req_external_abc',
+        ])->get('/r/'.$link->slug);
+
+        $this->assertSame('req_external_abc', $response->headers->get('X-Request-Id'));
+
+        Queue::assertPushed(ProcessLinkClickJob::class, function (ProcessLinkClickJob $job) {
+            $this->assertSame('req_external_abc', $job->payload['request_id'] ?? null);
+            return true;
+        });
+    }
 }
