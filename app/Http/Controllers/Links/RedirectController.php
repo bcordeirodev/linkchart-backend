@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use App\Logging\AppLogger;
+use App\Logging\Context\RequestContext;
 use Jenssegers\Agent\Agent;
 
 /**
@@ -64,18 +65,24 @@ class RedirectController extends Controller
             $link = Link::findActiveBySlugCached($slug);
 
             if (! $link) {
+                AppLogger::redirectBlocked($slug, 'not_found');
                 return $this->renderErrorPage('Link não encontrado ou inativo');
             }
 
+            AppLogger::redirectStarted($slug, $link->id);
+
             if ($link->expires_at && now()->isAfter($link->expires_at)) {
+                AppLogger::redirectBlocked($slug, 'expired');
                 return $this->renderErrorPage('Este link expirou e não está mais disponível');
             }
 
             if ($link->starts_in && now()->isBefore($link->starts_in)) {
+                AppLogger::redirectBlocked($slug, 'not_started');
                 return $this->renderErrorPage('Este link ainda não está disponível');
             }
 
             if ($link->hasReachedClickLimit()) {
+                AppLogger::redirectBlocked($slug, 'click_limit');
                 return $this->renderErrorPage('Este link atingiu o limite de cliques');
             }
 
@@ -96,50 +103,34 @@ class RedirectController extends Controller
 
             return $this->renderRedirectPage($link, $metadata, $isBot);
         } catch (\Exception $e) {
-            Log::error('Redirect Error', [
-                'slug' => $slug,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            AppLogger::redirectError($slug, $e);
 
             return $this->renderErrorPage('Erro ao processar redirecionamento');
         }
     }
 
     /**
-     * Enfileira o tracking do clique e incrementa o contador denormalizado
-     * em `links.clicks` via query direta (sem disparar model events — o cache
-     * do Link por slug permanece válido durante picos de clique).
+     * Enqueue tracking work asynchronously and increment the denormalised
+     * click counter directly via DB (no model events) so the cached Link
+     * stays valid during click peaks.
      */
     private function dispatchTracking(Link $link, Request $request, string $slug): void
     {
         try {
             $payload = [
+                'request_id' => RequestContext::current()?->requestId,
                 'ip' => $this->linkTrackingService->resolveRealUserIP($request),
                 'user_agent' => $request->userAgent(),
                 'referer' => $request->header('referer'),
                 'accept_language' => $request->header('Accept-Language'),
                 'query_params' => $request->only(LinkTrackingService::UTM_KEYS),
                 'http_response_ms' => round((microtime(true) - (defined('LARAVEL_START') ? LARAVEL_START : microtime(true))) * 1000, 2),
-                'sec_fetch_site'   => $request->header('Sec-Fetch-Site'),
-                'sec_fetch_mode'   => $request->header('Sec-Fetch-Mode'),
-                'sec_fetch_dest'   => $request->header('Sec-Fetch-Dest'),
-                'ch_platform'      => trim($request->header('Sec-CH-UA-Platform', ''), '"'),
-                'ch_is_mobile'     => $request->hasHeader('Sec-CH-UA-Mobile')
-                                        ? $request->header('Sec-CH-UA-Mobile') === '?1'
-                                        : null,
-                'save_data'        => $request->header('Save-Data') === 'on',
-                'server_protocol'  => $request->server('SERVER_PROTOCOL'),
             ];
 
             ProcessLinkClickJob::dispatch($link->id, $payload);
+            AppLogger::redirectDispatched($link->id, ProcessLinkClickJob::class);
         } catch (\Throwable $e) {
-            Log::error('Failed to dispatch click tracking', [
-                'slug' => $slug,
-                'link_id' => $link->id,
-                'error' => $e->getMessage(),
-            ]);
+            AppLogger::redirectError($slug, $e);
         }
     }
 
@@ -164,7 +155,7 @@ class RedirectController extends Controller
     private function fetchOriginalMetadata(string $url): array
     {
         if (! $this->isSafeFetchUrl($url)) {
-            Log::info('Skipping OG fetch for unsafe URL', ['url' => $url]);
+            AppLogger::ogFetchSkipped($url, 'unsafe_url');
 
             return $this->getDefaultMetadata($url);
         }
@@ -190,21 +181,13 @@ class RedirectController extends Controller
                     ->get($url);
 
                 if (! $response->ok()) {
-                    Log::warning('OG fetch returned non-OK status', [
-                        'url' => $url,
-                        'status' => $response->status(),
-                    ]);
-
+                    AppLogger::ogFetchNonOk($url, $response->status());
                     return $this->getDefaultMetadata($url);
                 }
 
                 return $this->parseMetaTags($response->body(), $url);
             } catch (\Throwable $e) {
-                Log::warning('Exception fetching metadata', [
-                    'url' => $url,
-                    'error' => $e->getMessage(),
-                ]);
-
+                AppLogger::ogFetchFailed($url, $e);
                 return $this->getDefaultMetadata($url);
             }
         });
