@@ -50,6 +50,9 @@ class LinkTrackingService
         $behaviorData = $this->analyzeVisitorBehavior($ip, $link->id, $referer);
         $performanceData = $this->collectPerformanceData($acceptLanguage, $httpResponseMs);
 
+        $navigationData = $this->enrichNavigationContext($payload);
+        $languageData   = $this->parseAcceptLanguage($payload['accept_language'] ?? null);
+
         $click = Click::create(array_merge([
             'link_id' => $link->id,
             'ip' => $ip,
@@ -67,7 +70,7 @@ class LinkTrackingService
             'timezone' => $locationData['timezone'],
             'continent' => $locationData['continent'],
             'currency' => $locationData['currency'],
-        ], $deviceData, $temporalData, $behaviorData, $performanceData));
+        ], $deviceData, $temporalData, $behaviorData, $performanceData, $navigationData, $languageData));
 
         DB::table('links')->where('id', $link->id)->increment('clicks');
 
@@ -383,6 +386,70 @@ class LinkTrackingService
         return [
             'response_time' => $httpResponseMs !== null ? round($httpResponseMs, 3) : null,
             'accept_language' => $acceptLanguage,
+        ];
+    }
+
+    /**
+     * Derives a semantic navigation context from Sec-Fetch-* headers.
+     *
+     * Uses Sec-Fetch-Site and Sec-Fetch-Mode to produce a reliable attribution
+     * category that is more accurate than the Referer header, which browsers
+     * may suppress via Referrer-Policy.
+     *
+     * @param  array{
+     *     sec_fetch_site?: ?string,
+     *     sec_fetch_mode?: ?string,
+     *     sec_fetch_dest?: ?string,
+     *     ch_platform?: ?string,
+     *     ch_is_mobile?: ?bool,
+     *     save_data?: bool,
+     *     server_protocol?: ?string
+     * } $payload
+     * @return array{navigation_context: string, fetch_dest: ?string, ch_platform: ?string, ch_is_mobile: ?bool, is_data_saver: bool, http_protocol: ?string}
+     */
+    private function enrichNavigationContext(array $payload): array
+    {
+        $site = $payload['sec_fetch_site'] ?? null;
+        $mode = $payload['sec_fetch_mode'] ?? null;
+
+        $context = match(true) {
+            in_array($mode, ['prefetch', 'preload'], true)                              => 'preload',
+            $site === 'none' && $mode === 'navigate'                                    => 'browser_direct',
+            in_array($site, ['cross-site', 'same-site'], true) && $mode === 'navigate' => 'browser_referral',
+            in_array($site, ['cross-site', 'same-site'], true) && $mode === 'no-cors'  => 'in_app_webview',
+            $site === null && $mode === null                                             => 'api_programmatic',
+            default                                                                     => 'browser_referral',
+        };
+
+        return [
+            'navigation_context' => $context,
+            'fetch_dest'         => $payload['sec_fetch_dest'] ?? null,
+            'ch_platform'        => !empty($payload['ch_platform']) ? $payload['ch_platform'] : null,
+            'ch_is_mobile'       => $payload['ch_is_mobile'] ?? null,
+            'is_data_saver'      => (bool) ($payload['save_data'] ?? false),
+            'http_protocol'      => $payload['server_protocol'] ?? null,
+        ];
+    }
+
+    /**
+     * Parses the Accept-Language header into primary language code and region.
+     *
+     * Extracts the highest-priority language tag from the quality-weighted list.
+     * Example: "pt-BR,pt;q=0.9,en;q=0.8" → ['primary_language' => 'pt', 'language_region' => 'BR']
+     *
+     * @param  string|null $raw  Raw Accept-Language header value
+     * @return array{primary_language: ?string, language_region: ?string}
+     */
+    private function parseAcceptLanguage(?string $raw): array
+    {
+        if (!$raw) {
+            return ['primary_language' => null, 'language_region' => null];
+        }
+        $first = trim(explode(';', explode(',', $raw)[0])[0]);
+        $parts  = explode('-', $first, 2);
+        return [
+            'primary_language' => strtolower($parts[0]) ?: null,
+            'language_region'  => isset($parts[1]) ? strtoupper($parts[1]) : null,
         ];
     }
 
