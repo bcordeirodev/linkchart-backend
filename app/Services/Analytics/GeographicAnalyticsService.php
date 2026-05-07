@@ -57,7 +57,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->whereNotNull('latitude')->whereNotNull('longitude')
             ->whereNotNull('country')->where('country', '!=', 'localhost')->where('country', '!=', '')
             ->groupBy('latitude', 'longitude', 'city', 'country', 'iso_code', 'currency', 'state_name', 'continent', 'timezone')
-            ->orderBy('clicks', 'desc')->get()
+            ->orderBy('clicks', 'desc')->limit(500)->get()
             ->map(fn ($r) => [
                 'lat' => (float) $r->latitude,
                 'lng' => (float) $r->longitude,
