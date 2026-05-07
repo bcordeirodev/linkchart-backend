@@ -50,6 +50,15 @@ class Click extends Model
         'is_return_visitor',
         'session_clicks',
         'click_source',
+        // Phase 1 — navigation context
+        'navigation_context',
+        'fetch_dest',
+        'ch_platform',
+        'ch_is_mobile',
+        'is_data_saver',
+        'http_protocol',
+        'primary_language',
+        'language_region',
         // Campos de performance
         'response_time',
         'accept_language',
