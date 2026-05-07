@@ -18,14 +18,28 @@ class LinkTrackingService
      * Registra clique a partir de payload serializável (extraído do Request no controller).
      * Ponto de entrada usado pelo ProcessLinkClickJob.
      *
+     * Applies enrichments in order:
+     *   - Phase 1: navigation context (Sec-Fetch-*), language parsing
+     *   - Phase 2: viral rank (ClickVelocityService), holiday, season,
+     *              connection type, rendering engine
+     *
+     * @param  int  $linkId  ID of the link being clicked
      * @param  array{
      *     ip?: string,
      *     user_agent?: ?string,
      *     referer?: ?string,
      *     accept_language?: ?string,
      *     query_params?: array<string, string>,
-     *     http_response_ms?: float
-     * }  $payload
+     *     http_response_ms?: float,
+     *     sec_fetch_site?: ?string,
+     *     sec_fetch_mode?: ?string,
+     *     sec_fetch_dest?: ?string,
+     *     ch_platform?: ?string,
+     *     ch_is_mobile?: ?bool,
+     *     save_data?: bool,
+     *     server_protocol?: ?string
+     * }  $payload  Serializable request payload extracted in the controller
+     * @return void
      */
     public function registrarCliqueFromPayload(int $linkId, array $payload): void
     {
@@ -53,24 +67,39 @@ class LinkTrackingService
         $navigationData = $this->enrichNavigationContext($payload);
         $languageData   = $this->parseAcceptLanguage($payload['accept_language'] ?? null);
 
+        // Phase 2 — contextual intelligence
+        $velocityData   = app(\App\Services\Links\ClickVelocityService::class)->record($link->id);
+
+        $isoCode        = $locationData['iso_code'] ?? '';
+        $holidayData    = $isoCode
+            ? $this->enrichHoliday($isoCode, now())
+            : ['is_holiday' => null, 'holiday_name' => null];
+        $seasonData     = $isoCode
+            ? ['season' => $this->enrichSeason($isoCode, now())]
+            : ['season' => null];
+        $connectionData = ['connection_type' => $this->classifyConnectionType($locationData['isp'] ?? null)];
+        $engineData     = ['rendering_engine' => $this->deriveRenderingEngine($deviceData['browser'] ?? null)];
+
         $click = Click::create(array_merge([
-            'link_id' => $link->id,
-            'ip' => $ip,
-            'user_agent' => $userAgent,
-            'referer' => $referer,
-            'country' => $locationData['country'],
-            'city' => $locationData['city'],
-            'device' => $this->resolveDevice($userAgent),
-            'iso_code' => $locationData['iso_code'],
-            'state' => $locationData['state'],
-            'state_name' => $locationData['state_name'],
-            'postal_code' => $locationData['postal_code'],
-            'latitude' => $locationData['latitude'],
-            'longitude' => $locationData['longitude'],
-            'timezone' => $locationData['timezone'],
-            'continent' => $locationData['continent'],
-            'currency' => $locationData['currency'],
-        ], $deviceData, $temporalData, $behaviorData, $performanceData, $navigationData, $languageData));
+            'link_id'      => $link->id,
+            'ip'           => $ip,
+            'user_agent'   => $userAgent,
+            'referer'      => $referer,
+            'country'      => $locationData['country'],
+            'city'         => $locationData['city'],
+            'device'       => $this->resolveDevice($userAgent),
+            'iso_code'     => $locationData['iso_code'],
+            'state'        => $locationData['state'],
+            'state_name'   => $locationData['state_name'],
+            'postal_code'  => $locationData['postal_code'],
+            'latitude'     => $locationData['latitude'],
+            'longitude'    => $locationData['longitude'],
+            'timezone'     => $locationData['timezone'],
+            'continent'    => $locationData['continent'],
+            'currency'     => $locationData['currency'],
+        ], $deviceData, $temporalData, $behaviorData, $performanceData,
+           $navigationData, $languageData,
+           $velocityData, $holidayData, $seasonData, $connectionData, $engineData));
 
         DB::table('links')->where('id', $link->id)->increment('clicks');
 
@@ -471,5 +500,142 @@ class LinkTrackingService
         }
 
         return true;
+    }
+
+    /**
+     * Determines the calendar season for the given ISO country code and datetime.
+     *
+     * Accounts for southern hemisphere inversion — BR, AR, AU, etc. experience
+     * opposite seasons to northern-hemisphere countries at the same time of year.
+     *
+     * @param  string             $isoCode   ISO 3166-1 alpha-2 country code (e.g. 'BR', 'US')
+     * @param  \DateTimeInterface $clickedAt Click timestamp (used for month extraction)
+     * @return string One of: spring, summer, fall, winter
+     */
+    private function enrichSeason(string $isoCode, \DateTimeInterface $clickedAt): string
+    {
+        $month    = (int) $clickedAt->format('n');
+        $southern = ['BR', 'AR', 'CL', 'AU', 'NZ', 'ZA', 'PE', 'BO', 'PY', 'UY'];
+        $isSouth  = in_array(strtoupper($isoCode), $southern, true);
+
+        $northSeason = match(true) {
+            in_array($month, [12, 1, 2], true) => 'winter',
+            in_array($month, [3, 4, 5], true)  => 'spring',
+            in_array($month, [6, 7, 8], true)  => 'summer',
+            default                            => 'fall',
+        };
+
+        if (! $isSouth) {
+            return $northSeason;
+        }
+
+        return match($northSeason) {
+            'winter' => 'summer',
+            'spring' => 'fall',
+            'summer' => 'winter',
+            'fall'   => 'spring',
+        };
+    }
+
+    /**
+     * Classifies the ISP name into a connection type category.
+     *
+     * Uses keyword matching against the ISP string from GeoIP. Returns 'unknown'
+     * when ISP is null (e.g. free GeoLite2-City without ISP data).
+     *
+     * @param  string|null $isp  ISP name from GeoIP lookup, or null
+     * @return string One of: datacenter, mobile, education, residential, unknown
+     */
+    private function classifyConnectionType(?string $isp): string
+    {
+        if (! $isp) {
+            return 'unknown';
+        }
+
+        $lower = strtolower($isp);
+
+        $datacenter = ['amazon', 'google', 'digitalocean', 'hetzner', 'ovh', 'vultr',
+                       'linode', 'azure', 'cloudflare', 'akamai', 'fastly', 'microsoft'];
+        $mobile     = ['claro', 'vivo', 'tim ', 'oi ', 'nextel', 't-mobile',
+                       'verizon', 'at&t', 'sprint', 'net mobile'];
+        $education  = ['university', 'universidade', 'instituto', 'college', 'escola'];
+
+        foreach ($datacenter as $kw) {
+            if (str_contains($lower, $kw)) {
+                return 'datacenter';
+            }
+        }
+        foreach ($mobile as $kw) {
+            if (str_contains($lower, $kw)) {
+                return 'mobile';
+            }
+        }
+        foreach ($education as $kw) {
+            if (str_contains($lower, $kw)) {
+                return 'education';
+            }
+        }
+
+        return 'residential';
+    }
+
+    /**
+     * Derives the browser rendering engine from the parsed browser name.
+     *
+     * Maps browser names (as returned by jenssegers/agent) to their underlying
+     * rendering engine family.
+     *
+     * @param  string|null $browser  Browser name from parseUserAgent(), e.g. 'Chrome', 'Safari'
+     * @return string One of: blink, gecko, webkit, trident, unknown
+     */
+    private function deriveRenderingEngine(?string $browser): string
+    {
+        return match(true) {
+            in_array($browser, ['Chrome', 'Edge', 'Opera', 'Brave', 'Vivaldi'], true) => 'blink',
+            in_array($browser, ['Firefox'], true)                                      => 'gecko',
+            in_array($browser, ['Safari'], true)                                       => 'webkit',
+            in_array($browser, ['IE'], true)                                           => 'trident',
+            default                                                                    => 'unknown',
+        };
+    }
+
+    /**
+     * Checks whether the click timestamp falls on a national holiday.
+     *
+     * Uses the azuyalabs/yasumi library. Returns null values for countries not
+     * supported by yasumi or when the library throws. Requires `composer require
+     * azuyalabs/yasumi` to have been run (Docker must be up for this step).
+     *
+     * @param  string             $isoCode   ISO 3166-1 alpha-2 country code
+     * @param  \DateTimeInterface $clickedAt Click timestamp
+     * @return array{is_holiday: ?bool, holiday_name: ?string}
+     */
+    private function enrichHoliday(string $isoCode, \DateTimeInterface $clickedAt): array
+    {
+        $supported = [
+            'BR' => 'Brazil',      'US' => 'USA',         'GB' => 'UnitedKingdom',
+            'DE' => 'Germany',     'FR' => 'France',       'PT' => 'Portugal',
+            'ES' => 'Spain',       'NL' => 'Netherlands',  'AU' => 'Australia',
+            'CA' => 'Canada',
+        ];
+
+        $iso = strtoupper($isoCode);
+        if (! isset($supported[$iso])) {
+            return ['is_holiday' => null, 'holiday_name' => null];
+        }
+
+        try {
+            $year      = (int) $clickedAt->format('Y');
+            $holidays  = \Yasumi\Yasumi::create($supported[$iso], $year);
+            $date      = new \DateTime($clickedAt->format('Y-m-d'));
+            $isHoliday = $holidays->isHoliday($date);
+
+            return [
+                'is_holiday'   => $isHoliday,
+                'holiday_name' => $isHoliday ? ($holidays->whatObservance($date)?->getName() ?? null) : null,
+            ];
+        } catch (\Throwable) {
+            return ['is_holiday' => null, 'holiday_name' => null];
+        }
     }
 }
