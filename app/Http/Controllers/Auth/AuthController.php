@@ -100,6 +100,8 @@ class AuthController extends Controller
             $credentials = $request->only('email', 'password');
 
             if (! $token = JWTAuth::attempt($credentials)) {
+                AppLogger::authLoginFailure($credentials['email'], $request->ip(), 'invalid_credentials');
+
                 return response()->json([
                     'error' => 'Unauthorized',
                     'message' => 'Credenciais inválidas',
