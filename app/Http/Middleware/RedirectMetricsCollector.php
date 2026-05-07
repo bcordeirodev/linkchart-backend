@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use App\Logging\AppLogger;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -22,7 +23,7 @@ class RedirectMetricsCollector
         $userAgent = $request->userAgent();
         $referer = $request->headers->get('referer');
 
-        Log::info('RedirectMetricsCollector: Starting', [
+        Log::debug('RedirectMetricsCollector: Starting', [
             'slug' => $slug,
             'ip' => $ip,
             'user_agent' => substr($userAgent, 0, 100), // Truncar para log
@@ -34,7 +35,7 @@ class RedirectMetricsCollector
         $responseTime = microtime(true) - $startTime;
         $statusCode = $response->getStatusCode();
 
-        Log::info('RedirectMetricsCollector: Response processed', [
+        Log::debug('RedirectMetricsCollector: Response processed', [
             'slug' => $slug,
             'status_code' => $statusCode,
             'response_time' => $responseTime,
@@ -56,18 +57,17 @@ class RedirectMetricsCollector
                 'utm_params' => $request->query(),
             ]);
 
-            Log::info('RedirectMetricsCollector: Metrics collected successfully', ['slug' => $slug]);
-        } catch (\Exception $e) {
-            // Log com fallback para stderr se falhar
+            AppLogger::redirectMetricsCollected(
+                $slug,
+                $statusCode,
+                $responseTime,
+                $this->getCountryFromIp($ip)
+            );
+        } catch (\Throwable $e) {
             try {
-                Log::error('RedirectMetricsCollector: Failed to collect metrics', [
-                    'slug' => $slug,
-                    'error' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                ]);
-            } catch (\Exception $logError) {
-                error_log("FALLBACK_LOG: RedirectMetricsCollector failed for slug: $slug, Error: ".$e->getMessage());
+                AppLogger::redirectMetricsFailed($slug, $e);
+            } catch (\Throwable $logError) {
+                error_log('FALLBACK_LOG: RedirectMetricsCollector failed for slug='.$slug.' error='.$e->getMessage());
             }
             // Não falhar a requisição por causa das métricas
         }
@@ -80,31 +80,31 @@ class RedirectMetricsCollector
      */
     private function collectRedirectMetrics(array $metrics): void
     {
-        Log::info('RedirectMetricsCollector: collectRedirectMetrics called', [
+        Log::debug('RedirectMetricsCollector: collectRedirectMetrics called', [
             'slug' => $metrics['slug'] ?? 'unknown',
         ]);
 
         try {
             // Verificar se Cache está disponível
             if (! $this->isCacheAvailable()) {
-                Log::warning('RedirectMetricsCollector: Cache not available, skipping metrics collection');
+                Log::debug('RedirectMetricsCollector: Cache not available, skipping metrics collection');
 
                 return;
             }
 
-            Log::info('RedirectMetricsCollector: Cache available, proceeding with metrics');
+            Log::debug('RedirectMetricsCollector: Cache available, proceeding with metrics');
 
             $hour = now()->format('Y-m-d-H');
             $day = now()->format('Y-m-d');
 
-            Log::info('RedirectMetricsCollector: Time variables set', [
+            Log::debug('RedirectMetricsCollector: Time variables set', [
                 'hour' => $hour,
                 'day' => $day,
             ]);
 
             // Métricas por hora de redirecionamentos
             $hourKey = "redirect_metrics:hour:{$hour}";
-            Log::info('RedirectMetricsCollector: Getting hourly metrics', ['key' => $hourKey]);
+            Log::debug('RedirectMetricsCollector: Getting hourly metrics', ['key' => $hourKey]);
 
             $hourMetrics = Cache::get($hourKey, [
                 'total_redirects' => 0,
@@ -119,7 +119,7 @@ class RedirectMetricsCollector
                 'top_slugs' => [],
             ]);
 
-            Log::info('RedirectMetricsCollector: Current hourly metrics', [
+            Log::debug('RedirectMetricsCollector: Current hourly metrics', [
                 'total_redirects' => $hourMetrics['total_redirects'],
                 'unique_ips_count' => count($hourMetrics['unique_ips']),
             ]);
@@ -160,7 +160,7 @@ class RedirectMetricsCollector
             $hourMetrics['avg_response_time'] =
                 $hourMetrics['total_response_time'] / $hourMetrics['total_redirects'];
 
-            Log::info('RedirectMetricsCollector: Saving hourly metrics', [
+            Log::debug('RedirectMetricsCollector: Saving hourly metrics', [
                 'key' => $hourKey,
                 'total_redirects' => $hourMetrics['total_redirects'],
                 'successful' => $hourMetrics['successful_redirects'],
@@ -171,7 +171,7 @@ class RedirectMetricsCollector
 
             // Métricas diárias agregadas
             $dayKey = "redirect_metrics:day:{$day}";
-            Log::info('RedirectMetricsCollector: Processing daily metrics', ['key' => $dayKey]);
+            Log::debug('RedirectMetricsCollector: Processing daily metrics', ['key' => $dayKey]);
 
             $dayMetrics = Cache::get($dayKey, [
                 'total_redirects' => 0,
@@ -210,23 +210,8 @@ class RedirectMetricsCollector
 
             Cache::put($dayKey, $dayMetrics, 86400); // 24 horas
 
-            // Log estruturado para análise posterior (usando canal padrão)
-            Log::info('redirect_metrics', [
-                'slug' => $metrics['slug'],
-                'ip' => $metrics['ip'],
-                'country' => $metrics['country'],
-                'device' => $metrics['device'],
-                'referer_domain' => $refererDomain,
-                'response_time' => $metrics['response_time'],
-                'success' => $metrics['success'],
-                'timestamp' => $metrics['timestamp']->toISOString(),
-                'utm_source' => $metrics['utm_params']['utm_source'] ?? null,
-                'utm_medium' => $metrics['utm_params']['utm_medium'] ?? null,
-                'utm_campaign' => $metrics['utm_params']['utm_campaign'] ?? null,
-            ]);
-
         } catch (\Exception $e) {
-            Log::error('Failed to collect redirect metrics', [
+            Log::debug('Failed to collect redirect metrics', [
                 'error' => $e->getMessage(),
                 'metrics' => $metrics,
             ]);
@@ -238,10 +223,10 @@ class RedirectMetricsCollector
      */
     private function getCountryFromIp(?string $ip): ?string
     {
-        Log::info('RedirectMetricsCollector: Getting country for IP', ['ip' => $ip]);
+        Log::debug('RedirectMetricsCollector: Getting country for IP', ['ip' => $ip]);
 
         if (! $ip || in_array($ip, ['127.0.0.1', '::1'])) {
-            Log::info('RedirectMetricsCollector: Localhost IP detected');
+            Log::debug('RedirectMetricsCollector: Localhost IP detected');
 
             return 'localhost';
         }
@@ -252,12 +237,12 @@ class RedirectMetricsCollector
             $cachedCountry = Cache::get($cacheKey);
 
             if ($cachedCountry !== null) {
-                Log::info('RedirectMetricsCollector: Country found in cache', ['country' => $cachedCountry]);
+                Log::debug('RedirectMetricsCollector: Country found in cache', ['country' => $cachedCountry]);
 
                 return $cachedCountry;
             }
 
-            Log::info('RedirectMetricsCollector: Attempting GeoIP lookup');
+            Log::debug('RedirectMetricsCollector: Attempting GeoIP lookup');
 
             // Usar o serviço GeoIP do Laravel (torann/geoip)
             $geoip = app('geoip');
@@ -265,20 +250,20 @@ class RedirectMetricsCollector
 
             // Verificar se a localização foi encontrada (não é default)
             if (! $location->default && $location->country) {
-                Log::info('RedirectMetricsCollector: Country found via GeoIP', ['country' => $location->country]);
+                Log::debug('RedirectMetricsCollector: Country found via GeoIP', ['country' => $location->country]);
                 // Cache por 24 horas
                 Cache::put($cacheKey, $location->country, 86400);
 
                 return $location->country;
             }
 
-            Log::info('RedirectMetricsCollector: GeoIP returned default location or no country found');
+            Log::debug('RedirectMetricsCollector: GeoIP returned default location or no country found');
 
             // Cache null result por 1 hora para evitar lookups repetidos
             Cache::put($cacheKey, null, 3600);
 
         } catch (\Exception $e) {
-            Log::error('RedirectMetricsCollector: GeoIP lookup failed', [
+            Log::debug('RedirectMetricsCollector: GeoIP lookup failed', [
                 'ip' => $ip,
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
@@ -336,7 +321,7 @@ class RedirectMetricsCollector
     {
         try {
             $testKey = 'cache_test_redirect_'.uniqid();
-            Log::info('RedirectMetricsCollector: Testing cache availability', ['test_key' => $testKey]);
+            Log::debug('RedirectMetricsCollector: Testing cache availability', ['test_key' => $testKey]);
 
             // Testar operação de cache simples
             Cache::put($testKey, 'test', 1);
@@ -345,18 +330,18 @@ class RedirectMetricsCollector
             $testValue = Cache::get($testKey);
 
             if ($testValue === 'test') {
-                Log::info('RedirectMetricsCollector: Cache is available and working');
+                Log::debug('RedirectMetricsCollector: Cache is available and working');
                 // Limpar teste
                 Cache::forget($testKey);
 
                 return true;
             } else {
-                Log::warning('RedirectMetricsCollector: Cache write succeeded but read failed');
+                Log::debug('RedirectMetricsCollector: Cache write succeeded but read failed');
 
                 return false;
             }
         } catch (\Exception $e) {
-            Log::error('RedirectMetricsCollector: Cache not available', [
+            Log::debug('RedirectMetricsCollector: Cache not available', [
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
@@ -382,7 +367,7 @@ class RedirectMetricsCollector
         if ($realIP = $request->query('real_ip')) {
             $cleanIP = trim($realIP);
             if ($this->isValidIP($cleanIP)) {
-                Log::info('RedirectMetricsCollector: IP captured via real_ip query parameter', [
+                Log::debug('RedirectMetricsCollector: IP captured via real_ip query parameter', [
                     'ip' => $cleanIP,
                     'source' => 'query_param',
                 ]);
@@ -395,7 +380,7 @@ class RedirectMetricsCollector
         if ($realIP = $request->header('X-Real-IP')) {
             $cleanIP = trim($realIP);
             if ($this->isValidIP($cleanIP)) {
-                Log::info('RedirectMetricsCollector: IP captured via X-Real-IP header', [
+                Log::debug('RedirectMetricsCollector: IP captured via X-Real-IP header', [
                     'ip' => $cleanIP,
                     'source' => 'X-Real-IP',
                 ]);
@@ -411,7 +396,7 @@ class RedirectMetricsCollector
             $clientIP = $ips[0]; // Primeiro IP é sempre o cliente original
 
             if ($this->isValidIP($clientIP)) {
-                Log::info('RedirectMetricsCollector: IP captured via X-Forwarded-For header', [
+                Log::debug('RedirectMetricsCollector: IP captured via X-Forwarded-For header', [
                     'ip' => $clientIP,
                     'source' => 'X-Forwarded-For',
                     'full_chain' => $forwardedFor,
@@ -425,7 +410,7 @@ class RedirectMetricsCollector
         if ($cfIP = $request->header('CF-Connecting-IP')) {
             $cleanIP = trim($cfIP);
             if ($this->isValidIP($cleanIP)) {
-                Log::info('RedirectMetricsCollector: IP captured via CF-Connecting-IP header', [
+                Log::debug('RedirectMetricsCollector: IP captured via CF-Connecting-IP header', [
                     'ip' => $cleanIP,
                     'source' => 'Cloudflare',
                 ]);
@@ -437,7 +422,7 @@ class RedirectMetricsCollector
         // 5. FALLBACK: IP da requisição (pode ser do proxy)
         $fallbackIP = $request->ip() ?: '127.0.0.1';
 
-        Log::warning('RedirectMetricsCollector: Using fallback IP (may be proxy IP)', [
+        Log::debug('RedirectMetricsCollector: Using fallback IP (may be proxy IP)', [
             'ip' => $fallbackIP,
             'source' => 'request->ip()',
             'warning' => 'This might be proxy IP, not real user IP',
