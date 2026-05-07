@@ -122,6 +122,15 @@ class RedirectController extends Controller
                 'accept_language' => $request->header('Accept-Language'),
                 'query_params' => $request->only(LinkTrackingService::UTM_KEYS),
                 'http_response_ms' => round((microtime(true) - (defined('LARAVEL_START') ? LARAVEL_START : microtime(true))) * 1000, 2),
+                'sec_fetch_site'   => $request->header('Sec-Fetch-Site'),
+                'sec_fetch_mode'   => $request->header('Sec-Fetch-Mode'),
+                'sec_fetch_dest'   => $request->header('Sec-Fetch-Dest'),
+                'ch_platform'      => trim($request->header('Sec-CH-UA-Platform', ''), '"'),
+                'ch_is_mobile'     => $request->hasHeader('Sec-CH-UA-Mobile')
+                                        ? $request->header('Sec-CH-UA-Mobile') === '?1'
+                                        : null,
+                'save_data'        => $request->header('Save-Data') === 'on',
+                'server_protocol'  => $request->server('SERVER_PROTOCOL'),
             ];
 
             ProcessLinkClickJob::dispatch($link->id, $payload);
