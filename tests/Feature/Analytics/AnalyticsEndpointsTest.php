@@ -38,7 +38,6 @@ class AnalyticsEndpointsTest extends TestCase
         return [
             'dashboard'    => ['/api/analytics/link/%d/dashboard'],
             'comprehensive' => ['/api/analytics/link/%d/comprehensive'],
-            'heatmap'      => ['/api/analytics/link/%d/heatmap'],
             'geographic'   => ['/api/analytics/link/%d/geographic'],
             'insights'     => ['/api/analytics/link/%d/insights'],
             'temporal'     => ['/api/analytics/link/%d/temporal'],
@@ -79,5 +78,51 @@ class AnalyticsEndpointsTest extends TestCase
         $this->getJson($url, $this->auth())
             ->assertOk()
             ->assertJsonStructure(['data']);
+    }
+
+    public function test_geographic_endpoint_returns_data_and_metadata_blocks(): void
+    {
+        \App\Models\Click::factory()->count(3)->create([
+            'link_id'   => $this->link->id,
+            'latitude'  => -23.5,
+            'longitude' => -46.6,
+            'country'   => 'Brazil',
+            'iso_code'  => 'BR',
+            'state'     => 'SP',
+            'state_name'=> 'São Paulo',
+            'city'      => 'São Paulo',
+            'continent' => 'SA',
+        ]);
+
+        $url = sprintf('/api/analytics/link/%d/geographic', $this->link->id);
+
+        $this->getJson($url, $this->auth())
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'heatmap_data',
+                    'top_countries',
+                    'top_states',
+                    'top_cities',
+                    'continents',
+                ],
+                'metadata' => [
+                    'total_clicks',
+                    'unique_countries',
+                    'unique_states',
+                    'unique_cities',
+                    'max_clicks',
+                    'total_locations',
+                    'last_updated',
+                    'link_info' => ['id', 'title', 'short_url', 'is_active'],
+                ],
+            ]);
+    }
+
+    public function test_removed_heatmap_endpoint_returns_404(): void
+    {
+        $url = sprintf('/api/analytics/link/%d/heatmap', $this->link->id);
+
+        $this->getJson($url, $this->auth())->assertStatus(404);
     }
 }
