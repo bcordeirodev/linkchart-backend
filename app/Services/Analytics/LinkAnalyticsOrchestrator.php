@@ -47,10 +47,7 @@ class LinkAnalyticsOrchestrator
                 'countries_reached' => $regions,
                 'avg_daily_clicks' => $total > 0 ? round($total / 30, 1) : 0,
             ],
-            'geographic' => array_merge(
-                ['heatmap_data' => $this->geographic->getHeatmapData($linkId)],
-                $this->geographic->getLinkGeographicAnalytics($linkId)
-            ),
+            'geographic' => $this->geographic->getLinkGeographicAnalytics($linkId),
             'temporal' => $this->temporal->getLinkTemporalAnalytics($linkId),
             'audience' => $this->audience->getLinkAudienceAnalytics($linkId),
             'insights' => $insightsPayload['insights'] ?? [],
@@ -80,11 +77,6 @@ class LinkAnalyticsOrchestrator
     public function getLinkInsightsAnalytics(int $linkId): array
     {
         return $this->insights->getLinkInsightsAnalytics($linkId);
-    }
-
-    public function getHeatmapData(int $linkId): array
-    {
-        return $this->geographic->getHeatmapData($linkId);
     }
 
     private function linkInfo(Link $link): array

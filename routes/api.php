@@ -116,7 +116,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     Route::prefix('analytics/link')->controller(AnalyticsController::class)->group(function () {
         Route::get('/{linkId}/dashboard', 'getLinkDashboardData')->where('linkId', '[0-9]+');     // ✅ NOVO: useDashboardData (linkMode)
         Route::get('/{linkId}/comprehensive', 'getLinkAnalytics')->where('linkId', '[0-9]+');       // ✅ USADO: useEnhancedAnalytics
-        Route::get('/{linkId}/heatmap', 'getHeatmapData')->where('linkId', '[0-9]+');             // ✅ USADO: useHeatmapData
         Route::get('/{linkId}/geographic', 'getGeographicAnalytics')->where('linkId', '[0-9]+');  // ✅ USADO: useGeographicData
         Route::get('/{linkId}/insights', 'getBusinessInsights')->where('linkId', '[0-9]+');       // ✅ USADO: useInsightsData
         Route::get('/{linkId}/temporal', 'getTemporalAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useTemporalData
