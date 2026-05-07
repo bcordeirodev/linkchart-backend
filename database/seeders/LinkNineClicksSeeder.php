@@ -9,7 +9,7 @@ use Illuminate\Database\Seeder;
 class LinkNineClicksSeeder extends Seeder
 {
     /**
-     * Seeder para o Link ID 31 - Post LinkedIn (Case de Sucesso)
+     * Seeder para o Link ID 9 - Post LinkedIn (Case de Sucesso)
      * Foco: Desktop dominante, público profissional global, tráfego orgânico LinkedIn
      */
     private array $countries = [
@@ -95,9 +95,9 @@ class LinkNineClicksSeeder extends Seeder
 
     public function run(): void
     {
-        Click::where('link_id', 31)->delete();
+        Click::where('link_id', 9)->delete();
 
-        $this->command->info('🚀 Criando Link ID 31 (LinkedIn - Case de Sucesso)...');
+        $this->command->info('🚀 Criando Link ID 9 (LinkedIn - Case de Sucesso)...');
 
         $clicks = [];
         $totalClicks = 980;
@@ -120,7 +120,7 @@ class LinkNineClicksSeeder extends Seeder
             $referer = $this->getReferer();
 
             $clicks[] = [
-                'link_id' => 31,
+                'link_id' => 9,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
                 'referer' => $referer,
@@ -152,7 +152,7 @@ class LinkNineClicksSeeder extends Seeder
             Click::insert($clicks);
         }
 
-        $this->command->info("🎉 {$totalClicks} clicks criados para Link ID 31!");
+        $this->command->info("🎉 {$totalClicks} clicks criados para Link ID 9!");
     }
 
     private function generateRandomDate(Carbon $start, Carbon $end): Carbon
