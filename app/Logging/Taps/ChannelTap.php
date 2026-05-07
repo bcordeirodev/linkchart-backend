@@ -11,8 +11,12 @@ use Illuminate\Log\Logger;
  * Standard tap applied to most channels:
  *  - Replaces handler formatter with KeyValueFormatter.
  *  - Pushes RequestContextProcessor (request_id/user_id/ip/route/env injection).
- *  - Pushes PiiRedactionProcessor unless `logging.channels.<channel>.skip_redaction` is true
- *    (auth/audit channels set this to keep email/ip raw for compliance).
+ *  - Pushes PiiRedactionProcessor unless invoked with the ':skip-redaction' arg.
+ *
+ * Skipping redaction is required for auth/audit channels that need raw
+ * email/ip for compliance. Pass the flag via the tap config string:
+ *
+ *   'tap' => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
  */
 final class ChannelTap
 {
@@ -20,12 +24,12 @@ final class ChannelTap
      * Apply standard logging configuration to the channel.
      *
      * @param  Logger  $logger  Illuminate logger wrapping a Monolog instance.
+     * @param  string  $mode    'skip-redaction' to omit the PII redactor; anything else applies it.
      */
-    public function __invoke(Logger $logger): void
+    public function __invoke(Logger $logger, string $mode = ''): void
     {
+        $skipRedaction = $mode === 'skip-redaction';
         $monolog = $logger->getLogger();
-        $channel = $monolog->getName();
-        $skipRedaction = (bool) config("logging.channels.{$channel}.skip_redaction", false);
 
         $formatter = new KeyValueFormatter();
         foreach ($monolog->getHandlers() as $handler) {

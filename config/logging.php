@@ -122,8 +122,7 @@ return [
             'path'   => storage_path('logs/auth.log'),
             'level'  => env('LOG_AUTH_LEVEL', 'info'),
             'days'   => env('LOG_AUTH_DAYS', 4),
-            'skip_redaction' => true,
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'tap'    => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
         ],
 
         'audit' => [
@@ -136,8 +135,7 @@ return [
             'path'   => storage_path('logs/audit.log'),
             'level'  => 'info',
             'days'   => env('LOG_AUDIT_DAYS', 10),
-            'skip_redaction' => true,
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'tap'    => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
         ],
 
         'http' => [
