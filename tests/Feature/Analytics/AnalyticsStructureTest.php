@@ -97,24 +97,32 @@ class AnalyticsStructureTest extends TestCase
         }
     }
 
-    public function test_geographic_service_heatmap_returns_valid_structure(): void
+    public function test_geographic_service_returns_heatmap_data_inside_link_geographic_payload(): void
     {
         $link = $this->makeLink();
         Click::factory()->count(2)->create([
-            'link_id' => $link->id,
-            'latitude' => -23.5,
+            'link_id'   => $link->id,
+            'latitude'  => -23.5,
             'longitude' => -46.6,
-            'country' => 'Brazil',
+            'country'   => 'Brazil',
         ]);
 
-        $result = app(GeographicAnalyticsService::class)->getHeatmapData($link->id);
+        $payload = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
 
-        $this->assertIsArray($result);
-        if (count($result) > 0) {
-            $this->assertArrayHasKey('lat', $result[0]);
-            $this->assertArrayHasKey('lng', $result[0]);
-            $this->assertArrayHasKey('clicks', $result[0]);
+        $this->assertArrayHasKey('data', $payload);
+        $this->assertArrayHasKey('metadata', $payload);
+        $this->assertArrayHasKey('heatmap_data', $payload['data']);
+        $this->assertIsArray($payload['data']['heatmap_data']);
+
+        if (count($payload['data']['heatmap_data']) > 0) {
+            $point = $payload['data']['heatmap_data'][0];
+            $this->assertArrayHasKey('lat', $point);
+            $this->assertArrayHasKey('lng', $point);
+            $this->assertArrayHasKey('clicks', $point);
         }
+
+        $this->assertArrayHasKey('unique_states', $payload['metadata']);
+        $this->assertArrayHasKey('link_info', $payload['metadata']);
     }
 
     public function test_orchestrator_all_public_methods_return_correct_top_level_keys(): void
@@ -125,7 +133,7 @@ class AnalyticsStructureTest extends TestCase
 
         $this->assertArrayHasKey('has_data', $orch->getComprehensiveLinkAnalytics($link->id));
         $this->assertArrayHasKey('summary', $orch->getLinkDashboardAnalytics($link->id));
-        $this->assertArrayHasKey('top_countries', $orch->getLinkGeographicAnalytics($link->id));
+        $this->assertArrayHasKey('top_countries', $orch->getLinkGeographicAnalytics($link->id)['data']);
         $this->assertArrayHasKey('clicks_by_hour', $orch->getLinkTemporalAnalytics($link->id));
         $this->assertArrayHasKey('device_breakdown', $orch->getLinkAudienceAnalytics($link->id));
         $this->assertArrayHasKey('insights', $orch->getLinkInsightsAnalytics($link->id));
