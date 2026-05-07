@@ -5,6 +5,13 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
+    /**
+     * Add Phase 1 enrichment columns to the clicks table.
+     *
+     * Adds navigation context (Sec-Fetch-* headers), Client Hints (ch_platform,
+     * ch_is_mobile), Save-Data indicator, HTTP protocol, and parsed language fields.
+     * Includes indexes on navigation_context and primary_language for query performance.
+     */
     public function up(): void
     {
         Schema::table('clicks', function (Blueprint $table) {
@@ -22,6 +29,12 @@ return new class extends Migration {
         });
     }
 
+    /**
+     * Reverse Phase 1 enrichment columns migration.
+     *
+     * Drops navigation context, Client Hints, Save-Data, HTTP protocol,
+     * and language fields along with their associated indexes.
+     */
     public function down(): void
     {
         Schema::table('clicks', function (Blueprint $table) {
