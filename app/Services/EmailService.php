@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
+use App\Logging\AppLogger;
 use Illuminate\Mail\Message;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use SendGrid;
 use SendGrid\Mail\Mail as SendGridMail;
@@ -45,12 +45,7 @@ class EmailService
             // Enviar email
             $response = $sendgrid->send($email);
 
-            Log::info('Email enviado com sucesso via SendGrid API', [
-                'to' => $toEmail,
-                'subject' => $subject,
-                'status_code' => $response->statusCode(),
-                'method' => 'SendGrid API',
-            ]);
+            AppLogger::emailSent($toEmail, 'unknown', 'sendgrid');
 
             return [
                 'success' => true,
@@ -61,13 +56,7 @@ class EmailService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao enviar email via SendGrid API', [
-                'to' => $toEmail,
-                'subject' => $subject,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            AppLogger::emailFailed($toEmail, 'unknown', $e);
 
             return [
                 'success' => false,
@@ -124,10 +113,7 @@ class EmailService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao testar SendGrid API', [
-                'error' => $e->getMessage(),
-                'config' => $this->getSendGridConfiguration(),
-            ]);
+            AppLogger::emailTestFailed($e, ['provider' => 'sendgrid']);
 
             return [
                 'success' => false,
@@ -175,11 +161,7 @@ class EmailService
                     ->html($this->getTestEmailTemplate($data));
             });
 
-            Log::info('Email de teste enviado com sucesso via Laravel Mail', [
-                'to' => $toEmail,
-                'mailer' => config('mail.default'),
-                'host' => config('mail.mailers.smtp.host'),
-            ]);
+            AppLogger::emailSent($toEmail, 'test', 'laravel_mail');
 
             return [
                 'success' => true,
@@ -189,19 +171,7 @@ class EmailService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao enviar email de teste via Laravel Mail', [
-                'to' => $toEmail,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'mailer_config' => [
-                    'default' => config('mail.default'),
-                    'host' => config('mail.mailers.smtp.host'),
-                    'port' => config('mail.mailers.smtp.port'),
-                    'username' => config('mail.mailers.smtp.username'),
-                    'from_address' => config('mail.from.address'),
-                ],
-            ]);
+            AppLogger::emailFailed($toEmail, 'test', $e);
 
             return [
                 'success' => false,
@@ -242,10 +212,7 @@ class EmailService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro na configuração Laravel Mail', [
-                'error' => $e->getMessage(),
-                'config' => $this->getMailConfiguration(),
-            ]);
+            AppLogger::emailTestFailed($e, ['provider' => 'laravel_mail']);
 
             return [
                 'success' => false,
@@ -291,10 +258,7 @@ class EmailService
                 }
             });
 
-            Log::info('Email personalizado enviado com sucesso', [
-                'to' => $toEmail,
-                'subject' => $subject,
-            ]);
+            AppLogger::emailSent($toEmail, 'unknown', 'laravel_mail');
 
             return [
                 'success' => true,
@@ -303,11 +267,7 @@ class EmailService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao enviar email personalizado', [
-                'to' => $toEmail,
-                'subject' => $subject,
-                'error' => $e->getMessage(),
-            ]);
+            AppLogger::emailFailed($toEmail, 'unknown', $e);
 
             return [
                 'success' => false,
