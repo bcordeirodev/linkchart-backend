@@ -2,6 +2,7 @@
 
 namespace App\Services\Links;
 
+use App\Logging\AppLogger;
 use App\Models\Link;
 use App\Models\LinkAudit;
 use Illuminate\Http\Request;
@@ -82,7 +83,7 @@ class LinkAuditService
             ]);
         } catch (\Exception $e) {
             // Log do erro mas não falha a operação principal
-            \Log::error('Erro ao criar log de auditoria: '.$e->getMessage(), [
+            AppLogger::auditFailed($e, [
                 'link_id' => $linkId,
                 'user_id' => $userId,
                 'action' => $action,
