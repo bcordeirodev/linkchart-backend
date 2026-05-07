@@ -67,12 +67,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // JWT malformado/expirado
         $exceptions->render(function (\Tymon\JWTAuth\Exceptions\JWTException $e, $request) {
             if ($request->isApiRequest()) {
-                \Log::channel('api_errors')->error('JWT Error', [
-                    'message' => $e->getMessage(),
-                    'url' => $request->fullUrl(),
-                    'method' => $request->method(),
-                    'ip' => $request->ip(),
-                ]);
+                \App\Logging\AppLogger::authJwtError($e->getMessage(), $request->fullUrl());
 
                 return response()->json(['error' => [
                     'code' => 'JWT_INVALID',
@@ -121,16 +116,11 @@ return Application::configure(basePath: dirname(__DIR__))
             $errorId = uniqid('err_');
 
             try {
-                \Log::channel('api_errors')->error('API Exception', [
-                    'error_id' => $errorId,
-                    'message' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine(),
-                    'url' => $request->fullUrl(),
-                    'method' => $request->method(),
-                    'ip' => $request->ip(),
-                    'trace' => $e->getTraceAsString(),
-                ]);
+                \App\Logging\AppLogger::httpServerError(
+                    $request->path(),
+                    $e,
+                    optional($request->user())->id ?? null
+                );
             } catch (\Throwable $logError) {
                 error_log('Laravel Exception: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             }
