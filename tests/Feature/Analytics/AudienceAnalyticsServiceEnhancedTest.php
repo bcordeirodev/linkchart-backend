@@ -86,4 +86,51 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         $this->assertSame(0.0, $stats['new_rate']);
         $this->assertSame(0.0, $stats['avg_session_clicks']);
     }
+
+    public function test_quality_breakdown_returns_tier_distribution_and_bot_rate(): void
+    {
+        Click::factory()->count(72)->create(['link_id' => $this->link->id, 'quality_tier' => 'organic',      'is_bot' => false, 'fingerprint_score' => 0]);
+        Click::factory()->count(22)->create(['link_id' => $this->link->id, 'quality_tier' => 'suspicious',   'is_bot' => false, 'fingerprint_score' => 1]);
+        Click::factory()->count(6)->create( ['link_id' => $this->link->id, 'quality_tier' => 'likely_fraud', 'is_bot' => true,  'fingerprint_score' => 2]);
+
+        $result    = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $quality   = $result['quality_breakdown'];
+
+        $this->assertCount(3, $quality['tiers']);
+
+        $organic = collect($quality['tiers'])->firstWhere('tier', 'organic');
+        $this->assertEquals(72, $organic['clicks']);
+        $this->assertEquals(72.0, $organic['percentage']);
+
+        $this->assertEquals(6, $quality['bot_clicks']);
+        $this->assertEquals(6.0, $quality['bot_percentage']);
+
+        // avg fingerprint: (72*0 + 22*1 + 6*2) / 100 = (0+22+12)/100 = 0.34
+        $this->assertEquals(0.34, $quality['avg_fingerprint_score']);
+    }
+
+    public function test_quality_breakdown_excludes_null_tiers_from_donut(): void
+    {
+        // Cliques sem quality_tier (anteriores à Fase 3) não devem aparecer no donut
+        Click::factory()->count(10)->create(['link_id' => $this->link->id, 'quality_tier' => null, 'is_bot' => false]);
+        Click::factory()->count(5)->create(['link_id' => $this->link->id, 'quality_tier' => 'organic', 'is_bot' => false]);
+
+        $result  = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $quality = $result['quality_breakdown'];
+
+        $this->assertCount(1, $quality['tiers']);
+        // bot_percentage uses total (15) as denominator
+        $this->assertEquals(0.0, $quality['bot_percentage']);
+    }
+
+    public function test_quality_breakdown_zeros_when_no_clicks(): void
+    {
+        $result  = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $quality = $result['quality_breakdown'];
+
+        $this->assertSame([], $quality['tiers']);
+        $this->assertSame(0, $quality['bot_clicks']);
+        $this->assertSame(0.0, $quality['bot_percentage']);
+        $this->assertSame(0.0, $quality['avg_fingerprint_score']);
+    }
 }
