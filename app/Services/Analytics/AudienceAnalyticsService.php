@@ -17,34 +17,36 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
 
         if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'device_breakdown'          => [],
-                'browser_breakdown'         => [],
-                'os_breakdown'              => [],
-                'browsers'                  => [],
-                'operating_systems'         => [],
-                'device_performance'        => [],
-                'languages'                 => [],
-                'language_breakdown'        => [],
-                'platform_breakdown'        => [],
-                'data_saver'                => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
-                'connection_type_breakdown' => [],
-                'rendering_engine'          => [],
+                'device_breakdown'             => [],
+                'browser_breakdown'            => [],
+                'os_breakdown'                 => [],
+                'browsers'                     => [],
+                'operating_systems'            => [],
+                'device_performance'           => [],
+                'languages'                    => [],
+                'language_breakdown'           => [],
+                'platform_breakdown'           => [],
+                'data_saver'                   => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
+                'connection_type_breakdown'    => [],
+                'rendering_engine'             => [],
+                'navigation_context_breakdown' => [],
             ];
         }
 
         return [
-            'device_breakdown'          => $this->getDeviceBreakdown($linkId),
-            'browser_breakdown'         => $this->getBrowserBreakdown($linkId),
-            'os_breakdown'              => $this->getOSBreakdown($linkId),
-            'browsers'                  => $this->getBrowserDistribution($linkId),
-            'operating_systems'         => $this->getOSDistribution($linkId),
-            'device_performance'        => $this->getDevicePerformance($linkId),
-            'languages'                 => $this->getLanguageDistribution($linkId),
-            'language_breakdown'        => $this->getLanguageBreakdown($linkId),
-            'platform_breakdown'        => $this->getPlatformBreakdown($linkId),
-            'data_saver'                => $this->getDataSaverStats($linkId),
-            'connection_type_breakdown' => $this->getConnectionTypeBreakdown($linkId),
-            'rendering_engine'          => $this->getRenderingEngineBreakdown($linkId),
+            'device_breakdown'             => $this->getDeviceBreakdown($linkId),
+            'browser_breakdown'            => $this->getBrowserBreakdown($linkId),
+            'os_breakdown'                 => $this->getOSBreakdown($linkId),
+            'browsers'                     => $this->getBrowserDistribution($linkId),
+            'operating_systems'            => $this->getOSDistribution($linkId),
+            'device_performance'           => $this->getDevicePerformance($linkId),
+            'languages'                    => $this->getLanguageDistribution($linkId),
+            'language_breakdown'           => $this->getLanguageBreakdown($linkId),
+            'platform_breakdown'           => $this->getPlatformBreakdown($linkId),
+            'data_saver'                   => $this->getDataSaverStats($linkId),
+            'connection_type_breakdown'    => $this->getConnectionTypeBreakdown($linkId),
+            'rendering_engine'             => $this->getRenderingEngineBreakdown($linkId),
+            'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId),
         ];
     }
 
@@ -302,6 +304,43 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'clicks'     => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
+            ->toArray();
+    }
+
+    /**
+     * Returns click distribution grouped by navigation context.
+     *
+     * navigation_context is derived from Sec-Fetch-Site + Sec-Fetch-Mode headers (Phase 1).
+     * NULL entries (clicks before Phase 1) are grouped as 'unknown' only if they
+     * represent more than 1 % of total clicks.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{context: string, clicks: int, percentage: float}>
+     */
+    private function getNavigationContextBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        $rows = DB::table('clicks')
+            ->selectRaw("COALESCE(navigation_context, 'unknown') as context, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->groupBy('navigation_context')
+            ->orderBy('clicks', 'desc')
+            ->get();
+
+        return $rows
+            ->filter(function ($r) use ($total) {
+                if ($r->context !== 'unknown') {
+                    return true;
+                }
+                return $total > 0 && ($r->clicks / $total) > 0.01;
+            })
+            ->map(fn ($r) => [
+                'context'    => $r->context,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
+            ])
+            ->values()
             ->toArray();
     }
 
