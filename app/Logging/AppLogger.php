@@ -500,11 +500,29 @@ final class AppLogger
     // ============================================================
 
     /**
+     * Write to a domain channel, applying the standard 'event' context tag.
+     *
+     * For most channels the configured stack ('<channel>' → ['<channel>_file', 'errors'])
+     * fans out automatically. For 'auth' and 'audit' we bypass the stack and write
+     * directly to '<channel>_file' so the raw email/ip aren't redacted by the
+     * 'errors' sub-channel's processors. Error-level events from auth/audit are
+     * still mirrored to 'errors' (with redaction applied there).
+     *
      * @param  array<string,mixed>  $context
      */
     private static function write(string $channel, string $level, string $event, array $context): void
     {
-        Log::channel($channel)->{$level}($event, ['event' => $event] + $context);
+        $payload = ['event' => $event] + $context;
+
+        if ($channel === 'auth' || $channel === 'audit') {
+            Log::channel($channel.'_file')->{$level}($event, $payload);
+            if (in_array($level, ['error', 'critical', 'alert', 'emergency'], true)) {
+                Log::channel('errors')->{$level}($event, $payload);
+            }
+            return;
+        }
+
+        Log::channel($channel)->{$level}($event, $payload);
     }
 
     /**
