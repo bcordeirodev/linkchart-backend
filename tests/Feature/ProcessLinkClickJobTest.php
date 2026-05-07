@@ -115,20 +115,19 @@ class ProcessLinkClickJobTest extends TestCase
 
     public function test_missing_link_is_logged_without_creating_click(): void
     {
-        // Grab a real null-channel logger before the spy replaces the facade,
-        // then configure channel() on the spy to return it.  This lets
-        // AppLogger::write() (which calls Log::channel('jobs')->info(...))
-        // succeed while Log::warning() calls are still captured for assertion.
-        $nullChannel = new \Psr\Log\NullLogger();
-        $spy = Log::spy();
-        $spy->shouldReceive('channel')->andReturn($nullChannel);
+        // Capture the warning call on the 'tracking' channel via a spy.
+        $trackingSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
+        Log::shouldReceive('channel')->with('tracking')->andReturn($trackingSpy);
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('info')->andReturnNull();
+        Log::shouldReceive('error')->andReturnNull();
 
         (new ProcessLinkClickJob(99999, $this->payload()))
             ->handle(app(\App\Services\Links\LinkTrackingService::class));
 
         $this->assertSame(0, Click::count());
-        $spy->shouldHaveReceived('warning')
-            ->with('Tracking job: link not found', ['link_id' => 99999]);
+        $trackingSpy->shouldHaveReceived('warning')
+            ->with('tracking.link_not_found', \Mockery::on(fn ($ctx) => ($ctx['link_id'] ?? null) === 99999));
     }
 
     public function test_payload_is_array_serializable_for_queue(): void
