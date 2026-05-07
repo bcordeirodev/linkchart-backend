@@ -53,6 +53,26 @@ class LinkTrackingPhase1Test extends TestCase
         $this->assertTrue($result['is_data_saver']);
     }
 
+    public function test_in_app_webview_from_same_site_no_cors(): void
+    {
+        $result = $this->call('enrichNavigationContext', [[
+            'sec_fetch_site' => 'same-site', 'sec_fetch_mode' => 'no-cors',
+            'sec_fetch_dest' => null, 'ch_platform' => null,
+            'ch_is_mobile' => null, 'save_data' => false, 'server_protocol' => null,
+        ]]);
+        $this->assertEquals('in_app_webview', $result['navigation_context']);
+    }
+
+    public function test_preload_context_from_prefetch_mode(): void
+    {
+        $result = $this->call('enrichNavigationContext', [[
+            'sec_fetch_site' => 'same-site', 'sec_fetch_mode' => 'prefetch',
+            'sec_fetch_dest' => null, 'ch_platform' => null,
+            'ch_is_mobile' => null, 'save_data' => false, 'server_protocol' => null,
+        ]]);
+        $this->assertEquals('preload', $result['navigation_context']);
+    }
+
     public function test_api_programmatic_when_no_sec_fetch_headers(): void
     {
         $result = $this->call('enrichNavigationContext', [[
@@ -92,5 +112,12 @@ class LinkTrackingPhase1Test extends TestCase
         $result = $this->call('parseAcceptLanguage', [null]);
         $this->assertNull($result['primary_language']);
         $this->assertNull($result['language_region']);
+    }
+
+    public function test_parse_zh_hant_tw_extracts_region_correctly(): void
+    {
+        $result = $this->call('parseAcceptLanguage', ['zh-Hant-TW,zh;q=0.9']);
+        $this->assertEquals('zh', $result['primary_language']);
+        $this->assertEquals('TW', $result['language_region']);
     }
 }
