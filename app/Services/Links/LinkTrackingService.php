@@ -2,12 +2,12 @@
 
 namespace App\Services\Links;
 
+use App\Logging\AppLogger;
 use App\Models\Click;
 use App\Models\Link;
 use App\Models\LinkUtm;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Jenssegers\Agent\Agent;
 
 class LinkTrackingService
@@ -46,7 +46,7 @@ class LinkTrackingService
         $link = Link::find($linkId);
 
         if (! $link) {
-            Log::warning('Tracking job: link not found', ['link_id' => $linkId]);
+            AppLogger::trackingLinkNotFound($linkId);
 
             return;
         }
@@ -114,8 +114,7 @@ class LinkTrackingService
             LinkUtm::create(array_merge(['click_id' => $click->id], $utm));
         }
 
-        Log::info('Click registered', [
-            'link_id' => $link->id,
+        AppLogger::trackingClickRegistered($click->id, $link->id, [
             'slug' => $link->slug,
             'ip' => $ip,
             'country' => $locationData['country'],
@@ -236,14 +235,11 @@ class LinkTrackingService
                 ];
             }
 
-            Log::warning('GeoIP returned default location for IP: '.$ip);
+            AppLogger::geoipDefaultLocation($ip);
 
             return $defaultData;
         } catch (\Exception $e) {
-            Log::warning('GeoIP lookup failed: '.$e->getMessage(), [
-                'ip' => $ip,
-                'error' => $e->getMessage(),
-            ]);
+            AppLogger::geoipFailed($ip, $e);
 
             return $defaultData;
         }
@@ -289,10 +285,7 @@ class LinkTrackingService
                 'is_bot' => $agent->isRobot(),
             ];
         } catch (\Exception $e) {
-            Log::warning('Failed to parse user agent', [
-                'user_agent' => $userAgent,
-                'error' => $e->getMessage(),
-            ]);
+            AppLogger::userAgentParseFailed($userAgent, $e);
 
             return [
                 'browser' => 'Unknown',
@@ -316,7 +309,7 @@ class LinkTrackingService
                 try {
                     $localTime->setTimezone(new \DateTimeZone($timezone));
                 } catch (\Exception $e) {
-                    Log::warning('Invalid timezone', ['timezone' => $timezone]);
+                    AppLogger::event('tracking', 'warning', 'tracking.invalid_timezone', ['timezone' => $timezone]);
                 }
             }
 
@@ -334,10 +327,7 @@ class LinkTrackingService
                 'is_business_hours' => $hour >= 9 && $hour <= 17,
             ];
         } catch (\Exception $e) {
-            Log::warning('Failed to enrich temporal data', [
-                'error' => $e->getMessage(),
-                'timezone' => $timezone,
-            ]);
+            AppLogger::trackingTemporalEnrichmentFailed($e, ['timezone' => $timezone]);
 
             $hour = (int) $timestamp->format('H');
             $dayOfWeek = (int) $timestamp->format('N');
@@ -372,11 +362,7 @@ class LinkTrackingService
                 'click_source' => $this->categorizeClickSource($referer),
             ];
         } catch (\Exception $e) {
-            Log::warning('Failed to analyze visitor behavior', [
-                'ip' => $ip,
-                'link_id' => $linkId,
-                'error' => $e->getMessage(),
-            ]);
+            AppLogger::trackingBehaviorAnalysisFailed($e, ['ip' => $ip, 'link_id' => $linkId]);
 
             return [
                 'is_return_visitor' => false,
