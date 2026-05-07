@@ -42,9 +42,11 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         $totalClicks = Click::where('link_id', $linkId)->count();
 
         $analyticsData = [
-            'retention' => $this->getReturnVisitorRate($linkId),
-            'session_depth' => $this->getSessionDepthAnalysis($linkId),
-            'traffic_sources' => $this->getTrafficSourceAnalysis($linkId),
+            'retention'          => $this->getReturnVisitorRate($linkId),
+            'session_depth'      => $this->getSessionDepthAnalysis($linkId),
+            'traffic_sources'    => $this->getTrafficSourceAnalysis($linkId),
+            'navigation_context' => $this->getNavigationContextBreakdown($linkId),
+            'http_protocol'      => $this->getHttpProtocolBreakdown($linkId),
         ];
 
         if ($totalClicks === 0) {
@@ -323,5 +325,61 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             'total_clicks' => $totalClicks,
             'recommendations' => $recommendations,
         ];
+    }
+
+    /**
+     * Returns a breakdown of clicks by navigation context (derived from Sec-Fetch-* headers).
+     *
+     * Navigation context is a more reliable attribution signal than click_source/referer,
+     * since browsers do not suppress Sec-Fetch headers via Referrer-Policy.
+     * Only includes clicks recorded after the Phase 1 migration.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{context: string, clicks: int, percentage: float}>
+     */
+    private function getNavigationContextBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw('navigation_context as context, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('navigation_context')
+            ->groupBy('navigation_context')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'context'    => $r->context,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Returns a breakdown of clicks by HTTP protocol version (HTTP/1.1 vs HTTP/2).
+     *
+     * HTTP protocol is captured from the SERVER_PROTOCOL server variable (Phase 1).
+     * High HTTP/2 percentage indicates modern browser traffic.
+     *
+     * @param  int  $linkId
+     * @return array<int, array{protocol: string, clicks: int, percentage: float}>
+     */
+    private function getHttpProtocolBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw("COALESCE(http_protocol, 'unknown') as protocol, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->groupBy('http_protocol')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => [
+                'protocol'   => $r->protocol,
+                'clicks'     => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
     }
 }
