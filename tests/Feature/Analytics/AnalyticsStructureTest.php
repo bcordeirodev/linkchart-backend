@@ -110,7 +110,7 @@ class AnalyticsStructureTest extends TestCase
         $payload = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
 
         $this->assertArrayHasKey('data', $payload);
-        $this->assertArrayHasKey('metadata', $payload);
+        $this->assertArrayHasKey('meta', $payload);
         $this->assertArrayHasKey('heatmap_data', $payload['data']);
         $this->assertIsArray($payload['data']['heatmap_data']);
 
@@ -121,8 +121,8 @@ class AnalyticsStructureTest extends TestCase
             $this->assertArrayHasKey('clicks', $point);
         }
 
-        $this->assertArrayHasKey('unique_states', $payload['metadata']);
-        $this->assertArrayHasKey('link_info', $payload['metadata']);
+        $this->assertArrayHasKey('unique_states', $payload['meta']);
+        $this->assertArrayHasKey('link_info', $payload['meta']);
     }
 
     public function test_orchestrator_all_public_methods_return_correct_top_level_keys(): void

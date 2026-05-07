@@ -41,7 +41,7 @@ class AnalyticsController extends BaseController
     }
 
     /**
-     * Analytics geográficos detalhados — payload unificado (data + metadata)
+     * Analytics geográficos detalhados — payload unificado (data + meta)
      */
     public function getGeographicAnalytics(int $linkId): JsonResponse
     {
@@ -52,9 +52,9 @@ class AnalyticsController extends BaseController
             $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
             return response()->json([
-                'success'  => true,
-                'data'     => $payload['data'],
-                'metadata' => $payload['metadata'],
+                'success' => true,
+                'data'    => $payload['data'],
+                'meta'    => $payload['meta'],
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar analytics geográficos.', $e);

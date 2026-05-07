@@ -38,7 +38,7 @@ The Temporal tab establishes the desired UX pattern: a single tab with top-level
     "top_cities":     [{ "city", "country", "state", "clicks" }],
     "continents":     [{ "continent", "continent_name", "clicks", "percentage" }]
   },
-  "metadata": {
+  "meta": {
     "total_clicks":      int,
     "unique_countries":  int,
     "unique_states":     int,
@@ -58,11 +58,11 @@ The success/error envelope from `NormalizeApiResponse` middleware is preserved.
 | File | Change |
 |---|---|
 | `routes/api.php` | Remove the `heatmap` route entry. |
-| `app/Http/Controllers/Analytics/AnalyticsController.php` | Delete `getHeatmapData()` (lines 46–81). Update `getGeographicAnalytics()` to also build and attach the new `metadata` block (link_info + totals). |
+| `app/Http/Controllers/Analytics/AnalyticsController.php` | Delete `getHeatmapData()` (lines 46–81). Update `getGeographicAnalytics()` to also build and attach the new `meta` block (link_info + totals). |
 | `app/Services/Analytics/LinkAnalyticsOrchestrator.php` | Delete `getHeatmapData()` (lines 85–88). |
-| `app/Services/Analytics/GeographicAnalyticsService.php` | Convert `getHeatmapData()` from public to **private** (it remains the single producer of `heatmap_data[]`, called internally by `getLinkGeographicAnalytics()`). Add a private helper `buildGeographicMetadata(int $linkId, array $heatmapData): array` that produces the metadata block (totals derived from `$heatmapData` + a `link_info` lookup against `Link::find($linkId)`). `getLinkGeographicAnalytics()` returns `['data' => [...], 'metadata' => [...]]`. |
+| `app/Services/Analytics/GeographicAnalyticsService.php` | Convert `getHeatmapData()` from public to **private** (it remains the single producer of `heatmap_data[]`, called internally by `getLinkGeographicAnalytics()`). Add a private helper `buildGeographicMeta(int $linkId, array $heatmapData): array` that produces the meta block (totals derived from `$heatmapData` + a `link_info` lookup against `Link::find($linkId)`). `getLinkGeographicAnalytics()` returns `['data' => [...], 'meta' => [...]]`. |
 | `app/Contracts/Analytics/GeographicAnalyticsInterface.php` | Remove `getHeatmapData()` from the interface. |
-| `tests/Feature/...` | If a heatmap endpoint test exists, delete it. Add or update a feature test for `/geographic` asserting the new top-level `metadata` block (presence of `link_info`, `total_clicks`, `unique_countries`, `unique_cities`, `max_clicks`, `total_locations`, `last_updated`). |
+| `tests/Feature/...` | If a heatmap endpoint test exists, delete it. Add or update a feature test for `/geographic` asserting the new top-level `meta` block (presence of `link_info`, `total_clicks`, `unique_countries`, `unique_cities`, `max_clicks`, `total_locations`, `last_updated`). |
 
 ### Backend invariants preserved
 
@@ -103,9 +103,9 @@ State for the active sub-tab uses `useState(0)` and an `handleTabChange(_, newVa
 
 ### Files to refactor
 
-- `src/features/analytics/components/geographic/GeographicAnalysis.tsx` — full refactor per the component tree above. The existing `GeographicMetrics` component is updated in place: its props change from the current `GeographicStats` shape to the unified set sourced from `metadata` (see "Top-level metric cards" below). Renamed only if the existing name no longer fits; default is to keep the file/name and update the prop type. No second metrics component is introduced — single source of truth.
-- `src/features/analytics/hooks/useGeographicData.ts` — extend the returned shape to expose `metadata` alongside `data`. The derived `GeographicStats` helper is computed from `metadata` rather than re-counting client-side.
-- `src/features/analytics/types/*` — `GeographicData` gains a `metadata` field; `HeatmapPoint` (the row shape inside `heatmap_data[]`) is consolidated into the geographic types module and the standalone heatmap types file is deleted.
+- `src/features/analytics/components/geographic/GeographicAnalysis.tsx` — full refactor per the component tree above. The existing `GeographicMetrics` component is updated in place: its props change from the current `GeographicStats` shape to the unified set sourced from `meta` (see "Top-level metric cards" below). Renamed only if the existing name no longer fits; default is to keep the file/name and update the prop type. No second metrics component is introduced — single source of truth.
+- `src/features/analytics/hooks/useGeographicData.ts` — extend the returned shape to expose `meta` alongside `data`. The derived `GeographicStats` helper is computed from `meta` rather than re-counting client-side.
+- `src/features/analytics/types/*` — `GeographicData` gains a `meta` field; `HeatmapPoint` (the row shape inside `heatmap_data[]`) is consolidated into the geographic types module and the standalone heatmap types file is deleted.
 - `src/features/links/components/analytics/LinkAnalyticsTabs.tsx`:
   - Remove the `Heatmap` entry from `tabLabels` (lines 71–79) and the corresponding `index === 4` render block.
   - Drop the `HeatmapAnalysis` import.
@@ -114,13 +114,13 @@ State for the active sub-tab uses `useState(0)` and an `handleTabChange(_, newVa
 
 ### Top-level metric cards (unified set)
 
-Five cards, derived from the new `metadata` block:
+Five cards, derived from the new `meta` block:
 
-1. **Countries reached** ← `metadata.unique_countries`
-2. **States reached** ← `metadata.unique_states` (added to the metadata block; the backend computes it via `count(distinct state_name)` in the same scan that produces the other unique counts)
-3. **Cities reached** ← `metadata.unique_cities`
-4. **Total clicks** ← `metadata.total_clicks`
-5. **Coverage %** ← computed client-side from `metadata` exactly as `GeographicMetrics` computes it today (preserved formula)
+1. **Countries reached** ← `meta.unique_countries`
+2. **States reached** ← `meta.unique_states` (added to the meta block; the backend computes it via `count(distinct state_name)` in the same scan that produces the other unique counts)
+3. **Cities reached** ← `meta.unique_cities`
+4. **Total clicks** ← `meta.total_clicks`
+5. **Coverage %** ← computed client-side from `meta` exactly as `GeographicMetrics` computes it today (preserved formula)
 
 ### Loading / errors / empty state
 
@@ -137,13 +137,13 @@ Single hook (`useGeographicData`) drives loading, error, and empty states for th
 | External consumer of `/heatmap` breaks | User has explicitly authorized the breaking change. No deprecation period. |
 | Tab-index reordering breaks deep links | No deep-link consumer of tab index 4 has been found. Reconfirm with a quick grep before implementation. |
 | Map library adds bundle weight to Geographic tab | Lazy-render the chart only when its sub-tab is active; use `next/dynamic` if it isn't already. |
-| Subtle drift between `metadata.total_clicks` and prior heatmap totals | Backend feature test asserts the metadata block exactly. |
+| Subtle drift between `meta.total_clicks` and prior heatmap totals | Backend feature test asserts the meta block exactly. |
 
 ## Validation
 
 **Backend (automated):**
 - `docker-compose exec app ./vendor/bin/phpunit` — full suite green.
-- New/updated feature test for `GET /api/analytics/link/{id}/geographic` asserts the response contains `data.heatmap_data`, `data.top_countries`, `data.top_states`, `data.top_cities`, `data.continents`, and a top-level `metadata` block containing `total_clicks`, `unique_countries`, `unique_states`, `unique_cities`, `max_clicks`, `total_locations`, `last_updated`, and `link_info`.
+- New/updated feature test for `GET /api/analytics/link/{id}/geographic` asserts the response contains `data.heatmap_data`, `data.top_countries`, `data.top_states`, `data.top_cities`, `data.continents`, and a top-level `meta` block containing `total_clicks`, `unique_countries`, `unique_states`, `unique_cities`, `max_clicks`, `total_locations`, `last_updated`, and `link_info`.
 - A test asserting `GET /api/analytics/link/{id}/heatmap` returns 404 (route removed).
 
 **Frontend (manual — no test runner):**
@@ -157,7 +157,7 @@ Single hook (`useGeographicData`) drives loading, error, and empty states for th
 
 ## Acceptance criteria
 
-1. `/api/analytics/link/{id}/heatmap` no longer exists; `/api/analytics/link/{id}/geographic` returns the unified payload with the new `metadata` block.
+1. `/api/analytics/link/{id}/heatmap` no longer exists; `/api/analytics/link/{id}/geographic` returns the unified payload with the new `meta` block.
 2. The `Heatmap` tab no longer appears in `LinkAnalyticsTabs`.
 3. The Geographic tab shows the five top-level metric cards plus four sub-tabs in the order: Visão geral, Mapa de calor, Rankings, Insights.
 4. No file under `src/features/analytics/components/heatmap/` exists after the change. `RealTimeHeatmapChart` lives under `src/features/analytics/components/geographic/`.

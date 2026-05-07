@@ -80,7 +80,7 @@ class AnalyticsEndpointsTest extends TestCase
             ->assertJsonStructure(['data']);
     }
 
-    public function test_geographic_endpoint_returns_data_and_metadata_blocks(): void
+    public function test_geographic_endpoint_returns_data_and_meta_blocks(): void
     {
         \App\Models\Click::factory()->count(3)->create([
             'link_id'   => $this->link->id,
@@ -106,7 +106,7 @@ class AnalyticsEndpointsTest extends TestCase
                     'top_cities',
                     'continents',
                 ],
-                'metadata' => [
+                'meta' => [
                     'total_clicks',
                     'unique_countries',
                     'unique_states',
