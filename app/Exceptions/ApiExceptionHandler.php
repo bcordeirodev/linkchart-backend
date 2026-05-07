@@ -5,7 +5,7 @@ namespace App\Exceptions;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
+use App\Logging\AppLogger;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -109,7 +109,7 @@ class ApiExceptionHandler extends ExceptionHandler
 
         } catch (\Exception $collectionError) {
             // Não deixar erro de coleta quebrar a aplicação
-            Log::error('Failed to collect error metrics', [
+            AppLogger::event('app', 'error', 'metrics.collect_failed', [
                 'original_error' => $e->getMessage(),
                 'collection_error' => $collectionError->getMessage(),
             ]);
@@ -169,7 +169,7 @@ class ApiExceptionHandler extends ExceptionHandler
             Cache::put($dayKey, $apiErrors, 86400); // 24 horas
 
         } catch (\Exception $collectionError) {
-            Log::error('Failed to collect API error', [
+            AppLogger::event('app', 'error', 'metrics.collect_failed', [
                 'original_error' => $e->getMessage(),
                 'collection_error' => $collectionError->getMessage(),
             ]);
