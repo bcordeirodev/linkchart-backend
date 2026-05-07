@@ -39,6 +39,18 @@ class DatabaseSeeder extends Seeder
             ['slug' => 'react-patterns'],
             ['id' => 6, 'user_id' => 2, 'title' => 'Advanced React Patterns Guide', 'original_url' => 'https://blog.tech.com/react-patterns', 'is_active' => true, 'clicks' => 0]
         );
+        \App\Models\Link::updateOrCreate(
+            ['slug' => 'newsletter-launch'],
+            ['id' => 7, 'user_id' => 2, 'title' => 'Newsletter — Lançamento de Produto', 'original_url' => 'https://newsletter.example.com/lancamento-2024', 'is_active' => true, 'clicks' => 0]
+        );
+        \App\Models\Link::updateOrCreate(
+            ['slug' => 'tutorial-yt'],
+            ['id' => 8, 'user_id' => 2, 'title' => 'Tutorial em Vídeo — YouTube', 'original_url' => 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'is_active' => true, 'clicks' => 0]
+        );
+        \App\Models\Link::updateOrCreate(
+            ['slug' => 'linkedin-post'],
+            ['id' => 9, 'user_id' => 2, 'title' => 'Post LinkedIn — Case de Sucesso', 'original_url' => 'https://www.linkedin.com/posts/linkcharts-case-sucesso', 'is_active' => true, 'clicks' => 0]
+        );
 
         $this->call([
             ClicksSeeder::class,
@@ -46,6 +58,9 @@ class DatabaseSeeder extends Seeder
             LinkFourClicksSeeder::class,
             LinkFiveClicksSeeder::class,
             LinkSixClicksSeeder::class,
+            LinkSevenClicksSeeder::class,
+            LinkEightClicksSeeder::class,
+            LinkNineClicksSeeder::class,
         ]);
     }
 }
