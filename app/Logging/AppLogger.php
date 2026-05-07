@@ -1,0 +1,522 @@
+<?php
+
+namespace App\Logging;
+
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+/**
+ * Semantic logging fachada. Every public method:
+ *   - knows which channel to use,
+ *   - sets `event=<name>` in the context,
+ *   - takes typed arguments to enforce a stable shape per event.
+ *
+ * Don't introduce raw `Log::*` calls in the codebase. If a use case is missing,
+ * either add a method here or use ::event() as an escape hatch.
+ *
+ * Channels:
+ *   redirect, tracking, jobs, auth, http, audit, app (default), errors (mirror).
+ */
+final class AppLogger
+{
+    public const REDIRECT_STARTED          = 'redirect.started';
+    public const REDIRECT_BLOCKED          = 'redirect.blocked';
+    public const REDIRECT_DISPATCHED       = 'redirect.dispatched';
+    public const REDIRECT_ERROR            = 'redirect.error';
+    public const REDIRECT_METRICS_OK       = 'redirect.metrics_collected';
+    public const REDIRECT_METRICS_FAILED   = 'redirect.metrics_failed';
+    public const OG_FETCH_SKIPPED          = 'og.fetch_skipped';
+    public const OG_FETCH_FAILED           = 'og.fetch_failed';
+    public const OG_FETCH_NON_OK           = 'og.fetch_non_ok';
+
+    public const TRACKING_CLICK_REGISTERED       = 'tracking.click_registered';
+    public const TRACKING_LINK_NOT_FOUND         = 'tracking.link_not_found';
+    public const TRACKING_TEMPORAL_FAIL          = 'tracking.temporal_enrichment_failed';
+    public const TRACKING_BEHAVIOR_FAIL          = 'tracking.behavior_analysis_failed';
+    public const GEOIP_DEFAULT_LOCATION          = 'geoip.default_location';
+    public const GEOIP_FAILED                    = 'geoip.failed';
+    public const USER_AGENT_PARSE_FAILED         = 'user_agent.parse_failed';
+
+    public const JOB_STARTED   = 'job.started';
+    public const JOB_SUCCEEDED = 'job.succeeded';
+    public const JOB_FAILED    = 'job.failed';
+    public const JOB_RETRYING  = 'job.retrying';
+
+    public const AUTH_LOGIN_SUCCESS               = 'auth.login_success';
+    public const AUTH_LOGIN_FAILURE               = 'auth.login_failure';
+    public const AUTH_REGISTRATION                = 'auth.registration';
+    public const AUTH_PASSWORD_RESET_REQUESTED    = 'auth.password_reset_requested';
+    public const AUTH_PASSWORD_RESET_COMPLETED    = 'auth.password_reset_completed';
+    public const AUTH_EMAIL_VERIFICATION_SENT     = 'auth.email_verification_sent';
+    public const AUTH_EMAIL_VERIFIED              = 'auth.email_verified';
+    public const AUTH_JWT_ERROR                   = 'auth.jwt_error';
+    public const AUTH_ERROR                       = 'auth.error';
+
+    public const HTTP_SLOW_REQUEST = 'http.slow_request';
+    public const HTTP_CLIENT_ERROR = 'http.client_error';
+    public const HTTP_SERVER_ERROR = 'http.server_error';
+
+    public const AUDIT_LINK_CHANGE = 'audit.link_change';
+    public const AUDIT_FAILED      = 'audit.failed';
+
+    public const EMAIL_SENT        = 'email.sent';
+    public const EMAIL_FAILED      = 'email.failed';
+    public const EMAIL_TEST_FAILED = 'email.test_failed';
+
+    public const LINK_CREATED              = 'link.created';
+    public const LINK_UPDATED              = 'link.updated';
+    public const LINK_DELETED              = 'link.deleted';
+    public const LINK_CLICK_LIMIT_REACHED  = 'link.click_limit_reached';
+
+    public const ANALYTICS_REQUESTED          = 'analytics.requested';
+    public const ANALYTICS_CACHE_MISS         = 'analytics.cache_miss';
+    public const ANALYTICS_SLOW_AGGREGATION   = 'analytics.slow_aggregation';
+    public const ANALYTICS_ERROR              = 'analytics.error';
+
+    public const SAFETY_URL_FLAGGED       = 'safety.url_flagged';
+    public const SAFETY_API_UNAVAILABLE   = 'safety.api_unavailable';
+    public const SAFETY_API_ERROR         = 'safety.api_error';
+
+    // ============================================================
+    // REDIRECT (channel: redirect)
+    // ============================================================
+
+    /**
+     * Hot path — first log line of a redirect after slug resolution.
+     *
+     * @param  array<string,mixed>  $extra
+     */
+    public static function redirectStarted(string $slug, ?int $linkId, array $extra = []): void
+    {
+        self::write('redirect', 'info', self::REDIRECT_STARTED, [
+            'slug' => $slug,
+            'link_id' => $linkId,
+        ] + $extra);
+    }
+
+    /**
+     * Redirect refused (expired/inactive/not_started/click_limit/not_found).
+     */
+    public static function redirectBlocked(string $slug, string $reason): void
+    {
+        self::write('redirect', 'info', self::REDIRECT_BLOCKED, [
+            'slug' => $slug,
+            'reason' => $reason,
+        ]);
+    }
+
+    /**
+     * Tracking job successfully dispatched to the queue.
+     */
+    public static function redirectDispatched(int $linkId, string $jobClass): void
+    {
+        self::write('redirect', 'info', self::REDIRECT_DISPATCHED, [
+            'link_id' => $linkId,
+            'job' => $jobClass,
+        ]);
+    }
+
+    /**
+     * Unexpected error inside the redirect controller.
+     */
+    public static function redirectError(string $slug, Throwable $e): void
+    {
+        self::write('redirect', 'error', self::REDIRECT_ERROR,
+            ['slug' => $slug] + self::throwableContext($e));
+    }
+
+    /**
+     * Final structured event written by RedirectMetricsCollector on success.
+     */
+    public static function redirectMetricsCollected(string $slug, int $statusCode, float $durationSec, ?string $country): void
+    {
+        self::write('redirect', 'info', self::REDIRECT_METRICS_OK, [
+            'slug' => $slug,
+            'status_code' => $statusCode,
+            'duration_ms' => round($durationSec * 1000, 2),
+            'country' => $country,
+        ]);
+    }
+
+    /**
+     * RedirectMetricsCollector failure (cache unavailable, geoip lookup error, etc).
+     */
+    public static function redirectMetricsFailed(string $slug, Throwable $e): void
+    {
+        self::write('redirect', 'error', self::REDIRECT_METRICS_FAILED,
+            ['slug' => $slug] + self::throwableContext($e));
+    }
+
+    /**
+     * OG fetch skipped because URL failed safety checks.
+     */
+    public static function ogFetchSkipped(string $url, string $reason): void
+    {
+        self::write('redirect', 'info', self::OG_FETCH_SKIPPED, [
+            'url' => $url,
+            'reason' => $reason,
+        ]);
+    }
+
+    /**
+     * OG fetch threw an exception.
+     */
+    public static function ogFetchFailed(string $url, Throwable $e): void
+    {
+        self::write('redirect', 'warning', self::OG_FETCH_FAILED,
+            ['url' => $url] + self::throwableContext($e));
+    }
+
+    /**
+     * OG fetch returned non-2xx.
+     */
+    public static function ogFetchNonOk(string $url, int $status): void
+    {
+        self::write('redirect', 'warning', self::OG_FETCH_NON_OK, [
+            'url' => $url,
+            'status' => $status,
+        ]);
+    }
+
+    // ============================================================
+    // TRACKING (channel: tracking)
+    // ============================================================
+
+    /**
+     * Click row written to DB. ctx contains slug, country, state, city, device, referer, utm_data.
+     *
+     * @param  array<string,mixed>  $context
+     */
+    public static function trackingClickRegistered(int $clickId, int $linkId, array $context): void
+    {
+        self::write('tracking', 'info', self::TRACKING_CLICK_REGISTERED,
+            ['click_id' => $clickId, 'link_id' => $linkId] + $context);
+    }
+
+    public static function trackingLinkNotFound(int $linkId): void
+    {
+        self::write('tracking', 'warning', self::TRACKING_LINK_NOT_FOUND, ['link_id' => $linkId]);
+    }
+
+    public static function trackingTemporalEnrichmentFailed(Throwable $e, array $ctx = []): void
+    {
+        self::write('tracking', 'warning', self::TRACKING_TEMPORAL_FAIL, $ctx + self::throwableContext($e));
+    }
+
+    public static function trackingBehaviorAnalysisFailed(Throwable $e, array $ctx = []): void
+    {
+        self::write('tracking', 'warning', self::TRACKING_BEHAVIOR_FAIL, $ctx + self::throwableContext($e));
+    }
+
+    public static function geoipDefaultLocation(string $ip): void
+    {
+        self::write('tracking', 'warning', self::GEOIP_DEFAULT_LOCATION, ['ip' => $ip]);
+    }
+
+    public static function geoipFailed(string $ip, Throwable $e): void
+    {
+        self::write('tracking', 'warning', self::GEOIP_FAILED,
+            ['ip' => $ip] + self::throwableContext($e));
+    }
+
+    public static function userAgentParseFailed(string $ua, Throwable $e): void
+    {
+        self::write('tracking', 'warning', self::USER_AGENT_PARSE_FAILED,
+            ['user_agent' => substr($ua, 0, 200)] + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // JOBS (channel: jobs)
+    // ============================================================
+
+    /**
+     * @param  array<string,mixed>  $payload
+     */
+    public static function jobStarted(string $jobClass, array $payload = []): void
+    {
+        self::write('jobs', 'info', self::JOB_STARTED, ['job' => $jobClass, 'payload' => $payload]);
+    }
+
+    public static function jobSucceeded(string $jobClass, float $durationMs): void
+    {
+        self::write('jobs', 'info', self::JOB_SUCCEEDED, [
+            'job' => $jobClass,
+            'duration_ms' => round($durationMs, 2),
+        ]);
+    }
+
+    public static function jobFailed(string $jobClass, Throwable $e, int $attempt): void
+    {
+        self::write('jobs', 'error', self::JOB_FAILED,
+            ['job' => $jobClass, 'attempt' => $attempt] + self::throwableContext($e));
+    }
+
+    public static function jobRetrying(string $jobClass, int $attempt, int $maxAttempts): void
+    {
+        self::write('jobs', 'warning', self::JOB_RETRYING, [
+            'job' => $jobClass,
+            'attempt' => $attempt,
+            'max_attempts' => $maxAttempts,
+        ]);
+    }
+
+    // ============================================================
+    // AUTH (channel: auth — email/ip kept raw)
+    // ============================================================
+
+    public static function authLoginSuccess(int $userId, string $ip): void
+    {
+        self::write('auth', 'info', self::AUTH_LOGIN_SUCCESS, ['user_id' => $userId, 'ip' => $ip]);
+    }
+
+    public static function authLoginFailure(string $email, string $ip, string $reason): void
+    {
+        self::write('auth', 'warning', self::AUTH_LOGIN_FAILURE, [
+            'email' => $email,
+            'ip' => $ip,
+            'reason' => $reason,
+        ]);
+    }
+
+    public static function authRegistration(int $userId, string $email): void
+    {
+        self::write('auth', 'info', self::AUTH_REGISTRATION, ['user_id' => $userId, 'email' => $email]);
+    }
+
+    public static function authPasswordResetRequested(string $email): void
+    {
+        self::write('auth', 'info', self::AUTH_PASSWORD_RESET_REQUESTED, ['email' => $email]);
+    }
+
+    public static function authPasswordResetCompleted(int $userId): void
+    {
+        self::write('auth', 'info', self::AUTH_PASSWORD_RESET_COMPLETED, ['user_id' => $userId]);
+    }
+
+    public static function authEmailVerificationSent(string $email, int $userId): void
+    {
+        self::write('auth', 'info', self::AUTH_EMAIL_VERIFICATION_SENT, [
+            'email' => $email,
+            'user_id' => $userId,
+        ]);
+    }
+
+    public static function authEmailVerified(int $userId): void
+    {
+        self::write('auth', 'info', self::AUTH_EMAIL_VERIFIED, ['user_id' => $userId]);
+    }
+
+    public static function authJwtError(string $reason, string $url): void
+    {
+        self::write('auth', 'error', self::AUTH_JWT_ERROR, ['reason' => $reason, 'url' => $url]);
+    }
+
+    /**
+     * Escape hatch for auth-domain errors that don't have a dedicated method.
+     *
+     * @param  array<string,mixed>  $extra
+     */
+    public static function authError(string $event, Throwable $e, array $extra = []): void
+    {
+        self::write('auth', 'error', self::AUTH_ERROR,
+            ['source_event' => $event] + $extra + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // HTTP (channel: http)
+    // ============================================================
+
+    public static function httpSlowRequest(string $route, int $durationMs, int $status): void
+    {
+        self::write('http', 'warning', self::HTTP_SLOW_REQUEST, [
+            'route' => $route,
+            'duration_ms' => $durationMs,
+            'status' => $status,
+        ]);
+    }
+
+    public static function httpClientError(string $route, int $status, ?int $userId): void
+    {
+        self::write('http', 'warning', self::HTTP_CLIENT_ERROR, [
+            'route' => $route,
+            'status' => $status,
+            'user_id' => $userId,
+        ]);
+    }
+
+    public static function httpServerError(string $route, Throwable $e, ?int $userId): void
+    {
+        self::write('http', 'error', self::HTTP_SERVER_ERROR,
+            ['route' => $route, 'user_id' => $userId] + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // AUDIT (channel: audit — email/ip kept raw)
+    // ============================================================
+
+    /**
+     * @param  array<string,mixed>  $diff
+     */
+    public static function auditLinkChange(int $linkId, int $userId, string $action, array $diff): void
+    {
+        self::write('audit', 'info', self::AUDIT_LINK_CHANGE, [
+            'link_id' => $linkId,
+            'user_id' => $userId,
+            'action' => $action,
+            'diff' => $diff,
+        ]);
+    }
+
+    /**
+     * @param  array<string,mixed>  $context
+     */
+    public static function auditFailed(Throwable $e, array $context = []): void
+    {
+        self::write('audit', 'error', self::AUDIT_FAILED, $context + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // EMAIL (channel: app)
+    // ============================================================
+
+    public static function emailSent(string $to, string $type, string $provider): void
+    {
+        self::write('app', 'info', self::EMAIL_SENT, ['to' => $to, 'type' => $type, 'provider' => $provider]);
+    }
+
+    public static function emailFailed(string $to, string $type, Throwable $e): void
+    {
+        self::write('app', 'error', self::EMAIL_FAILED,
+            ['to' => $to, 'type' => $type] + self::throwableContext($e));
+    }
+
+    public static function emailTestFailed(Throwable $e, array $ctx = []): void
+    {
+        self::write('app', 'error', self::EMAIL_TEST_FAILED, $ctx + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // LINKS (channel: app)
+    // ============================================================
+
+    public static function linkCreated(int $linkId, int $userId): void
+    {
+        self::write('app', 'info', self::LINK_CREATED, ['link_id' => $linkId, 'user_id' => $userId]);
+    }
+
+    /** @param  array<string,mixed>  $diff */
+    public static function linkUpdated(int $linkId, int $userId, array $diff): void
+    {
+        self::write('app', 'info', self::LINK_UPDATED, [
+            'link_id' => $linkId,
+            'user_id' => $userId,
+            'diff' => $diff,
+        ]);
+    }
+
+    public static function linkDeleted(int $linkId, int $userId): void
+    {
+        self::write('app', 'info', self::LINK_DELETED, ['link_id' => $linkId, 'user_id' => $userId]);
+    }
+
+    public static function linkClickLimitReached(int $linkId): void
+    {
+        self::write('app', 'warning', self::LINK_CLICK_LIMIT_REACHED, ['link_id' => $linkId]);
+    }
+
+    // ============================================================
+    // ANALYTICS (channel: app)
+    // ============================================================
+
+    public static function analyticsRequested(string $endpoint, int $linkId, int $userId): void
+    {
+        self::write('app', 'info', self::ANALYTICS_REQUESTED, [
+            'endpoint' => $endpoint,
+            'link_id' => $linkId,
+            'user_id' => $userId,
+        ]);
+    }
+
+    public static function analyticsCacheMiss(string $endpoint, int $linkId): void
+    {
+        self::write('app', 'info', self::ANALYTICS_CACHE_MISS, [
+            'endpoint' => $endpoint,
+            'link_id' => $linkId,
+        ]);
+    }
+
+    public static function analyticsSlowAggregation(string $endpoint, int $durationMs): void
+    {
+        self::write('app', 'warning', self::ANALYTICS_SLOW_AGGREGATION, [
+            'endpoint' => $endpoint,
+            'duration_ms' => $durationMs,
+        ]);
+    }
+
+    public static function analyticsError(Throwable $e, array $ctx = []): void
+    {
+        self::write('app', 'error', self::ANALYTICS_ERROR, $ctx + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // SAFETY (channel: app)
+    // ============================================================
+
+    /** @param  array<int,string>  $threats */
+    public static function safetyUrlFlagged(string $url, array $threats): void
+    {
+        self::write('app', 'warning', self::SAFETY_URL_FLAGGED, ['url' => $url, 'threats' => $threats]);
+    }
+
+    public static function safetyApiUnavailable(string $reason): void
+    {
+        self::write('app', 'warning', self::SAFETY_API_UNAVAILABLE, ['reason' => $reason]);
+    }
+
+    public static function safetyApiError(Throwable $e, string $url): void
+    {
+        self::write('app', 'error', self::SAFETY_API_ERROR,
+            ['url' => $url] + self::throwableContext($e));
+    }
+
+    // ============================================================
+    // ESCAPE HATCH
+    // ============================================================
+
+    /**
+     * Generic escape hatch. Use only when an event genuinely doesn't fit
+     * any of the typed methods. Repeated use of the same $event string is
+     * a signal to add a dedicated method above.
+     *
+     * @param  array<string,mixed>  $context
+     */
+    public static function event(string $channel, string $level, string $event, array $context = []): void
+    {
+        self::write($channel, $level, $event, $context);
+    }
+
+    // ============================================================
+    // INTERNAL
+    // ============================================================
+
+    /**
+     * @param  array<string,mixed>  $context
+     */
+    private static function write(string $channel, string $level, string $event, array $context): void
+    {
+        Log::channel($channel)->{$level}($event, ['event' => $event] + $context);
+    }
+
+    /**
+     * @return array{error: string, exception: string, file: string, line: int}
+     */
+    private static function throwableContext(Throwable $e): array
+    {
+        return [
+            'error' => $e->getMessage(),
+            'exception' => $e::class,
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ];
+    }
+}
