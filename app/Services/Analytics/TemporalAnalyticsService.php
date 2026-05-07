@@ -30,12 +30,15 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         $clicks = Click::where('link_id', $linkId)->get();
 
         return [
-            'hourly_patterns' => $this->getHourlyPatterns($clicks),
-            'daily_patterns' => $this->getDailyPatterns($clicks),
-            'weekly_trends' => $this->getWeeklyTrends($clicks),
-            'monthly_trends' => $this->getMonthlyTrends($clicks),
-            'peak_analysis' => $this->getPeakAnalysis($clicks),
-            'timezone_analysis' => $this->getTimezoneAnalysis($clicks),
+            'hourly_patterns'  => $this->getHourlyPatterns($clicks),
+            'daily_patterns'   => $this->getDailyPatterns($clicks),
+            'weekly_trends'    => $this->getWeeklyTrends($clicks),
+            'monthly_trends'   => $this->getMonthlyTrends($clicks),
+            'peak_analysis'    => $this->getPeakAnalysis($clicks),
+            'timezone_analysis'=> $this->getTimezoneAnalysis($clicks),
+            'heatmap_data'     => $this->getHourDayHeatmap($clicks),
+            'daily_timeline'   => $this->getDailyTimeline($linkId),
+            'device_by_period' => $this->getDeviceByPeriod($clicks),
         ];
     }
 
@@ -58,7 +61,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
 
         $result = [];
         for ($h = 0; $h < 24; $h++) {
-            $result[] = ['hour' => $h, 'clicks' => (int) ($rows->get($h)?->clicks ?? 0)];
+            $result[] = ['hour' => $h, 'label' => sprintf('%02d:00', $h), 'clicks' => (int) ($rows->get($h)?->clicks ?? 0)];
         }
 
         return $result;
@@ -77,7 +80,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         $names = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 7 => 'Domingo'];
         $result = [];
         for ($d = 1; $d <= 7; $d++) {
-            $result[] = ['day' => $d, 'name' => $names[$d], 'clicks' => (int) ($rows->get($d)?->clicks ?? 0)];
+            $result[] = ['day' => $d, 'day_name' => $names[$d], 'clicks' => (int) ($rows->get($d)?->clicks ?? 0)];
         }
 
         return $result;
@@ -99,14 +102,16 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
             : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
 
-        $rows = DB::table('clicks')->where('link_id', $linkId)->selectRaw("({$expr}) as dow, count(*) as clicks")->groupByRaw($expr)->get();
+        $rows = DB::table('clicks')->where('link_id', $linkId)->selectRaw("({$expr}) as dow, count(*) as clicks, count(distinct ip) as unique_visitors")->groupByRaw($expr)->get();
         $weekday = $rows->whereIn('dow', [1, 2, 3, 4, 5])->sum('clicks');
         $weekend = $rows->whereIn('dow', [6, 7])->sum('clicks');
+        $uniqueWeekday = $rows->whereIn('dow', [1, 2, 3, 4, 5])->sum('unique_visitors');
+        $uniqueWeekend = $rows->whereIn('dow', [6, 7])->sum('unique_visitors');
         $total = $weekday + $weekend;
 
         return [
-            'weekday' => ['clicks' => $weekday, 'percentage' => $total > 0 ? round($weekday / $total * 100, 2) : 0],
-            'weekend' => ['clicks' => $weekend, 'percentage' => $total > 0 ? round($weekend / $total * 100, 2) : 0],
+            'weekday' => ['clicks' => $weekday, 'unique_visitors' => $uniqueWeekday, 'percentage' => $total > 0 ? round($weekday / $total * 100, 2) : 0],
+            'weekend' => ['clicks' => $weekend, 'unique_visitors' => $uniqueWeekend, 'percentage' => $total > 0 ? round($weekend / $total * 100, 2) : 0],
         ];
     }
 
@@ -229,5 +234,84 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         arsort($tzs);
 
         return array_map(fn ($tz, $n) => ['name' => $tz, 'clicks' => $n], array_keys($tzs), $tzs);
+    }
+
+    private function getHourDayHeatmap($clicks): array
+    {
+        // 7 days × 24 hours matrix
+        $matrix = [];
+        for ($d = 1; $d <= 7; $d++) {
+            $matrix[$d] = array_fill(0, 24, 0);
+        }
+
+        foreach ($clicks as $click) {
+            $h = $click->hour_of_day ?? (int) $click->created_at->format('H');
+            $d = $click->day_of_week ?? (int) $click->created_at->format('N');
+            if ($h >= 0 && $h <= 23 && $d >= 1 && $d <= 7) {
+                $matrix[$d][$h]++;
+            }
+        }
+
+        $names = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
+        $result = [];
+        for ($d = 1; $d <= 7; $d++) {
+            $data = [];
+            for ($h = 0; $h < 24; $h++) {
+                $data[] = ['x' => sprintf('%02d:00', $h), 'y' => $matrix[$d][$h]];
+            }
+            $result[] = ['name' => $names[$d], 'data' => $data];
+        }
+
+        return $result;
+    }
+
+    private function getDailyTimeline(int $linkId): array
+    {
+        $rows = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->where('created_at', '>=', now()->subDays(90))
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors')
+            ->groupByRaw('DATE(created_at)')
+            ->orderByRaw('date')
+            ->get();
+
+        return $rows->map(fn ($r) => [
+            'date'             => $r->date,
+            'clicks'           => (int) $r->clicks,
+            'unique_visitors'  => (int) $r->unique_visitors,
+        ])->toArray();
+    }
+
+    private function getDeviceByPeriod($clicks): array
+    {
+        $periods = [
+            'dawn'      => ['label' => 'Madrugada', 'range' => [0, 5],  'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'morning'   => ['label' => 'Manhã',     'range' => [6, 11], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'afternoon' => ['label' => 'Tarde',     'range' => [12, 17],'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'evening'   => ['label' => 'Noite',     'range' => [18, 23],'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+        ];
+
+        foreach ($clicks as $click) {
+            $h = $click->hour_of_day ?? (int) $click->created_at->format('H');
+            $device = strtolower($click->device ?? '');
+
+            foreach ($periods as $key => &$period) {
+                if ($h >= $period['range'][0] && $h <= $period['range'][1]) {
+                    if (in_array($device, ['desktop', 'mobile', 'tablet'])) {
+                        $period[$device]++;
+                    }
+                    break;
+                }
+            }
+            unset($period);
+        }
+
+        return array_values(array_map(fn ($key, $p) => [
+            'period'  => $key,
+            'label'   => $p['label'],
+            'desktop' => $p['desktop'],
+            'mobile'  => $p['mobile'],
+            'tablet'  => $p['tablet'],
+        ], array_keys($periods), $periods));
     }
 }

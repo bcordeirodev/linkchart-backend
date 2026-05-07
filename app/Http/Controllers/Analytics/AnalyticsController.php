@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
 use App\Http\Controllers\BaseController;
-use App\Models\Link;
 use App\Services\Analytics\LinkAnalyticsOrchestrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -82,35 +81,6 @@ class AnalyticsController extends BaseController
     }
 
     /**
-     * Dados do heatmap em tempo real (sem autenticação para polling rápido)
-     */
-    public function getHeatmapDataRealtime(int $linkId): JsonResponse
-    {
-        try {
-            // Verificar se o link existe e está ativo (sem verificar usuário para performance)
-            $link = Link::where('id', $linkId)
-                ->where('is_active', true)
-                ->first();
-
-            if (! $link) {
-                return response()->json(['error' => 'Link não encontrado ou inativo.'], 404);
-            }
-
-            $heatmapData = $this->analyticsService->getHeatmapData($linkId);
-
-            // Retornar apenas os dados essenciais para performance
-            return response()->json([
-                'success' => true,
-                'data' => $heatmapData,
-                'timestamp' => now()->toISOString(),
-                'total_locations' => count($heatmapData),
-            ]);
-        } catch (\Exception $e) {
-            return $this->serverError('Erro ao buscar dados em tempo real.', $e);
-        }
-    }
-
-    /**
      * Analytics geográficos detalhados
      */
     public function getGeographicAnalytics(int $linkId): JsonResponse
@@ -176,10 +146,13 @@ class AnalyticsController extends BaseController
             // 4. Merge estruturado - compatível com tipos existentes
             $unifiedData = array_merge($baseData, [
                 'advanced' => [
-                    'weekly_trends' => $advancedData['weekly_trends'] ?? [],
-                    'monthly_trends' => $advancedData['monthly_trends'] ?? [],
-                    'peak_analysis' => $advancedData['peak_analysis'] ?? [],
-                    'timezone_analysis' => $enrichedTimezones,
+                    'weekly_trends'    => $advancedData['weekly_trends'] ?? [],
+                    'monthly_trends'   => $advancedData['monthly_trends'] ?? [],
+                    'peak_analysis'    => $advancedData['peak_analysis'] ?? [],
+                    'timezone_analysis'=> $enrichedTimezones,
+                    'heatmap_data'     => $advancedData['heatmap_data'] ?? [],
+                    'daily_timeline'   => $advancedData['daily_timeline'] ?? [],
+                    'device_by_period' => $advancedData['device_by_period'] ?? [],
                 ],
             ]);
 
@@ -209,47 +182,6 @@ class AnalyticsController extends BaseController
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar analytics de audiência.', $e);
-        }
-    }
-
-    /**
-     * Relatório executivo resumido
-     */
-    public function getExecutiveSummary(int $linkId): JsonResponse
-    {
-        try {
-            $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
-
-            $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
-
-            if (! $analytics['has_data']) {
-                return response()->json([
-                    'success' => true,
-                    'data' => ['link_info' => $analytics['link_info'], 'has_data' => false],
-                ]);
-            }
-
-            // Criar resumo executivo
-            $summary = [
-                'link_info' => $analytics['link_info'],
-                'key_metrics' => $analytics['overview'],
-                'top_insights' => array_slice($analytics['insights'] ?? [], 0, 3),
-                'geographic_summary' => [
-                    'top_country' => $analytics['geographic']['top_countries'][0] ?? null,
-                    'countries_count' => count($analytics['geographic']['top_countries'] ?? []),
-                ],
-                'audience_summary' => [
-                    'top_device' => $analytics['audience']['device_breakdown'][0] ?? null,
-                ],
-            ];
-
-            return response()->json([
-                'success' => true,
-                'data' => $summary,
-            ]);
-        } catch (\Exception $e) {
-            return $this->serverError('Erro ao buscar resumo executivo.', $e);
         }
     }
 
