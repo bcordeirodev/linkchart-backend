@@ -20,27 +20,36 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
 
     public function getLinkGeographicAnalytics(int $linkId): array
     {
-        Link::findOrFail($linkId);
+        $link = Link::findOrFail($linkId);
 
         if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'top_countries' => [],
-                'top_states'    => [],
-                'top_cities'    => [],
-                'continents'    => [],
+                'data' => [
+                    'heatmap_data'  => [],
+                    'top_countries' => [],
+                    'top_states'    => [],
+                    'top_cities'    => [],
+                    'continents'    => [],
+                ],
+                'metadata' => $this->buildGeographicMetadata($link, []),
             ];
         }
 
+        $heatmap = $this->getHeatmapData($linkId);
+
         return [
-            'heatmap_data'  => $this->getHeatmapData($linkId),
-            'top_countries' => $this->getTopCountriesOptimized($linkId),
-            'top_states'    => $this->getTopStatesOptimized($linkId),
-            'top_cities'    => $this->getTopCitiesOptimized($linkId),
-            'continents'    => $this->getTopContinents($linkId),
+            'data' => [
+                'heatmap_data'  => $heatmap,
+                'top_countries' => $this->getTopCountriesOptimized($linkId),
+                'top_states'    => $this->getTopStatesOptimized($linkId),
+                'top_cities'    => $this->getTopCitiesOptimized($linkId),
+                'continents'    => $this->getTopContinents($linkId),
+            ],
+            'metadata' => $this->buildGeographicMetadata($link, $heatmap),
         ];
     }
 
-    public function getHeatmapData(int $linkId): array
+    private function getHeatmapData(int $linkId): array
     {
         return DB::table('clicks')
             ->selectRaw('latitude, longitude, city, country, iso_code, currency, state_name, continent, timezone, COUNT(*) as clicks, MAX(created_at) as last_click')
@@ -122,5 +131,34 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
                     : 0.0,
             ];
         })->values()->toArray();
+    }
+
+    private function buildGeographicMetadata(Link $link, array $heatmap): array
+    {
+        $countries = array_filter(array_column($heatmap, 'country'));
+        $states    = array_filter(array_column($heatmap, 'state_name'));
+        $cities    = array_filter(array_column($heatmap, 'city'));
+        $clicks    = array_column($heatmap, 'clicks');
+
+        return [
+            'total_clicks'      => array_sum($clicks),
+            'unique_countries'  => count(array_unique($countries)),
+            'unique_states'     => count(array_unique($states)),
+            'unique_cities'     => count(array_unique($cities)),
+            'max_clicks'        => $clicks ? max($clicks) : 0,
+            'total_locations'   => count($heatmap),
+            'last_updated'      => now()->toISOString(),
+            'link_info'         => $this->linkInfo($link),
+        ];
+    }
+
+    private function linkInfo(Link $link): array
+    {
+        return [
+            'id'        => $link->id,
+            'title'     => $link->title,
+            'short_url' => $link->getShortedUrl(),
+            'is_active' => $link->is_active,
+        ];
     }
 }
