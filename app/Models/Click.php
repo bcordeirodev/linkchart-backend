@@ -10,8 +10,10 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Stores comprehensive click data including geographic location, device and browser
  * details, temporal context, behavioral signals, performance metrics, UTM parameters,
- * and Phase 1+ navigation context enrichment (Sec-Fetch headers, Client Hints,
- * Save-Data indicator, HTTP protocol, language preferences).
+ * Phase 1 navigation context enrichment (Sec-Fetch headers, Client Hints,
+ * Save-Data indicator, HTTP protocol, language preferences), and Phase 2
+ * contextual intelligence (holidays, season, viral rank, connection type,
+ * rendering engine).
  *
  * @property int $id
  * @property int $link_id
@@ -24,6 +26,13 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $browser
  * @property string|null $os
  * @property bool|null $is_mobile
+ * @property bool|null $is_holiday         Phase 2: whether the click fell on a national holiday
+ * @property string|null $holiday_name     Phase 2: name of the holiday if applicable
+ * @property string|null $season           Phase 2: calendar season (spring|summer|fall|winter)
+ * @property string|null $viral_rank       Phase 2: click velocity classification (cold|warming|trending|viral)
+ * @property int|null $seconds_since_last_click  Phase 2: seconds elapsed since the previous click on this link
+ * @property string|null $connection_type  Phase 2: ISP category (datacenter|mobile|education|residential|unknown)
+ * @property string|null $rendering_engine Phase 2: browser rendering engine (blink|gecko|webkit|trident|unknown)
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  *
@@ -83,6 +92,14 @@ class Click extends Model
         'http_protocol',
         'primary_language',
         'language_region',
+        // Phase 2 — contextual intelligence
+        'is_holiday',
+        'holiday_name',
+        'season',
+        'viral_rank',
+        'seconds_since_last_click',
+        'connection_type',
+        'rendering_engine',
         // Campos de performance
         'response_time',
         'accept_language',
