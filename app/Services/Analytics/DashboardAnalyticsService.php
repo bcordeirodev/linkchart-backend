@@ -32,6 +32,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'avg_response_time' => $this->estimateResponseTime($linkId, $since),
                 'countries_reached' => $countries,
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
+                'viral_rank' => $this->getViralRankSummary($linkId, $since),
             ],
             'link_info' => [
                 'id' => $link->id,
@@ -79,6 +80,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'avg_response_time' => 0,
                 'countries_reached' => 0,
                 'links_with_traffic' => 0,
+                'viral_rank' => ['current_rank' => 'cold', 'distribution' => []],
             ],
             'link_info' => null,
             'temporal_data' => [
@@ -103,6 +105,41 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'device_performance' => [],
                 'languages' => [],
             ],
+        ];
+    }
+
+    /**
+     * Returns the current viral rank and historical distribution for a link.
+     *
+     * Current rank is the most recent non-null viral_rank value. Distribution
+     * shows the count per rank bucket for the requested time window.
+     *
+     * @param  int          $linkId  Link ID
+     * @param  Carbon|null  $since   Optional time window start (null = all time)
+     * @return array{current_rank: string, distribution: array}
+     */
+    private function getViralRankSummary(int $linkId, ?Carbon $since): array
+    {
+        $latest = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->whereNotNull('viral_rank')
+            ->latest()
+            ->value('viral_rank');
+
+        $distribution = DB::table('clicks')
+            ->selectRaw("COALESCE(viral_rank, 'cold') as rank, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->groupBy('viral_rank')
+            ->orderBy('clicks', 'desc')
+            ->get()
+            ->map(fn ($r) => ['rank' => $r->rank, 'clicks' => (int) $r->clicks])
+            ->toArray();
+
+        return [
+            'current_rank' => $latest ?? 'cold',
+            'distribution' => $distribution,
         ];
     }
 
