@@ -2,8 +2,8 @@
 
 namespace App\Services\Links;
 
+use App\Logging\AppLogger;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 class LinkSafetyService
 {
@@ -28,7 +28,7 @@ class LinkSafetyService
         $apiKey = config('services.google_safe_browsing.key');
 
         if (empty($apiKey)) {
-            Log::warning('LinkSafetyService: GOOGLE_SAFE_BROWSING_KEY não configurada — verificação ignorada.');
+            AppLogger::safetyApiUnavailable('GOOGLE_SAFE_BROWSING_KEY missing');
 
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
@@ -48,10 +48,7 @@ class LinkSafetyService
             ]);
 
             if ($response->failed()) {
-                Log::error('LinkSafetyService: erro na API', [
-                    'status' => $response->status(),
-                    'url' => $url,
-                ]);
+                AppLogger::safetyApiError(new \RuntimeException('safety_api_error_response'), $url);
 
                 return ['safe' => true, 'threats' => [], 'api_available' => false];
             }
@@ -62,6 +59,9 @@ class LinkSafetyService
                 return ['safe' => true, 'threats' => [], 'api_available' => true];
             }
 
+            $threatTypes = array_map(fn ($m) => $m['threatType'] ?? 'unknown', $matches);
+            AppLogger::safetyUrlFlagged($url, $threatTypes);
+
             $threats = array_values(array_unique(array_map(
                 fn ($m) => self::THREAT_LABELS[$m['threatType']] ?? strtolower($m['threatType']),
                 $matches
@@ -69,10 +69,7 @@ class LinkSafetyService
 
             return ['safe' => false, 'threats' => $threats, 'api_available' => true];
         } catch (\Throwable $e) {
-            Log::error('LinkSafetyService: exceção ao verificar URL', [
-                'message' => $e->getMessage(),
-                'url' => $url,
-            ]);
+            AppLogger::safetyApiError($e, $url);
 
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
