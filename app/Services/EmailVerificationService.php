@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\EmailVerificationToken;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
+use App\Logging\AppLogger;
 
 class EmailVerificationService
 {
@@ -66,12 +66,7 @@ class EmailVerificationService
                 // Marcar que email foi enviado
                 $user->markVerificationEmailSent();
 
-                Log::info('Email de verificação enviado', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'token_id' => $token->id,
-                    'method' => 'SendGrid API',
-                ]);
+                AppLogger::authEmailVerificationSent($user->email, $user->id);
 
                 return [
                     'success' => true,
@@ -88,13 +83,7 @@ class EmailVerificationService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao enviar email de verificação', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            AppLogger::authError('email_verification_send', $e, ['email' => $user->email ?? null]);
 
             return [
                 'success' => false,
@@ -151,11 +140,7 @@ class EmailVerificationService
             $user->markEmailAsVerified();
             $verificationToken->markAsUsed();
 
-            Log::info('Email verificado com sucesso', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'token_id' => $verificationToken->id,
-            ]);
+            AppLogger::authEmailVerified($user->id);
 
             return [
                 'success' => true,
@@ -165,12 +150,7 @@ class EmailVerificationService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao verificar email', [
-                'token' => $token,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            AppLogger::authError('email_verify', $e);
 
             return [
                 'success' => false,
@@ -230,12 +210,7 @@ class EmailVerificationService
             );
 
             if ($result['success']) {
-                Log::info('Email de recuperação de senha enviado', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'token_id' => $token->id,
-                    'method' => 'SendGrid API',
-                ]);
+                AppLogger::authPasswordResetRequested($email);
             }
 
             // Sempre retornar sucesso por segurança
@@ -246,12 +221,7 @@ class EmailVerificationService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao enviar email de recuperação de senha', [
-                'email' => $email,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            AppLogger::authError('password_reset_send', $e, ['email' => $email ?? null]);
 
             return [
                 'success' => false,
@@ -300,11 +270,7 @@ class EmailVerificationService
             // Marcar token como usado
             $resetToken->markAsUsed();
 
-            Log::info('Senha redefinida com sucesso', [
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'token_id' => $resetToken->id,
-            ]);
+            AppLogger::authPasswordResetCompleted($user->id);
 
             return [
                 'success' => true,
@@ -314,12 +280,7 @@ class EmailVerificationService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Erro ao redefinir senha', [
-                'token' => $token,
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
+            AppLogger::authError('password_reset', $e);
 
             return [
                 'success' => false,
