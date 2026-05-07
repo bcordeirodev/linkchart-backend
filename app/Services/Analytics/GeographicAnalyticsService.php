@@ -8,19 +8,35 @@ use Illuminate\Support\Facades\DB;
 
 class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicAnalyticsInterface
 {
+    private const CONTINENT_NAMES = [
+        'NA' => 'América do Norte',
+        'SA' => 'América do Sul',
+        'EU' => 'Europa',
+        'AS' => 'Ásia',
+        'AF' => 'África',
+        'OC' => 'Oceania',
+        'AN' => 'Antártica',
+    ];
+
     public function getLinkGeographicAnalytics(int $linkId): array
     {
         Link::findOrFail($linkId);
 
         if (! Click::where('link_id', $linkId)->exists()) {
-            return ['top_countries' => [], 'top_states' => [], 'top_cities' => []];
+            return [
+                'top_countries' => [],
+                'top_states'    => [],
+                'top_cities'    => [],
+                'continents'    => [],
+            ];
         }
 
         return [
-            'heatmap_data' => $this->getHeatmapData($linkId),
+            'heatmap_data'  => $this->getHeatmapData($linkId),
             'top_countries' => $this->getTopCountriesOptimized($linkId),
-            'top_states' => $this->getTopStatesOptimized($linkId),
-            'top_cities' => $this->getTopCitiesOptimized($linkId),
+            'top_states'    => $this->getTopStatesOptimized($linkId),
+            'top_cities'    => $this->getTopCitiesOptimized($linkId),
+            'continents'    => $this->getTopContinents($linkId),
         ];
     }
 
@@ -81,5 +97,30 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->orderBy('clicks', 'desc')->limit(10)->get()
             ->map(fn ($r) => ['city' => $r->city, 'country' => $r->country, 'state' => $r->state, 'clicks' => (int) $r->clicks])
             ->toArray();
+    }
+
+    private function getTopContinents(int $linkId): array
+    {
+        $results = DB::table('clicks')
+            ->selectRaw('continent, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('continent')
+            ->where('continent', '!=', '')
+            ->groupBy('continent')
+            ->orderByDesc('clicks')
+            ->get();
+
+        $total = $results->sum('clicks');
+
+        return $results->map(function ($row) use ($total) {
+            return [
+                'continent'      => $row->continent,
+                'continent_name' => self::CONTINENT_NAMES[$row->continent] ?? $row->continent,
+                'clicks'         => (int) $row->clicks,
+                'percentage'     => $total > 0
+                    ? round(($row->clicks / $total) * 100, 1)
+                    : 0.0,
+            ];
+        })->values()->toArray();
     }
 }
