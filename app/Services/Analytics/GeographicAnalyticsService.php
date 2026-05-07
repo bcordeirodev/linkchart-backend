@@ -31,7 +31,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
                     'top_cities'    => [],
                     'continents'    => [],
                 ],
-                'metadata' => $this->buildGeographicMetadata($link, []),
+                'meta' => $this->buildGeographicMeta($link, []),
             ];
         }
 
@@ -45,7 +45,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
                 'top_cities'    => $this->getTopCitiesOptimized($linkId),
                 'continents'    => $this->getTopContinents($linkId),
             ],
-            'metadata' => $this->buildGeographicMetadata($link, $heatmap),
+            'meta' => $this->buildGeographicMeta($link, $heatmap),
         ];
     }
 
@@ -133,7 +133,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
         })->values()->toArray();
     }
 
-    private function buildGeographicMetadata(Link $link, array $heatmap): array
+    private function buildGeographicMeta(Link $link, array $heatmap): array
     {
         $countries = array_filter(array_column($heatmap, 'country'));
         $states    = array_filter(array_column($heatmap, 'state_name'));

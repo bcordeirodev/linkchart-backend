@@ -4,7 +4,7 @@
 
 **Goal:** Eliminate the redundant `Heatmap` analytics tab and `/api/analytics/link/{id}/heatmap` endpoint by absorbing them into the existing `Geographic` tab, which gains four MUI sub-tabs (Visão geral, Mapa de calor, Rankings, Insights) mirroring the `TemporalChart` pattern.
 
-**Architecture:** Backend collapses two endpoints into one. `/api/analytics/link/{id}/geographic` becomes the single source of truth, returning the existing `data` block plus a new top-level `metadata` block (link_info + totals). On the frontend, `GeographicAnalysis.tsx` is refactored from a flat layout to a top-level metric row + an MUI Tabs control whose four panels host the existing visualization components. `RealTimeHeatmapChart` (with its internals `HeatmapMap` and `HeatmapControls`) is relocated under `components/geographic/`, all other heatmap files are deleted, and the `Heatmap` entry in `LinkAnalyticsTabs.tsx` is removed. No new dependencies. No new analytics dimensions.
+**Architecture:** Backend collapses two endpoints into one. `/api/analytics/link/{id}/geographic` becomes the single source of truth, returning the existing `data` block plus a new top-level `meta` block (link_info + totals). On the frontend, `GeographicAnalysis.tsx` is refactored from a flat layout to a top-level metric row + an MUI Tabs control whose four panels host the existing visualization components. `RealTimeHeatmapChart` (with its internals `HeatmapMap` and `HeatmapControls`) is relocated under `components/geographic/`, all other heatmap files are deleted, and the `Heatmap` entry in `LinkAnalyticsTabs.tsx` is removed. No new dependencies. No new analytics dimensions.
 
 **Tech Stack:** Laravel 12 / PHP 8.2 (backend, PHPUnit on SQLite `:memory:`), Next.js 15 / React / TypeScript / MUI 6 (frontend, no test runner — `npm run quality` is the gate).
 
@@ -16,9 +16,9 @@
 
 ### Backend — modified
 - `routes/api.php` — remove the `heatmap` route line.
-- `app/Http/Controllers/Analytics/AnalyticsController.php` — delete `getHeatmapData()`; update `getGeographicAnalytics()` to attach the new `metadata` block.
+- `app/Http/Controllers/Analytics/AnalyticsController.php` — delete `getHeatmapData()`; update `getGeographicAnalytics()` to attach the new `meta` block.
 - `app/Services/Analytics/LinkAnalyticsOrchestrator.php` — delete `getHeatmapData()`; simplify `getComprehensiveLinkAnalytics()` to drop the redundant heatmap merge.
-- `app/Services/Analytics/GeographicAnalyticsService.php` — make `getHeatmapData()` private; have `getLinkGeographicAnalytics()` return `['data' => […], 'metadata' => […]]`; add private `buildGeographicMetadata()` helper that includes `unique_states`.
+- `app/Services/Analytics/GeographicAnalyticsService.php` — make `getHeatmapData()` private; have `getLinkGeographicAnalytics()` return `['data' => […], 'meta' => […]]`; add private `buildGeographicMeta()` helper that includes `unique_states`.
 - `app/Contracts/Analytics/GeographicAnalyticsInterface.php` — remove `getHeatmapData()` from the contract.
 - `tests/Feature/Analytics/AnalyticsEndpointsTest.php` — drop the `heatmap` data provider entry; add a dedicated test for `/geographic`'s new shape and a 404 test for the removed `/heatmap` URL.
 - `tests/Feature/Analytics/AnalyticsStructureTest.php` — update the existing heatmap-structure test to go through `getLinkGeographicAnalytics()` (the public path), since `getHeatmapData()` is private.
@@ -26,10 +26,10 @@
 ### Frontend — modified
 - `src/features/links/components/analytics/LinkAnalyticsTabs.tsx` — drop the Heatmap tab entry, its panel, and the import.
 - `src/features/analytics/components/geographic/GeographicAnalysis.tsx` — full refactor: top-level metric cards + 4 MUI sub-tabs.
-- `src/features/analytics/components/geographic/GeographicMetrics.tsx` — props change to consume the new `metadata` shape; remove the legacy fallback chains.
+- `src/features/analytics/components/geographic/GeographicMetrics.tsx` — props change to consume the new `meta` shape; remove the legacy fallback chains.
 - `src/features/analytics/components/geographic/index.ts` — re-export the relocated `RealTimeHeatmapChart`.
-- `src/features/analytics/hooks/useGeographicData.ts` — extend the response shape to surface `metadata`; rebuild `GeographicStats` from it.
-- `src/types/analytics/geographic.ts` — add `GeographicMetadata` interface; extend `GeographicData` with an optional `metadata` field at the top level (or surface it on the hook return — see Task 6).
+- `src/features/analytics/hooks/useGeographicData.ts` — extend the response shape to surface `meta`; rebuild `GeographicStats` from it.
+- `src/types/analytics/geographic.ts` — add `GeographicMeta` interface; extend `GeographicData` with an optional `meta` field at the top level (or surface it on the hook return — see Task 6).
 - `src/services/analytics.service.ts` — remove `getLinkHeatmap()`; remove the unused `HeatmapPoint` import.
 - `src/lib/query/keys.ts` — remove `heatmap` key under `analytics`.
 - `src/lib/api/endpoints.ts` — remove `ANALYTICS_HEATMAP` constant.
@@ -85,7 +85,7 @@ Replace lines 35–47 (`analyticsEndpoints()` method) with:
 Append the following two tests inside the class (before the closing `}`):
 
 ```php
-    public function test_geographic_endpoint_returns_data_and_metadata_blocks(): void
+    public function test_geographic_endpoint_returns_data_and_meta_blocks(): void
     {
         \App\Models\Click::factory()->count(3)->create([
             'link_id'   => $this->link->id,
@@ -111,7 +111,7 @@ Append the following two tests inside the class (before the closing `}`):
                     'top_cities',
                     'continents',
                 ],
-                'metadata' => [
+                'meta' => [
                     'total_clicks',
                     'unique_countries',
                     'unique_states',
@@ -150,7 +150,7 @@ In `backend/tests/Feature/Analytics/AnalyticsStructureTest.php`, replace the bod
         $payload = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);
 
         $this->assertArrayHasKey('data', $payload);
-        $this->assertArrayHasKey('metadata', $payload);
+        $this->assertArrayHasKey('meta', $payload);
         $this->assertArrayHasKey('heatmap_data', $payload['data']);
         $this->assertIsArray($payload['data']['heatmap_data']);
 
@@ -161,8 +161,8 @@ In `backend/tests/Feature/Analytics/AnalyticsStructureTest.php`, replace the bod
             $this->assertArrayHasKey('clicks', $point);
         }
 
-        $this->assertArrayHasKey('unique_states', $payload['metadata']);
-        $this->assertArrayHasKey('link_info', $payload['metadata']);
+        $this->assertArrayHasKey('unique_states', $payload['meta']);
+        $this->assertArrayHasKey('link_info', $payload['meta']);
     }
 ```
 
@@ -186,9 +186,9 @@ docker-compose exec app ./vendor/bin/phpunit --filter "Analytics"
 ```
 
 Expected: failures (RED) coming from
-- `test_geographic_endpoint_returns_data_and_metadata_blocks` — `metadata` is missing from the current response.
+- `test_geographic_endpoint_returns_data_and_meta_blocks` — `meta` is missing from the current response.
 - `test_removed_heatmap_endpoint_returns_404` — current code still returns 200 (route still exists).
-- `test_geographic_service_returns_heatmap_data_inside_link_geographic_payload` — top-level `data`/`metadata` not present yet.
+- `test_geographic_service_returns_heatmap_data_inside_link_geographic_payload` — top-level `data`/`meta` not present yet.
 - `test_orchestrator_all_public_methods_return_correct_top_level_keys` — current shape is flat.
 
 These RED failures confirm the tests reflect the target shape before any implementation.
@@ -198,7 +198,7 @@ These RED failures confirm the tests reflect the target shape before any impleme
 ```bash
 cd /Users/bruno/Projects/link-charts/backend
 git add tests/Feature/Analytics/AnalyticsEndpointsTest.php tests/Feature/Analytics/AnalyticsStructureTest.php
-git commit -m "test(analytics): assert /geographic metadata shape and 404 for /heatmap"
+git commit -m "test(analytics): assert /geographic meta shape and 404 for /heatmap"
 ```
 
 ---
@@ -224,13 +224,13 @@ interface GeographicAnalyticsInterface
 }
 ```
 
-- [ ] **Step 2.2: Make `getHeatmapData()` private and produce the unified `data + metadata` payload**
+- [ ] **Step 2.2: Make `getHeatmapData()` private and produce the unified `data + meta` payload**
 
 In `backend/app/Services/Analytics/GeographicAnalyticsService.php`:
 
 - Change the visibility of `getHeatmapData()` from `public` to `private` (line 43).
 - Replace `getLinkGeographicAnalytics()` (lines 21–41) with the version below.
-- Append a new private helper `buildGeographicMetadata()`.
+- Append a new private helper `buildGeographicMeta()`.
 - Append a new private helper `linkInfo()`.
 
 Replace lines 21–41 with:
@@ -249,7 +249,7 @@ Replace lines 21–41 with:
                     'top_cities'    => [],
                     'continents'    => [],
                 ],
-                'metadata' => $this->buildGeographicMetadata($link, []),
+                'meta' => $this->buildGeographicMeta($link, []),
             ];
         }
 
@@ -263,7 +263,7 @@ Replace lines 21–41 with:
                 'top_cities'    => $this->getTopCitiesOptimized($linkId),
                 'continents'    => $this->getTopContinents($linkId),
             ],
-            'metadata' => $this->buildGeographicMetadata($link, $heatmap),
+            'meta' => $this->buildGeographicMeta($link, $heatmap),
         ];
     }
 ```
@@ -271,7 +271,7 @@ Replace lines 21–41 with:
 Append the helpers immediately above the closing `}` of the class:
 
 ```php
-    private function buildGeographicMetadata(Link $link, array $heatmap): array
+    private function buildGeographicMeta(Link $link, array $heatmap): array
     {
         $countries = array_filter(array_column($heatmap, 'country'));
         $states    = array_filter(array_column($heatmap, 'state_name'));
@@ -306,7 +306,7 @@ Append the helpers immediately above the closing `}` of the class:
 ```bash
 cd /Users/bruno/Projects/link-charts/backend
 git add app/Contracts/Analytics/GeographicAnalyticsInterface.php app/Services/Analytics/GeographicAnalyticsService.php
-git commit -m "refactor(analytics): unify geographic payload with metadata block"
+git commit -m "refactor(analytics): unify geographic payload with meta block"
 ```
 
 ---
@@ -339,7 +339,7 @@ with:
             'geographic' => $this->geographic->getLinkGeographicAnalytics($linkId),
 ```
 
-- [ ] **Step 3.2: Delete `getHeatmapData()` from the controller and attach `metadata` on `getGeographicAnalytics()`**
+- [ ] **Step 3.2: Delete `getHeatmapData()` from the controller and attach `meta` on `getGeographicAnalytics()`**
 
 In `backend/app/Http/Controllers/Analytics/AnalyticsController.php`:
 
@@ -349,7 +349,7 @@ Replace `getGeographicAnalytics()` (lines 86–101) with:
 
 ```php
     /**
-     * Analytics geográficos detalhados — payload unificado (data + metadata)
+     * Analytics geográficos detalhados — payload unificado (data + meta)
      */
     public function getGeographicAnalytics(int $linkId): JsonResponse
     {
@@ -360,9 +360,9 @@ Replace `getGeographicAnalytics()` (lines 86–101) with:
             $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
             return response()->json([
-                'success'  => true,
-                'data'     => $payload['data'],
-                'metadata' => $payload['metadata'],
+                'success' => true,
+                'data'    => $payload['data'],
+                'meta'    => $payload['meta'],
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar analytics geográficos.', $e);
@@ -401,20 +401,20 @@ Expected: green.
 ```bash
 cd /Users/bruno/Projects/link-charts/backend
 git add app/Services/Analytics/LinkAnalyticsOrchestrator.php app/Http/Controllers/Analytics/AnalyticsController.php routes/api.php
-git commit -m "feat(analytics): remove /heatmap endpoint, return metadata on /geographic"
+git commit -m "feat(analytics): remove /heatmap endpoint, return meta on /geographic"
 ```
 
 ---
 
 ## Phase B — Frontend
 
-### Task 4: Extend the geographic types and hook to surface `metadata`
+### Task 4: Extend the geographic types and hook to surface `meta`
 
 **Files:**
 - Modify: `frontend-next/src/types/analytics/geographic.ts`
 - Modify: `frontend-next/src/features/analytics/hooks/useGeographicData.ts`
 
-- [ ] **Step 4.1: Add `GeographicMetadata` and `GeographicResponse` types**
+- [ ] **Step 4.1: Add `GeographicMeta` and `GeographicResponse` types**
 
 In `frontend-next/src/types/analytics/geographic.ts`, append (after the `ContinentData` interface and before the existing `GeographicStats` definition):
 
@@ -422,7 +422,7 @@ In `frontend-next/src/types/analytics/geographic.ts`, append (after the `Contine
 /**
  * Metadados retornados junto com /api/analytics/link/{id}/geographic
  */
-export interface GeographicMetadata {
+export interface GeographicMeta {
   total_clicks: number;
   unique_countries: number;
   unique_states: number;
@@ -440,15 +440,15 @@ export interface GeographicMetadata {
 
 /**
  * Envelope completo da resposta /geographic.
- * Espelha exatamente { data, metadata } retornado pelo backend.
+ * Espelha exatamente { data, meta } retornado pelo backend.
  */
 export interface GeographicResponse {
   data: GeographicData;
-  metadata: GeographicMetadata;
+  meta: GeographicMeta;
 }
 ```
 
-- [ ] **Step 4.2: Update the hook to consume `{ data, metadata }` and rebuild `GeographicStats` from metadata**
+- [ ] **Step 4.2: Update the hook to consume `{ data, meta }` and rebuild `GeographicStats` from meta**
 
 Replace the entire content of `frontend-next/src/features/analytics/hooks/useGeographicData.ts` with:
 
@@ -464,7 +464,7 @@ import { API_CONFIG } from "@/lib/api/endpoints";
 
 import type {
   GeographicData,
-  GeographicMetadata,
+  GeographicMeta,
   GeographicResponse,
 } from "@/types/analytics/geographic";
 
@@ -489,7 +489,7 @@ export interface UseGeographicDataOptions {
 
 export interface UseGeographicDataReturn {
   data: GeographicData | null;
-  metadata: GeographicMetadata | null;
+  meta: GeographicMeta | null;
   stats: GeographicStats | null;
   loading: boolean;
   error: string | null;
@@ -497,19 +497,19 @@ export interface UseGeographicDataReturn {
   isRealtime: boolean;
 }
 
-function calculateStats(metadata: GeographicMetadata): GeographicStats {
+function calculateStats(meta: GeographicMeta): GeographicStats {
   return {
-    totalCountries: metadata.unique_countries,
-    totalStates: metadata.unique_states,
-    totalCities: metadata.unique_cities,
-    totalClicks: metadata.total_clicks,
-    maxClicks: metadata.max_clicks,
-    totalLocations: metadata.total_locations,
+    totalCountries: meta.unique_countries,
+    totalStates: meta.unique_states,
+    totalCities: meta.unique_cities,
+    totalClicks: meta.total_clicks,
+    maxClicks: meta.max_clicks,
+    totalLocations: meta.total_locations,
     coveragePercentage:
-      metadata.unique_countries > 0
-        ? Math.min((metadata.unique_countries / 195) * 100, 100)
+      meta.unique_countries > 0
+        ? Math.min((meta.unique_countries / 195) * 100, 100)
         : 0,
-    lastUpdate: metadata.last_updated,
+    lastUpdate: meta.last_updated,
   };
 }
 
@@ -549,15 +549,15 @@ export function useGeographicData({
     };
   }, [raw, minClicks]);
 
-  const metadata = raw?.metadata ?? null;
+  const meta = raw?.meta ?? null;
   const stats = useMemo(
-    () => (metadata ? calculateStats(metadata) : null),
-    [metadata],
+    () => (meta ? calculateStats(meta) : null),
+    [meta],
   );
 
   return {
     data,
-    metadata,
+    meta,
     stats,
     loading: isLoading,
     error: error ? (error as Error).message : null,
@@ -574,17 +574,17 @@ export default useGeographicData;
 ```bash
 cd /Users/bruno/Projects/link-charts/frontend-next
 git add src/types/analytics/geographic.ts src/features/analytics/hooks/useGeographicData.ts
-git commit -m "feat(analytics): surface metadata block on geographic hook"
+git commit -m "feat(analytics): surface meta block on geographic hook"
 ```
 
 ---
 
-### Task 5: Update `GeographicMetrics` to consume the new metadata-derived stats
+### Task 5: Update `GeographicMetrics` to consume the new meta-derived stats
 
 **Files:**
 - Modify: `frontend-next/src/features/analytics/components/geographic/GeographicMetrics.tsx`
 
-- [ ] **Step 5.1: Replace the component body with a metadata-driven version**
+- [ ] **Step 5.1: Replace the component body with a meta-driven version**
 
 Replace the entire content of `frontend-next/src/features/analytics/components/geographic/GeographicMetrics.tsx` with:
 
@@ -695,7 +695,7 @@ export default GeographicMetrics;
 ```bash
 cd /Users/bruno/Projects/link-charts/frontend-next
 git add src/features/analytics/components/geographic/GeographicMetrics.tsx
-git commit -m "refactor(analytics): drive GeographicMetrics from metadata-backed stats"
+git commit -m "refactor(analytics): drive GeographicMetrics from meta-backed stats"
 ```
 
 ---
@@ -1262,7 +1262,7 @@ git commit -m "chore(analytics): satisfy quality gate after geographic refactor"
 
 ## Self-Review Checklist (already applied during plan authoring)
 
-- **Spec coverage:** every requirement in the spec maps to a task — backend route removal (Task 3.3), service refactor (Task 2), interface update (Task 2.1), `metadata` block including `unique_states` (Task 2.2), controller wiring (Task 3.2), orchestrator simplification (Task 3.1), `LinkAnalyticsTabs` cleanup (Task 8.1), `GeographicAnalysis` sub-tab refactor (Task 7), `RealTimeHeatmapChart` relocation (Task 6), 5-card metric set driven by metadata (Task 5 + Task 4 hook), deletion of the heatmap module (Task 8.2), service / query-key / endpoint / i18n cleanup (Task 9), backend tests (Task 1), frontend quality + manual validation (Task 10).
+- **Spec coverage:** every requirement in the spec maps to a task — backend route removal (Task 3.3), service refactor (Task 2), interface update (Task 2.1), `meta` block including `unique_states` (Task 2.2), controller wiring (Task 3.2), orchestrator simplification (Task 3.1), `LinkAnalyticsTabs` cleanup (Task 8.1), `GeographicAnalysis` sub-tab refactor (Task 7), `RealTimeHeatmapChart` relocation (Task 6), 5-card metric set driven by meta (Task 5 + Task 4 hook), deletion of the heatmap module (Task 8.2), service / query-key / endpoint / i18n cleanup (Task 9), backend tests (Task 1), frontend quality + manual validation (Task 10).
 - **Placeholder scan:** no TBD / TODO / vague "handle errors" / "similar to" — every code-bearing step has full code.
-- **Type consistency:** `GeographicMetadata` shape is consistent across the spec, the backend `buildGeographicMetadata()`, the frontend `GeographicMetadata` interface, the hook's `GeographicResponse`, and the metric-card consumers. `unique_states` is present in all three layers. `GeographicStats` is rebuilt from metadata in one place (the hook) and consumed everywhere else as `GeographicStats | null`.
+- **Type consistency:** `GeographicMeta` shape is consistent across the spec, the backend `buildGeographicMeta()`, the frontend `GeographicMeta` interface, the hook's `GeographicResponse`, and the metric-card consumers. `unique_states` is present in all three layers. `GeographicStats` is rebuilt from meta in one place (the hook) and consumed everywhere else as `GeographicStats | null`.
 - **Branch safety:** the order keeps the tree compilable except for an explicitly-noted intermediate state in Step 6.3, which is resolved by Tasks 7 and 8.
