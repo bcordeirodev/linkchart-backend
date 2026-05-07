@@ -28,11 +28,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // 🌐 MIDDLEWARE GLOBAL: TrustProxies e CORS devem ser os primeiros
         $middleware->web([
             \App\Http\Middleware\TrustProxies::class,
+            \App\Http\Middleware\AssignRequestId::class,
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
         $middleware->api([
             \App\Http\Middleware\TrustProxies::class,
+            \App\Http\Middleware\AssignRequestId::class,
             \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\NormalizeApiResponse::class,
         ]);
