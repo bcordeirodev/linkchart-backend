@@ -5,6 +5,7 @@ namespace Tests\Feature\Analytics;
 use App\Models\Link;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AnalyticsEndpointsTest extends TestCase
@@ -45,9 +46,7 @@ class AnalyticsEndpointsTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider analyticsEndpoints
-     */
+    #[DataProvider('analyticsEndpoints')]
     public function test_returns_401_without_token(string $pattern): void
     {
         auth()->guard('api')->logout();
@@ -56,9 +55,7 @@ class AnalyticsEndpointsTest extends TestCase
         $this->getJson($url)->assertStatus(401);
     }
 
-    /**
-     * @dataProvider analyticsEndpoints
-     */
+    #[DataProvider('analyticsEndpoints')]
     public function test_returns_404_for_link_owned_by_another_user(string $pattern): void
     {
         $other = User::factory()->create();
@@ -68,9 +65,7 @@ class AnalyticsEndpointsTest extends TestCase
         $this->getJson($url, $this->auth())->assertStatus(404);
     }
 
-    /**
-     * @dataProvider analyticsEndpoints
-     */
+    #[DataProvider('analyticsEndpoints')]
     public function test_returns_200_with_success_for_owned_link(string $pattern): void
     {
         $url = sprintf($pattern, $this->link->id);

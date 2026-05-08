@@ -48,7 +48,6 @@ class LinkTrackingPhase3Test extends TestCase
         ];
     }
 
-    /** @test */
     public function test_organic_score_for_clean_click(): void
     {
         $result = $this->call('calculateQualityScore', [$this->baseFields()]);
@@ -57,7 +56,6 @@ class LinkTrackingPhase3Test extends TestCase
         $this->assertEquals(0, $result['fingerprint_score']);
     }
 
-    /** @test */
     public function test_bot_click_results_in_zero_score(): void
     {
         $fields = array_merge($this->baseFields(), ['is_bot' => true]);
@@ -66,7 +64,6 @@ class LinkTrackingPhase3Test extends TestCase
         $this->assertEquals('likely_fraud', $result['quality_tier']);
     }
 
-    /** @test */
     public function test_datacenter_connection_reduces_score(): void
     {
         $fields = array_merge($this->baseFields(), ['connection_type' => 'datacenter']);
@@ -74,7 +71,6 @@ class LinkTrackingPhase3Test extends TestCase
         $this->assertLessThan(80, $result['quality_score']);
     }
 
-    /** @test */
     public function test_api_programmatic_without_hints_reduces_score(): void
     {
         $fields = array_merge($this->baseFields(), [
@@ -85,7 +81,6 @@ class LinkTrackingPhase3Test extends TestCase
         $this->assertLessThan(80, $result['quality_score']);
     }
 
-    /** @test */
     public function test_flood_pattern_reduces_score(): void
     {
         $fields = array_merge($this->baseFields(), [
@@ -96,7 +91,6 @@ class LinkTrackingPhase3Test extends TestCase
         $this->assertLessThan(70, $result['quality_score']);
     }
 
-    /** @test */
     public function test_ch_mobile_inconsistency_increases_fingerprint_score(): void
     {
         $fields = array_merge($this->baseFields(), [
@@ -107,7 +101,6 @@ class LinkTrackingPhase3Test extends TestCase
         $this->assertGreaterThan(0, $result['fingerprint_score']);
     }
 
-    /** @test */
     public function test_tiers_are_set_correctly(): void
     {
         $fields = array_merge($this->baseFields(), [
