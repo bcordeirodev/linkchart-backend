@@ -28,11 +28,12 @@ class ProcessLinkClickJob implements ShouldQueue
     use Dispatchable, HasLogContext, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 10;
+
     public int $timeout = 30;
 
     /**
-     * @param  int  $linkId
      * @param  array<string,mixed>  $payload  See LinkTrackingService::registrarCliqueFromPayload signature.
      */
     public function __construct(
@@ -62,7 +63,7 @@ class ProcessLinkClickJob implements ShouldQueue
         }
     }
 
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     protected function logContextRequestId(): ?string
     {
         return $this->payload['request_id'] ?? null;

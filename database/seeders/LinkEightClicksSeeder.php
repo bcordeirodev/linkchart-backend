@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 class LinkEightClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder para o Link ID 8 - Tutorial YouTube
      * Foco: Mobile-first, forte BR, tráfego via YouTube e social

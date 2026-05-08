@@ -13,14 +13,14 @@ class DatabaseSeeder extends Seeder
         DB::table('users')->upsert(
             [
                 [
-                    'id'                => 2,
-                    'name'              => 'Usuário Teste',
-                    'email'             => 'usuario2@example.com',
-                    'password'          => Hash::make('password'),
-                    'email_verified'    => true,
+                    'id' => 2,
+                    'name' => 'Usuário Teste',
+                    'email' => 'usuario2@example.com',
+                    'password' => Hash::make('password'),
+                    'email_verified' => true,
                     'email_verified_at' => now(),
-                    'created_at'        => now(),
-                    'updated_at'        => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ],
             ],
             ['email'],
@@ -30,7 +30,7 @@ class DatabaseSeeder extends Seeder
         // Advance the users sequence past the manually inserted ID
         DB::statement("SELECT setval('users_id_seq', (SELECT MAX(id) FROM users))");
 
-        $now   = now()->toDateTimeString();
+        $now = now()->toDateTimeString();
         $links = [
             ['id' => 2, 'slug' => 'teste-analytics',  'title' => 'Link de Teste Analytics',          'original_url' => 'https://www.example.com'],
             ['id' => 3, 'slug' => 'teste-completo',    'title' => 'Link de Teste Completo',           'original_url' => 'https://www.example.org'],
@@ -45,9 +45,9 @@ class DatabaseSeeder extends Seeder
         foreach ($links as $link) {
             DB::table('links')->upsert(
                 array_merge($link, [
-                    'user_id'    => 2,
-                    'is_active'  => true,
-                    'clicks'     => 0,
+                    'user_id' => 2,
+                    'is_active' => true,
+                    'clicks' => 0,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]),

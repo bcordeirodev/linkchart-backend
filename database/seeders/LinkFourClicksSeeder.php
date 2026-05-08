@@ -10,6 +10,7 @@ use Illuminate\Database\Seeder;
 class LinkFourClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder para o Link ID 4 - Analytics Dashboard Test
      * Cria dados variados e realísticos para testar todos os endpoints de analytics

@@ -15,15 +15,15 @@ class LinkTrackingPhase2Test extends TestCase
      * Invokes a private method on LinkTrackingService via reflection.
      *
      * @param  string  $method  Method name
-     * @param  array   $args    Arguments to pass
-     * @return mixed
+     * @param  array  $args  Arguments to pass
      */
     private function call(string $method, array $args): mixed
     {
         $r = new ReflectionClass(LinkTrackingService::class);
         $m = $r->getMethod($method);
         $m->setAccessible(true);
-        return $m->invoke(new LinkTrackingService(), ...$args);
+
+        return $m->invoke(new LinkTrackingService, ...$args);
     }
 
     // --- enrichSeason ---

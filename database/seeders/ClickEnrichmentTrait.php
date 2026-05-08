@@ -16,11 +16,11 @@ trait ClickEnrichmentTrait
     /**
      * Returns an array of enriched fields ready to merge into a click record.
      *
-     * @param  string       $ua      User-Agent string
-     * @param  string       $device  'mobile' | 'desktop' | 'tablet' | 'bot'
-     * @param  string|null  $referer Referer URL or null
-     * @param  Carbon       $date    Click timestamp
-     * @param  string       $iso     Country ISO code
+     * @param  string  $ua  User-Agent string
+     * @param  string  $device  'mobile' | 'desktop' | 'tablet' | 'bot'
+     * @param  string|null  $referer  Referer URL or null
+     * @param  Carbon  $date  Click timestamp
+     * @param  string  $iso  Country ISO code
      */
     private function enrichClickData(
         string $ua,
@@ -29,50 +29,50 @@ trait ClickEnrichmentTrait
         Carbon $date,
         string $iso
     ): array {
-        $isBot     = $device === 'bot';
-        $isMobile  = $device === 'mobile';
-        $isTablet  = $device === 'tablet';
+        $isBot = $device === 'bot';
+        $isMobile = $device === 'mobile';
+        $isTablet = $device === 'tablet';
         $isDesktop = $device === 'desktop';
 
         [$browser, $browserVersion, $os, $osVersion] = $this->parseBrowserOs($ua, $device);
-        $engine      = $this->deriveEngine($browser);
-        $navContext  = $this->deriveNavContext($device, $referer, $isBot);
+        $engine = $this->deriveEngine($browser);
+        $navContext = $this->deriveNavContext($device, $referer, $isBot);
         [$qualityTier, $qualityScore, $fingerprintScore] = $this->deriveQuality($isBot, $navContext);
         [$primaryLang, $langRegion] = $this->deriveLanguage($iso);
-        $connType    = $this->deriveConnectionType($device);
-        $isReturn    = ! $isBot && (mt_rand(1, 100) <= 28);
+        $connType = $this->deriveConnectionType($device);
+        $isReturn = ! $isBot && (mt_rand(1, 100) <= 28);
         $sessionClicks = $isReturn ? mt_rand(2, 5) : 1;
 
-        $hour   = (int) $date->format('H');
-        $dow    = (int) $date->format('N'); // 1=Mon … 7=Sun
-        $isWeekend       = $dow >= 6;
+        $hour = (int) $date->format('H');
+        $dow = (int) $date->format('N'); // 1=Mon … 7=Sun
+        $isWeekend = $dow >= 6;
         $isBusinessHours = ! $isWeekend && $hour >= 9 && $hour < 18;
 
         return [
-            'browser'          => $browser,
-            'browser_version'  => $browserVersion,
-            'os'               => $os,
-            'os_version'       => $osVersion,
-            'is_mobile'        => $isMobile,
-            'is_tablet'        => $isTablet,
-            'is_desktop'       => $isDesktop,
-            'is_bot'           => $isBot,
+            'browser' => $browser,
+            'browser_version' => $browserVersion,
+            'os' => $os,
+            'os_version' => $osVersion,
+            'is_mobile' => $isMobile,
+            'is_tablet' => $isTablet,
+            'is_desktop' => $isDesktop,
+            'is_bot' => $isBot,
             'rendering_engine' => $engine,
             'navigation_context' => $navContext,
-            'quality_tier'     => $qualityTier,
-            'quality_score'    => $qualityScore,
+            'quality_tier' => $qualityTier,
+            'quality_score' => $qualityScore,
             'fingerprint_score' => $fingerprintScore,
             'primary_language' => $primaryLang,
-            'language_region'  => $langRegion,
-            'connection_type'  => $connType,
+            'language_region' => $langRegion,
+            'connection_type' => $connType,
             'is_return_visitor' => $isReturn,
-            'session_clicks'   => $sessionClicks,
-            'hour_of_day'      => $hour,
-            'day_of_week'      => $dow,
-            'day_of_month'     => (int) $date->format('j'),
-            'month'            => (int) $date->format('n'),
-            'year'             => (int) $date->format('Y'),
-            'is_weekend'       => $isWeekend,
+            'session_clicks' => $sessionClicks,
+            'hour_of_day' => $hour,
+            'day_of_week' => $dow,
+            'day_of_month' => (int) $date->format('j'),
+            'month' => (int) $date->format('n'),
+            'year' => (int) $date->format('Y'),
+            'is_weekend' => $isWeekend,
             'is_business_hours' => $isBusinessHours,
         ];
     }
@@ -87,6 +87,7 @@ trait ClickEnrichmentTrait
             if (str_contains($ua, 'bingbot')) {
                 return ['Bingbot', '2.0', 'Unknown', null];
             }
+
             return ['Bot', null, 'Unknown', null];
         }
 
@@ -155,10 +156,10 @@ trait ClickEnrichmentTrait
     {
         return match (true) {
             in_array($browser, ['Chrome', 'Edge', 'Opera', 'Brave'], true) => 'blink',
-            $browser === 'Firefox'                                          => 'gecko',
-            $browser === 'Safari'                                           => 'webkit',
-            $browser === 'IE'                                               => 'trident',
-            default                                                         => 'unknown',
+            $browser === 'Firefox' => 'gecko',
+            $browser === 'Safari' => 'webkit',
+            $browser === 'IE' => 'trident',
+            default => 'unknown',
         };
     }
 

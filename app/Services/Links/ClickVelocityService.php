@@ -24,13 +24,12 @@ class ClickVelocityService
      * Degrades gracefully when Redis is unavailable, returning a 'cold' rank
      * so the tracking job is not interrupted by Redis downtime.
      *
-     * @param  int  $linkId
      * @return array{viral_rank: string, seconds_since_last_click: ?int}
      */
     public function record(int $linkId): array
     {
-        $key5    = "link:{$linkId}:v5";
-        $key60   = "link:{$linkId}:v60";
+        $key5 = "link:{$linkId}:v5";
+        $key60 = "link:{$linkId}:v60";
         $keyLast = "link:{$linkId}:last_click";
 
         try {
@@ -44,26 +43,26 @@ class ClickVelocityService
         } catch (\Throwable $e) {
             Log::warning('ClickVelocityService: Redis unavailable, returning cold rank', [
                 'link_id' => $linkId,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             return ['viral_rank' => 'cold', 'seconds_since_last_click' => null];
         }
 
-        $c5         = (int) $results[0];
-        $c60        = (int) $results[2];
-        $prevTs     = $results[4];
+        $c5 = (int) $results[0];
+        $c60 = (int) $results[2];
+        $prevTs = $results[4];
         $thresholds = config('tracking.viral_thresholds');
 
-        $viralRank = match(true) {
-            $c5  >= $thresholds['viral']    => 'viral',
-            $c5  >= $thresholds['trending'] => 'trending',
-            $c60 >= $thresholds['warming']  => 'warming',
-            default                         => 'cold',
+        $viralRank = match (true) {
+            $c5 >= $thresholds['viral'] => 'viral',
+            $c5 >= $thresholds['trending'] => 'trending',
+            $c60 >= $thresholds['warming'] => 'warming',
+            default => 'cold',
         };
 
         return [
-            'viral_rank'               => $viralRank,
+            'viral_rank' => $viralRank,
             'seconds_since_last_click' => $prevTs !== null
                 ? max(0, now()->timestamp - (int) $prevTs)
                 : null,

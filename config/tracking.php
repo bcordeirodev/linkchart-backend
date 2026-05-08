@@ -15,8 +15,8 @@ return [
     |
     */
     'viral_thresholds' => [
-        'viral'    => env('VIRAL_THRESHOLD_VIRAL',    50),
+        'viral' => env('VIRAL_THRESHOLD_VIRAL', 50),
         'trending' => env('VIRAL_THRESHOLD_TRENDING', 20),
-        'warming'  => env('VIRAL_THRESHOLD_WARMING', 100),
+        'warming' => env('VIRAL_THRESHOLD_WARMING', 100),
     ],
 ];

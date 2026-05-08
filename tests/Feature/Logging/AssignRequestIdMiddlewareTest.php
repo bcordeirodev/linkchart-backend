@@ -18,11 +18,12 @@ class AssignRequestIdMiddlewareTest extends TestCase
 
     public function test_generates_id_when_header_absent(): void
     {
-        $mw = new AssignRequestId();
+        $mw = new AssignRequestId;
         $captured = null;
 
         $response = $mw->handle(Request::create('/test'), function () use (&$captured) {
             $captured = RequestContext::current();
+
             return new Response('ok');
         });
 
@@ -33,13 +34,14 @@ class AssignRequestIdMiddlewareTest extends TestCase
 
     public function test_reuses_inbound_x_request_id_header(): void
     {
-        $mw = new AssignRequestId();
+        $mw = new AssignRequestId;
         $captured = null;
         $req = Request::create('/test');
         $req->headers->set('X-Request-Id', 'req_external_123');
 
         $response = $mw->handle($req, function () use (&$captured) {
             $captured = RequestContext::current();
+
             return new Response('ok');
         });
 
@@ -49,13 +51,14 @@ class AssignRequestIdMiddlewareTest extends TestCase
 
     public function test_populates_ip_and_route_in_context(): void
     {
-        $mw = new AssignRequestId();
+        $mw = new AssignRequestId;
         $captured = null;
         $req = Request::create('/r/abc');
         $req->server->set('REMOTE_ADDR', '8.8.8.8');
 
         $mw->handle($req, function () use (&$captured) {
             $captured = RequestContext::current();
+
             return new Response('ok');
         });
 
@@ -65,7 +68,7 @@ class AssignRequestIdMiddlewareTest extends TestCase
 
     public function test_clears_context_after_response(): void
     {
-        $mw = new AssignRequestId();
+        $mw = new AssignRequestId;
 
         $mw->handle(Request::create('/t'), fn () => new Response('ok'));
 

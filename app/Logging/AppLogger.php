@@ -19,63 +19,101 @@ use Throwable;
  */
 final class AppLogger
 {
-    public const REDIRECT_STARTED          = 'redirect.started';
-    public const REDIRECT_BLOCKED          = 'redirect.blocked';
-    public const REDIRECT_DISPATCHED       = 'redirect.dispatched';
-    public const REDIRECT_ERROR            = 'redirect.error';
-    public const REDIRECT_METRICS_OK       = 'redirect.metrics_collected';
-    public const REDIRECT_METRICS_FAILED   = 'redirect.metrics_failed';
-    public const OG_FETCH_SKIPPED          = 'og.fetch_skipped';
-    public const OG_FETCH_FAILED           = 'og.fetch_failed';
-    public const OG_FETCH_NON_OK           = 'og.fetch_non_ok';
+    public const REDIRECT_STARTED = 'redirect.started';
 
-    public const TRACKING_CLICK_REGISTERED       = 'tracking.click_registered';
-    public const TRACKING_LINK_NOT_FOUND         = 'tracking.link_not_found';
-    public const TRACKING_TEMPORAL_FAIL          = 'tracking.temporal_enrichment_failed';
-    public const TRACKING_BEHAVIOR_FAIL          = 'tracking.behavior_analysis_failed';
-    public const GEOIP_DEFAULT_LOCATION          = 'geoip.default_location';
-    public const GEOIP_FAILED                    = 'geoip.failed';
-    public const USER_AGENT_PARSE_FAILED         = 'user_agent.parse_failed';
+    public const REDIRECT_BLOCKED = 'redirect.blocked';
 
-    public const JOB_STARTED   = 'job.started';
+    public const REDIRECT_DISPATCHED = 'redirect.dispatched';
+
+    public const REDIRECT_ERROR = 'redirect.error';
+
+    public const REDIRECT_METRICS_OK = 'redirect.metrics_collected';
+
+    public const REDIRECT_METRICS_FAILED = 'redirect.metrics_failed';
+
+    public const OG_FETCH_SKIPPED = 'og.fetch_skipped';
+
+    public const OG_FETCH_FAILED = 'og.fetch_failed';
+
+    public const OG_FETCH_NON_OK = 'og.fetch_non_ok';
+
+    public const TRACKING_CLICK_REGISTERED = 'tracking.click_registered';
+
+    public const TRACKING_LINK_NOT_FOUND = 'tracking.link_not_found';
+
+    public const TRACKING_TEMPORAL_FAIL = 'tracking.temporal_enrichment_failed';
+
+    public const TRACKING_BEHAVIOR_FAIL = 'tracking.behavior_analysis_failed';
+
+    public const GEOIP_DEFAULT_LOCATION = 'geoip.default_location';
+
+    public const GEOIP_FAILED = 'geoip.failed';
+
+    public const USER_AGENT_PARSE_FAILED = 'user_agent.parse_failed';
+
+    public const JOB_STARTED = 'job.started';
+
     public const JOB_SUCCEEDED = 'job.succeeded';
-    public const JOB_FAILED    = 'job.failed';
-    public const JOB_RETRYING  = 'job.retrying';
 
-    public const AUTH_LOGIN_SUCCESS               = 'auth.login_success';
-    public const AUTH_LOGIN_FAILURE               = 'auth.login_failure';
-    public const AUTH_REGISTRATION                = 'auth.registration';
-    public const AUTH_PASSWORD_RESET_REQUESTED    = 'auth.password_reset_requested';
-    public const AUTH_PASSWORD_RESET_COMPLETED    = 'auth.password_reset_completed';
-    public const AUTH_EMAIL_VERIFICATION_SENT     = 'auth.email_verification_sent';
-    public const AUTH_EMAIL_VERIFIED              = 'auth.email_verified';
-    public const AUTH_JWT_ERROR                   = 'auth.jwt_error';
-    public const AUTH_ERROR                       = 'auth.error';
+    public const JOB_FAILED = 'job.failed';
+
+    public const JOB_RETRYING = 'job.retrying';
+
+    public const AUTH_LOGIN_SUCCESS = 'auth.login_success';
+
+    public const AUTH_LOGIN_FAILURE = 'auth.login_failure';
+
+    public const AUTH_REGISTRATION = 'auth.registration';
+
+    public const AUTH_PASSWORD_RESET_REQUESTED = 'auth.password_reset_requested';
+
+    public const AUTH_PASSWORD_RESET_COMPLETED = 'auth.password_reset_completed';
+
+    public const AUTH_EMAIL_VERIFICATION_SENT = 'auth.email_verification_sent';
+
+    public const AUTH_EMAIL_VERIFIED = 'auth.email_verified';
+
+    public const AUTH_JWT_ERROR = 'auth.jwt_error';
+
+    public const AUTH_ERROR = 'auth.error';
 
     public const HTTP_SLOW_REQUEST = 'http.slow_request';
+
     public const HTTP_CLIENT_ERROR = 'http.client_error';
+
     public const HTTP_SERVER_ERROR = 'http.server_error';
 
     public const AUDIT_LINK_CHANGE = 'audit.link_change';
-    public const AUDIT_FAILED      = 'audit.failed';
 
-    public const EMAIL_SENT        = 'email.sent';
-    public const EMAIL_FAILED      = 'email.failed';
+    public const AUDIT_FAILED = 'audit.failed';
+
+    public const EMAIL_SENT = 'email.sent';
+
+    public const EMAIL_FAILED = 'email.failed';
+
     public const EMAIL_TEST_FAILED = 'email.test_failed';
 
-    public const LINK_CREATED              = 'link.created';
-    public const LINK_UPDATED              = 'link.updated';
-    public const LINK_DELETED              = 'link.deleted';
-    public const LINK_CLICK_LIMIT_REACHED  = 'link.click_limit_reached';
+    public const LINK_CREATED = 'link.created';
 
-    public const ANALYTICS_REQUESTED          = 'analytics.requested';
-    public const ANALYTICS_CACHE_MISS         = 'analytics.cache_miss';
-    public const ANALYTICS_SLOW_AGGREGATION   = 'analytics.slow_aggregation';
-    public const ANALYTICS_ERROR              = 'analytics.error';
+    public const LINK_UPDATED = 'link.updated';
 
-    public const SAFETY_URL_FLAGGED       = 'safety.url_flagged';
-    public const SAFETY_API_UNAVAILABLE   = 'safety.api_unavailable';
-    public const SAFETY_API_ERROR         = 'safety.api_error';
+    public const LINK_DELETED = 'link.deleted';
+
+    public const LINK_CLICK_LIMIT_REACHED = 'link.click_limit_reached';
+
+    public const ANALYTICS_REQUESTED = 'analytics.requested';
+
+    public const ANALYTICS_CACHE_MISS = 'analytics.cache_miss';
+
+    public const ANALYTICS_SLOW_AGGREGATION = 'analytics.slow_aggregation';
+
+    public const ANALYTICS_ERROR = 'analytics.error';
+
+    public const SAFETY_URL_FLAGGED = 'safety.url_flagged';
+
+    public const SAFETY_API_UNAVAILABLE = 'safety.api_unavailable';
+
+    public const SAFETY_API_ERROR = 'safety.api_error';
 
     // ============================================================
     // REDIRECT (channel: redirect)
@@ -519,6 +557,7 @@ final class AppLogger
             if (in_array($level, ['error', 'critical', 'alert', 'emergency'], true)) {
                 Log::channel('errors')->{$level}($event, $payload);
             }
+
             return;
         }
 

@@ -20,11 +20,6 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class AssignRequestId
 {
-    /**
-     * @param  Request  $request
-     * @param  Closure  $next
-     * @return Response
-     */
     public function handle(Request $request, Closure $next): Response
     {
         $requestId = $request->headers->get('X-Request-Id') ?? 'req_'.bin2hex(random_bytes(8));
@@ -42,6 +37,7 @@ final class AssignRequestId
         try {
             $response = $next($request);
             $response->headers->set('X-Request-Id', $requestId);
+
             return $response;
         } finally {
             RequestContext::clear();
@@ -55,6 +51,7 @@ final class AssignRequestId
     {
         try {
             $user = $request->user();
+
             return $user?->id;
         } catch (\Throwable) {
             return null;

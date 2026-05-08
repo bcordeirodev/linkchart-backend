@@ -53,8 +53,7 @@ final class SamplingWrapper implements HandlerInterface
     public function __construct(
         private readonly HandlerInterface $wrapped,
         private readonly float $rate,
-    ) {
-    }
+    ) {}
 
     public function isHandling(LogRecord $record): bool
     {
@@ -85,7 +84,7 @@ final class SamplingWrapper implements HandlerInterface
             }
         }
 
-        if (!empty($filtered)) {
+        if (! empty($filtered)) {
             $this->wrapped->handleBatch($filtered);
         }
     }

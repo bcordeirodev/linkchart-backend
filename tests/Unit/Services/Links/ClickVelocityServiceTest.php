@@ -18,11 +18,12 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
                 $pipe->shouldReceive('getset')->once()->andReturn(null);
                 $cb($pipe);
+
                 return [3, true, 10, true, null];
             });
 
-        $service = new ClickVelocityService();
-        $result  = $service->record(1);
+        $service = new ClickVelocityService;
+        $result = $service->record(1);
 
         $this->assertEquals('cold', $result['viral_rank']);
         $this->assertNull($result['seconds_since_last_click']);
@@ -40,11 +41,12 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
                 $pipe->shouldReceive('getset')->once()->andReturn(null);
                 $cb($pipe);
+
                 return [60, true, 200, true, (string) $prevTs];
             });
 
-        $service = new ClickVelocityService();
-        $result  = $service->record(1);
+        $service = new ClickVelocityService;
+        $result = $service->record(1);
 
         $this->assertEquals('viral', $result['viral_rank']);
         $this->assertGreaterThanOrEqual(4, $result['seconds_since_last_click']);
@@ -60,11 +62,12 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
                 $pipe->shouldReceive('getset')->once()->andReturn(null);
                 $cb($pipe);
+
                 return [25, true, 50, true, null];
             });
 
-        $service = new ClickVelocityService();
-        $result  = $service->record(1);
+        $service = new ClickVelocityService;
+        $result = $service->record(1);
 
         $this->assertEquals('trending', $result['viral_rank']);
     }
@@ -79,11 +82,12 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
                 $pipe->shouldReceive('getset')->once()->andReturn(null);
                 $cb($pipe);
+
                 return [5, true, 120, true, null];
             });
 
-        $service = new ClickVelocityService();
-        $result  = $service->record(1);
+        $service = new ClickVelocityService;
+        $result = $service->record(1);
 
         $this->assertEquals('warming', $result['viral_rank']);
     }
@@ -100,11 +104,12 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
                 $pipe->shouldReceive('getset')->once()->andReturn(null);
                 $cb($pipe);
+
                 return [1, true, 1, true, (string) $prevTs];
             });
 
-        $service = new ClickVelocityService();
-        $result  = $service->record(42);
+        $service = new ClickVelocityService;
+        $result = $service->record(42);
 
         $this->assertNotNull($result['seconds_since_last_click']);
         $this->assertGreaterThanOrEqual(29, $result['seconds_since_last_click']);

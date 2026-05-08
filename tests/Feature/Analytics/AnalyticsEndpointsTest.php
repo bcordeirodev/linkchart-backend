@@ -13,7 +13,9 @@ class AnalyticsEndpointsTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private string $token;
+
     private Link $link;
 
     protected function setUp(): void
@@ -21,11 +23,11 @@ class AnalyticsEndpointsTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create([
-            'email_verified'    => true,
+            'email_verified' => true,
             'email_verified_at' => now(),
         ]);
         $this->token = auth()->guard('api')->login($this->user);
-        $this->link  = Link::factory()->create(['user_id' => $this->user->id]);
+        $this->link = Link::factory()->create(['user_id' => $this->user->id]);
     }
 
     private function auth(): array
@@ -37,12 +39,12 @@ class AnalyticsEndpointsTest extends TestCase
     public static function analyticsEndpoints(): array
     {
         return [
-            'dashboard'    => ['/api/analytics/link/%d/dashboard'],
+            'dashboard' => ['/api/analytics/link/%d/dashboard'],
             'comprehensive' => ['/api/analytics/link/%d/comprehensive'],
-            'geographic'   => ['/api/analytics/link/%d/geographic'],
-            'insights'     => ['/api/analytics/link/%d/insights'],
-            'temporal'     => ['/api/analytics/link/%d/temporal'],
-            'audience'     => ['/api/analytics/link/%d/audience'],
+            'geographic' => ['/api/analytics/link/%d/geographic'],
+            'insights' => ['/api/analytics/link/%d/insights'],
+            'temporal' => ['/api/analytics/link/%d/temporal'],
+            'audience' => ['/api/analytics/link/%d/audience'],
         ];
     }
 
@@ -78,14 +80,14 @@ class AnalyticsEndpointsTest extends TestCase
     public function test_geographic_endpoint_returns_data_and_meta_blocks(): void
     {
         \App\Models\Click::factory()->count(3)->create([
-            'link_id'   => $this->link->id,
-            'latitude'  => -23.5,
+            'link_id' => $this->link->id,
+            'latitude' => -23.5,
             'longitude' => -46.6,
-            'country'   => 'Brazil',
-            'iso_code'  => 'BR',
-            'state'     => 'SP',
-            'state_name'=> 'São Paulo',
-            'city'      => 'São Paulo',
+            'country' => 'Brazil',
+            'iso_code' => 'BR',
+            'state' => 'SP',
+            'state_name' => 'São Paulo',
+            'city' => 'São Paulo',
             'continent' => 'SA',
         ]);
 

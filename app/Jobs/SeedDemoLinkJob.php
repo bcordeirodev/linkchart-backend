@@ -47,6 +47,7 @@ class SeedDemoLinkJob implements ShouldQueue
 
             if (! $user) {
                 AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
+
                 return;
             }
 
@@ -68,13 +69,13 @@ class SeedDemoLinkJob implements ShouldQueue
         AppLogger::jobFailed(static::class, $e, $this->tries);
     }
 
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     protected function logContextRequestId(): ?string
     {
         return null;
     }
 
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     protected function logContextUserId(): ?int
     {
         return $this->userId;

@@ -10,6 +10,7 @@ use Illuminate\Database\Seeder;
 class LinkOneClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Dados realísticos para gerar clicks diversos
      */

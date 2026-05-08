@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 class LinkSevenClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder para o Link ID 7 - Newsletter Lançamento de Produto
      * Foco: Tráfego via email, desktop dominante, público BR concentrado

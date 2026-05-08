@@ -13,7 +13,8 @@ class LinkTrackingPhase1Test extends TestCase
         $r = new ReflectionClass(LinkTrackingService::class);
         $m = $r->getMethod($method);
         $m->setAccessible(true);
-        return $m->invoke(new LinkTrackingService(), ...$args);
+
+        return $m->invoke(new LinkTrackingService, ...$args);
     }
 
     // --- enrichNavigationContext ---

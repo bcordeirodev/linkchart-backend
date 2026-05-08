@@ -15,6 +15,7 @@ abstract class BaseController extends Controller
         if ($userId === null) {
             return null;
         }
+
         return Link::where($by, $id)->where('user_id', $userId)->first();
     }
 

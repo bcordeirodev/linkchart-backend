@@ -14,14 +14,13 @@ namespace App\Logging\Context;
  */
 final class RequestContext
 {
-    /** @var self|null */
     private static ?self $current = null;
 
     /**
-     * @param  string       $requestId  Stable id for the logical request (HTTP or job).
-     * @param  int|null     $userId     Authenticated user id, when known.
-     * @param  string|null  $ip         Client IP for HTTP requests.
-     * @param  string|null  $route      Route name or path; null for jobs/console.
+     * @param  string  $requestId  Stable id for the logical request (HTTP or job).
+     * @param  int|null  $userId  Authenticated user id, when known.
+     * @param  string|null  $ip  Client IP for HTTP requests.
+     * @param  string|null  $route  Route name or path; null for jobs/console.
      */
     public function __construct(
         public readonly string $requestId,

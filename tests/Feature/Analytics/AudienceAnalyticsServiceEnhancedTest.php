@@ -15,15 +15,16 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
     use RefreshDatabase;
 
     private AudienceAnalyticsService $service;
+
     private Link $link;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $user       = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
+        $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         $this->link = Link::factory()->create(['user_id' => $user->id]);
-        $this->service = new AudienceAnalyticsService(new UserAgentParser());
+        $this->service = new AudienceAnalyticsService(new UserAgentParser);
     }
 
     public function test_navigation_context_breakdown_returns_counts_and_percentages(): void
@@ -33,7 +34,7 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         Click::factory()->count(18)->create(['link_id' => $this->link->id, 'navigation_context' => 'in_app_webview']);
         Click::factory()->count(6)->create(['link_id' => $this->link->id, 'navigation_context' => 'api_programmatic']);
 
-        $result    = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
         $breakdown = $result['navigation_context_breakdown'];
 
         $this->assertNotEmpty($breakdown);
@@ -50,7 +51,7 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         // 1 clique com NULL → < 1% → não deve aparecer
         Click::factory()->create(['link_id' => $this->link->id, 'navigation_context' => null]);
 
-        $result    = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
         $breakdown = $result['navigation_context_breakdown'];
 
         $unknown = collect($breakdown)->firstWhere('context', 'unknown');
@@ -69,7 +70,7 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         Click::factory()->count(66)->create(['link_id' => $this->link->id, 'is_return_visitor' => false, 'session_clicks' => 1]);
 
         $result = $this->service->getLinkAudienceAnalytics($this->link->id);
-        $stats  = $result['return_visitor_stats'];
+        $stats = $result['return_visitor_stats'];
 
         $this->assertEquals(34.0, $stats['return_rate']);
         $this->assertEquals(66.0, $stats['new_rate']);
@@ -80,7 +81,7 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
     public function test_return_visitor_stats_zeros_when_no_clicks(): void
     {
         $result = $this->service->getLinkAudienceAnalytics($this->link->id);
-        $stats  = $result['return_visitor_stats'];
+        $stats = $result['return_visitor_stats'];
 
         $this->assertSame(0.0, $stats['return_rate']);
         $this->assertSame(0.0, $stats['new_rate']);
@@ -91,10 +92,10 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
     {
         Click::factory()->count(72)->create(['link_id' => $this->link->id, 'quality_tier' => 'organic',      'is_bot' => false, 'fingerprint_score' => 0]);
         Click::factory()->count(22)->create(['link_id' => $this->link->id, 'quality_tier' => 'suspicious',   'is_bot' => false, 'fingerprint_score' => 1]);
-        Click::factory()->count(6)->create( ['link_id' => $this->link->id, 'quality_tier' => 'likely_fraud', 'is_bot' => true,  'fingerprint_score' => 2]);
+        Click::factory()->count(6)->create(['link_id' => $this->link->id, 'quality_tier' => 'likely_fraud', 'is_bot' => true,  'fingerprint_score' => 2]);
 
-        $result    = $this->service->getLinkAudienceAnalytics($this->link->id);
-        $quality   = $result['quality_breakdown'];
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $quality = $result['quality_breakdown'];
 
         $this->assertCount(3, $quality['tiers']);
 
@@ -115,7 +116,7 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         Click::factory()->count(10)->create(['link_id' => $this->link->id, 'quality_tier' => null, 'is_bot' => false]);
         Click::factory()->count(5)->create(['link_id' => $this->link->id, 'quality_tier' => 'organic', 'is_bot' => false]);
 
-        $result  = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
         $quality = $result['quality_breakdown'];
 
         $this->assertCount(1, $quality['tiers']);
@@ -125,7 +126,7 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
 
     public function test_quality_breakdown_zeros_when_no_clicks(): void
     {
-        $result  = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
         $quality = $result['quality_breakdown'];
 
         $this->assertSame([], $quality['tiers']);

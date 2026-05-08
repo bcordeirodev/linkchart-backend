@@ -2,10 +2,10 @@
 
 namespace App\Exceptions;
 
+use App\Logging\AppLogger;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use App\Logging\AppLogger;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 

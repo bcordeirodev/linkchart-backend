@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Logging\AppLogger;
 use App\Models\EmailVerificationToken;
 use App\Models\User;
 use Illuminate\Http\Request;
-use App\Logging\AppLogger;
 
 class EmailVerificationService
 {

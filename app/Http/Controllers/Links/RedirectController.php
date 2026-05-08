@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Links;
 
 use App\Contracts\Services\LinkServiceInterface;
 use App\Jobs\ProcessLinkClickJob;
+use App\Logging\AppLogger;
+use App\Logging\Context\RequestContext;
 use App\Models\Link;
 use App\Services\Links\LinkTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use App\Logging\AppLogger;
-use App\Logging\Context\RequestContext;
 use Jenssegers\Agent\Agent;
 
 /**
@@ -66,6 +66,7 @@ class RedirectController extends Controller
 
             if (! $link) {
                 AppLogger::redirectBlocked($slug, 'not_found');
+
                 return $this->renderErrorPage('Link não encontrado ou inativo');
             }
 
@@ -73,16 +74,19 @@ class RedirectController extends Controller
 
             if ($link->expires_at && now()->isAfter($link->expires_at)) {
                 AppLogger::redirectBlocked($slug, 'expired');
+
                 return $this->renderErrorPage('Este link expirou e não está mais disponível');
             }
 
             if ($link->starts_in && now()->isBefore($link->starts_in)) {
                 AppLogger::redirectBlocked($slug, 'not_started');
+
                 return $this->renderErrorPage('Este link ainda não está disponível');
             }
 
             if ($link->hasReachedClickLimit()) {
                 AppLogger::redirectBlocked($slug, 'click_limit');
+
                 return $this->renderErrorPage('Este link atingiu o limite de cliques');
             }
 
@@ -125,15 +129,15 @@ class RedirectController extends Controller
                 'accept_language' => $request->header('Accept-Language'),
                 'query_params' => $request->only(LinkTrackingService::UTM_KEYS),
                 'http_response_ms' => round((microtime(true) - (defined('LARAVEL_START') ? LARAVEL_START : microtime(true))) * 1000, 2),
-                'sec_fetch_site'   => $request->header('Sec-Fetch-Site'),
-                'sec_fetch_mode'   => $request->header('Sec-Fetch-Mode'),
-                'sec_fetch_dest'   => $request->header('Sec-Fetch-Dest'),
-                'ch_platform'      => trim($request->header('Sec-CH-UA-Platform', ''), '"'),
-                'ch_is_mobile'     => $request->hasHeader('Sec-CH-UA-Mobile')
+                'sec_fetch_site' => $request->header('Sec-Fetch-Site'),
+                'sec_fetch_mode' => $request->header('Sec-Fetch-Mode'),
+                'sec_fetch_dest' => $request->header('Sec-Fetch-Dest'),
+                'ch_platform' => trim($request->header('Sec-CH-UA-Platform', ''), '"'),
+                'ch_is_mobile' => $request->hasHeader('Sec-CH-UA-Mobile')
                                         ? $request->header('Sec-CH-UA-Mobile') === '?1'
                                         : null,
-                'save_data'        => $request->header('Save-Data') === 'on',
-                'server_protocol'  => $request->server('SERVER_PROTOCOL'),
+                'save_data' => $request->header('Save-Data') === 'on',
+                'server_protocol' => $request->server('SERVER_PROTOCOL'),
             ];
 
             ProcessLinkClickJob::dispatch($link->id, $payload);
@@ -191,12 +195,14 @@ class RedirectController extends Controller
 
                 if (! $response->ok()) {
                     AppLogger::ogFetchNonOk($url, $response->status());
+
                     return $this->getDefaultMetadata($url);
                 }
 
                 return $this->parseMetaTags($response->body(), $url);
             } catch (\Throwable $e) {
                 AppLogger::ogFetchFailed($url, $e);
+
                 return $this->getDefaultMetadata($url);
             }
         });
