@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 
 class LinkFiveClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder para o Link ID 5 - E-commerce Campaign
      * Foco: Tráfego principalmente mobile, alta concentração BR/US
@@ -108,7 +109,7 @@ class LinkFiveClicksSeeder extends Seeder
             $userAgent = $this->getUserAgent($device);
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 5,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -127,7 +128,7 @@ class LinkFiveClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             if (count($clicks) >= $batchSize) {
                 Click::insert($clicks);

@@ -8,6 +8,7 @@ use Illuminate\Database\Seeder;
 
 class LinkSevenClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder para o Link ID 7 - Newsletter Lançamento de Produto
      * Foco: Tráfego via email, desktop dominante, público BR concentrado
@@ -105,7 +106,7 @@ class LinkSevenClicksSeeder extends Seeder
             $userAgent = $this->getUserAgent($device);
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 7,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -124,7 +125,7 @@ class LinkSevenClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             if (count($clicks) >= $batchSize) {
                 Click::insert($clicks);

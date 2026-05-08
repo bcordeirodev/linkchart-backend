@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 
 class Or4S64ClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder específico para o link or4S64 (ID 35)
      * Cria dados realísticos para testar o front-end
@@ -179,7 +180,7 @@ class Or4S64ClicksSeeder extends Seeder
             // Selecionar referrer
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => $link->id,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -198,7 +199,7 @@ class Or4S64ClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             // Inserir em lotes
             if (count($clicks) >= $batchSize) {
