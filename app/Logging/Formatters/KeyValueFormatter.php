@@ -18,11 +18,11 @@ use Monolog\LogRecord;
  */
 final class KeyValueFormatter implements FormatterInterface
 {
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     public function format(LogRecord $record): string
     {
-        $ts      = $record->datetime->format('Y-m-d H:i:s');
-        $level   = $record->level->getName();
+        $ts = $record->datetime->format('Y-m-d H:i:s');
+        $level = $record->level->getName();
         $channel = $record->channel;
         $message = $record->message;
 
@@ -40,7 +40,7 @@ final class KeyValueFormatter implements FormatterInterface
         return $line."\n";
     }
 
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     public function formatBatch(array $records): string
     {
         return implode('', array_map(fn (LogRecord $r) => $this->format($r), $records));
@@ -60,6 +60,7 @@ final class KeyValueFormatter implements FormatterInterface
             }
             $tokens[] = $key.'='.$this->encode($value);
         }
+
         return implode(' ', $tokens);
     }
 

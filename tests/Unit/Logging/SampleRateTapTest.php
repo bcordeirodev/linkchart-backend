@@ -5,7 +5,6 @@ namespace Tests\Unit\Logging;
 use App\Logging\Taps\SampleRateTap;
 use Illuminate\Log\Logger as IlluminateLogger;
 use Monolog\Handler\TestHandler;
-use Monolog\Level;
 use Monolog\Logger as MonologLogger;
 use Tests\TestCase;
 
@@ -13,9 +12,10 @@ class SampleRateTapTest extends TestCase
 {
     private function buildLogger(): array
     {
-        $handler = new TestHandler();
+        $handler = new TestHandler;
         $monolog = new MonologLogger('test', [$handler]);
-        $logger  = new IlluminateLogger($monolog);
+        $logger = new IlluminateLogger($monolog);
+
         return [$logger, $handler];
     }
 
@@ -24,7 +24,7 @@ class SampleRateTapTest extends TestCase
         [$logger, $handler] = $this->buildLogger();
         config(['logging.channels.redirect_file.sample_rate' => 0.0]);
 
-        (new SampleRateTap())($logger);
+        (new SampleRateTap)($logger);
 
         $logger->info('redirect.started', ['slug' => 'abc']);
 
@@ -36,7 +36,7 @@ class SampleRateTapTest extends TestCase
         [$logger, $handler] = $this->buildLogger();
         config(['logging.channels.redirect_file.sample_rate' => 0.0]);
 
-        (new SampleRateTap())($logger);
+        (new SampleRateTap)($logger);
 
         $logger->warning('redirect.error', []);
         $logger->error('redirect.crash', []);
@@ -49,7 +49,7 @@ class SampleRateTapTest extends TestCase
         [$logger, $handler] = $this->buildLogger();
         config(['logging.channels.redirect_file.sample_rate' => 1.0]);
 
-        (new SampleRateTap())($logger);
+        (new SampleRateTap)($logger);
 
         $logger->info('redirect.started');
         $logger->info('redirect.dispatched');
@@ -61,7 +61,7 @@ class SampleRateTapTest extends TestCase
     {
         [$logger, $handler] = $this->buildLogger();
 
-        (new SampleRateTap())($logger);
+        (new SampleRateTap)($logger);
 
         $logger->info('redirect.started');
 

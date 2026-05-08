@@ -195,7 +195,9 @@ class LinkController extends BaseController
         try {
             // Buscar link por ID e verificar ownership
             $link = $this->findOwnedLink($id);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $base = fn () => \App\Models\Click::where('link_id', $link->id);
 
@@ -207,9 +209,9 @@ class LinkController extends BaseController
             // Estatísticas agregadas via SQL — sem carregar todos os cliques em memória
             $stats = [
                 'total_clicks' => $base()->count(),
-                'unique_ips'   => $base()->distinct('ip')->count('ip'),
-                'last_click'   => $base()->max('created_at'),
-                'first_click'  => $base()->min('created_at'),
+                'unique_ips' => $base()->distinct('ip')->count('ip'),
+                'last_click' => $base()->max('created_at'),
+                'first_click' => $base()->min('created_at'),
 
                 // Distribuição por hora nas últimas 24h
                 'clicks_by_hour' => $base()
@@ -255,6 +257,7 @@ class LinkController extends BaseController
                             $hostTotals[$host] = ($hostTotals[$host] ?? 0) + $total;
                         }
                         arsort($hostTotals);
+
                         return collect($hostTotals)->take(5);
                     }),
 
@@ -275,17 +278,17 @@ class LinkController extends BaseController
                 ->get()
                 ->map(function ($click) {
                     return [
-                        'id'         => $click->id,
-                        'ip'         => $click->ip,
-                        'country'    => $click->country,
-                        'city'       => $click->city,
-                        'device'     => $click->device,
-                        'referer'    => $click->referer,
+                        'id' => $click->id,
+                        'ip' => $click->ip,
+                        'country' => $click->country,
+                        'city' => $click->city,
+                        'device' => $click->device,
+                        'referer' => $click->referer,
                         'user_agent' => $click->user_agent,
                         'created_at' => $click->created_at,
-                        'utm'        => $click->utm ? [
-                            'source'   => $click->utm->utm_source,
-                            'medium'   => $click->utm->utm_medium,
+                        'utm' => $click->utm ? [
+                            'source' => $click->utm->utm_source,
+                            'medium' => $click->utm->utm_medium,
                             'campaign' => $click->utm->utm_campaign,
                         ] : null,
                     ];
@@ -293,14 +296,14 @@ class LinkController extends BaseController
 
             return response()->json([
                 'link_info' => [
-                    'id'           => $link->id,
-                    'slug'         => $link->slug,
-                    'title'        => $link->title,
+                    'id' => $link->id,
+                    'slug' => $link->slug,
+                    'title' => $link->title,
                     'original_url' => $link->original_url,
-                    'created_at'   => $link->created_at,
-                    'clicks'       => $link->clicks,
+                    'created_at' => $link->created_at,
+                    'clicks' => $link->clicks,
                 ],
-                'stats'         => $stats,
+                'stats' => $stats,
                 'recent_clicks' => $recent_clicks,
             ]);
         } catch (\Exception $e) {
@@ -324,7 +327,9 @@ class LinkController extends BaseController
             }
 
             $link = $this->findOwnedLink($id);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $perPage = (int) min(max($request->input('per_page', 25), 1), 100);
             $page = (int) max($request->input('page', 1), 1);

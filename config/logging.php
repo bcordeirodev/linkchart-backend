@@ -62,10 +62,10 @@ return [
         ],
         'app_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/app.log'),
-            'level'  => env('LOG_LEVEL', 'info'),
-            'days'   => env('LOG_APP_DAYS', 14),
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'path' => storage_path('logs/app.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_APP_DAYS', 14),
+            'tap' => [App\Logging\Taps\ChannelTap::class],
         ],
 
         'redirect' => [
@@ -75,11 +75,11 @@ return [
         ],
         'redirect_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/redirect.log'),
-            'level'  => env('LOG_REDIRECT_LEVEL', 'info'),
-            'days'   => env('LOG_REDIRECT_DAYS', 7),
+            'path' => storage_path('logs/redirect.log'),
+            'level' => env('LOG_REDIRECT_LEVEL', 'info'),
+            'days' => env('LOG_REDIRECT_DAYS', 7),
             'sample_rate' => env('LOG_REDIRECT_SAMPLE_RATE', 1.0),
-            'tap'    => [
+            'tap' => [
                 App\Logging\Taps\ChannelTap::class,
                 App\Logging\Taps\SampleRateTap::class,
             ],
@@ -92,10 +92,10 @@ return [
         ],
         'tracking_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/tracking.log'),
-            'level'  => env('LOG_TRACKING_LEVEL', 'info'),
-            'days'   => env('LOG_TRACKING_DAYS', 14),
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'path' => storage_path('logs/tracking.log'),
+            'level' => env('LOG_TRACKING_LEVEL', 'info'),
+            'days' => env('LOG_TRACKING_DAYS', 14),
+            'tap' => [App\Logging\Taps\ChannelTap::class],
         ],
 
         'jobs' => [
@@ -105,10 +105,10 @@ return [
         ],
         'jobs_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/jobs.log'),
-            'level'  => env('LOG_JOBS_LEVEL', 'info'),
-            'days'   => env('LOG_JOBS_DAYS', 14),
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'path' => storage_path('logs/jobs.log'),
+            'level' => env('LOG_JOBS_LEVEL', 'info'),
+            'days' => env('LOG_JOBS_DAYS', 14),
+            'tap' => [App\Logging\Taps\ChannelTap::class],
         ],
 
         // auth and audit channels skip PII redaction (compliance/incident response)
@@ -119,10 +119,10 @@ return [
         ],
         'auth_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/auth.log'),
-            'level'  => env('LOG_AUTH_LEVEL', 'info'),
-            'days'   => env('LOG_AUTH_DAYS', 4),
-            'tap'    => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
+            'path' => storage_path('logs/auth.log'),
+            'level' => env('LOG_AUTH_LEVEL', 'info'),
+            'days' => env('LOG_AUTH_DAYS', 4),
+            'tap' => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
         ],
 
         'audit' => [
@@ -132,10 +132,10 @@ return [
         ],
         'audit_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/audit.log'),
-            'level'  => 'info',
-            'days'   => env('LOG_AUDIT_DAYS', 10),
-            'tap'    => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
+            'path' => storage_path('logs/audit.log'),
+            'level' => 'info',
+            'days' => env('LOG_AUDIT_DAYS', 10),
+            'tap' => [App\Logging\Taps\ChannelTap::class.':skip-redaction'],
         ],
 
         'http' => [
@@ -145,18 +145,18 @@ return [
         ],
         'http_file' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/http.log'),
-            'level'  => env('LOG_HTTP_LEVEL', 'warning'),
-            'days'   => env('LOG_HTTP_DAYS', 14),
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'path' => storage_path('logs/http.log'),
+            'level' => env('LOG_HTTP_LEVEL', 'warning'),
+            'days' => env('LOG_HTTP_DAYS', 14),
+            'tap' => [App\Logging\Taps\ChannelTap::class],
         ],
 
         'errors' => [
             'driver' => 'daily',
-            'path'   => storage_path('logs/errors.log'),
-            'level'  => 'error',
-            'days'   => env('LOG_ERRORS_DAYS', 14),
-            'tap'    => [App\Logging\Taps\ChannelTap::class],
+            'path' => storage_path('logs/errors.log'),
+            'level' => 'error',
+            'days' => env('LOG_ERRORS_DAYS', 14),
+            'tap' => [App\Logging\Taps\ChannelTap::class],
         ],
 
         // ===== Standard channels (kept for compatibility/fallback) =====

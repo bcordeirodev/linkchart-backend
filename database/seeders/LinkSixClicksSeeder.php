@@ -10,6 +10,7 @@ use Illuminate\Database\Seeder;
 class LinkSixClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder para o Link ID 6 - Tech Blog International
      * Foco: Tráfego global diversificado, principalmente desktop, tráfego orgânico

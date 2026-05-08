@@ -18,7 +18,7 @@ use Monolog\Processor\ProcessorInterface;
  */
 final class RequestContextProcessor implements ProcessorInterface
 {
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     public function __invoke(LogRecord $record): LogRecord
     {
         $ctx = RequestContext::current();
@@ -29,9 +29,9 @@ final class RequestContextProcessor implements ProcessorInterface
         if ($ctx !== null) {
             $additions += [
                 'request_id' => $ctx->requestId,
-                'user_id'    => $ctx->userId,
-                'ip'         => $ctx->ip,
-                'route'      => $ctx->route,
+                'user_id' => $ctx->userId,
+                'ip' => $ctx->ip,
+                'route' => $ctx->route,
             ];
         }
 

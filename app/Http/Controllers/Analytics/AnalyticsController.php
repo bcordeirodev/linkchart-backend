@@ -27,7 +27,9 @@ class AnalyticsController extends BaseController
     {
         try {
             $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $analytics = $this->analyticsService->getComprehensiveLinkAnalytics($linkId);
 
@@ -47,14 +49,16 @@ class AnalyticsController extends BaseController
     {
         try {
             $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
-                'data'    => $payload['data'],
-                'meta'    => $payload['meta'],
+                'data' => $payload['data'],
+                'meta' => $payload['meta'],
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar analytics geográficos.', $e);
@@ -72,7 +76,9 @@ class AnalyticsController extends BaseController
     {
         try {
             $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $insights = $this->analyticsService->getLinkInsightsAnalytics($linkId);
 
@@ -93,7 +99,9 @@ class AnalyticsController extends BaseController
     {
         try {
             $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             // 1. Buscar dados base (clicks_by_hour, clicks_by_day_of_week, etc.)
             $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId);
@@ -107,12 +115,12 @@ class AnalyticsController extends BaseController
             // 4. Merge estruturado - compatível com tipos existentes
             $unifiedData = array_merge($baseData, [
                 'advanced' => [
-                    'weekly_trends'    => $advancedData['weekly_trends'] ?? [],
-                    'monthly_trends'   => $advancedData['monthly_trends'] ?? [],
-                    'peak_analysis'    => $advancedData['peak_analysis'] ?? [],
-                    'timezone_analysis'=> $enrichedTimezones,
-                    'heatmap_data'     => $advancedData['heatmap_data'] ?? [],
-                    'daily_timeline'   => $advancedData['daily_timeline'] ?? [],
+                    'weekly_trends' => $advancedData['weekly_trends'] ?? [],
+                    'monthly_trends' => $advancedData['monthly_trends'] ?? [],
+                    'peak_analysis' => $advancedData['peak_analysis'] ?? [],
+                    'timezone_analysis' => $enrichedTimezones,
+                    'heatmap_data' => $advancedData['heatmap_data'] ?? [],
+                    'daily_timeline' => $advancedData['daily_timeline'] ?? [],
                     'device_by_period' => $advancedData['device_by_period'] ?? [],
                 ],
             ]);
@@ -133,7 +141,9 @@ class AnalyticsController extends BaseController
     {
         try {
             $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $analytics = $this->analyticsService->getLinkAudienceAnalytics($linkId);
 
@@ -160,7 +170,9 @@ class AnalyticsController extends BaseController
             }
 
             $link = $this->findOwnedLink($linkId);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $validHours = [1, 24, 168, 720];
             $hours = in_array((int) $request->query('hours'), $validHours, true)
@@ -186,24 +198,26 @@ class AnalyticsController extends BaseController
     {
         try {
             $link = $this->findOwnedLink((int) $id);
-            if (! $link) return $this->linkNotFound();
+            if (! $link) {
+                return $this->linkNotFound();
+            }
 
             $totalClicks = (int) $link->getAttribute('clicks');
 
             if ($totalClicks == 0) {
                 return response()->json([
                     'has_sufficient_data' => false,
-                    'message'             => 'Analytics disponíveis após o primeiro clique no link',
-                    'total_clicks'        => 0,
-                    'link_info'           => [
-                        'id'           => $link->id,
-                        'slug'         => $link->slug,
-                        'title'        => $link->title,
+                    'message' => 'Analytics disponíveis após o primeiro clique no link',
+                    'total_clicks' => 0,
+                    'link_info' => [
+                        'id' => $link->id,
+                        'slug' => $link->slug,
+                        'title' => $link->title,
                         'original_url' => $link->original_url,
-                        'shorted_url'  => $link->getShortedUrl(),
-                        'created_at'   => $link->created_at,
-                        'is_active'    => $link->is_active,
-                        'expires_at'   => $link->expires_at,
+                        'shorted_url' => $link->getShortedUrl(),
+                        'created_at' => $link->created_at,
+                        'is_active' => $link->is_active,
+                        'expires_at' => $link->expires_at,
                     ],
                 ]);
             }
@@ -215,14 +229,14 @@ class AnalyticsController extends BaseController
 
             // avg_daily_clicks: total / days since creation (min 1)
             $daysSinceCreated = max(1, now()->diffInDays($link->created_at));
-            $avgDailyClicks   = round($totalClicks / $daysSinceCreated, 1);
-            $conversionRate   = $uniqueVisitors > 0
+            $avgDailyClicks = round($totalClicks / $daysSinceCreated, 1);
+            $conversionRate = $uniqueVisitors > 0
                 ? round(($totalClicks / $uniqueVisitors) * 100, 1).'%'
                 : '0%';
 
             // clicks_over_time: last 30 days, one row per day — SQL DATE aggregation
-            $isSqlite   = DB::connection()->getDriverName() === 'sqlite';
-            $dateExpr   = $isSqlite ? "strftime('%Y-%m-%d', created_at)" : "TO_CHAR(created_at, 'YYYY-MM-DD')";
+            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+            $dateExpr = $isSqlite ? "strftime('%Y-%m-%d', created_at)" : "TO_CHAR(created_at, 'YYYY-MM-DD')";
 
             $clicksRaw = $base()
                 ->where('created_at', '>=', now()->utc()->subDays(29)->startOfDay())
@@ -232,7 +246,7 @@ class AnalyticsController extends BaseController
 
             $clicksOverTime = [];
             for ($i = 29; $i >= 0; $i--) {
-                $date             = now()->utc()->subDays($i)->format('Y-m-d');
+                $date = now()->utc()->subDays($i)->format('Y-m-d');
                 $clicksOverTime[] = ['date' => $date, 'clicks' => (int) ($clicksRaw[$date] ?? 0)];
             }
 
@@ -275,8 +289,8 @@ class AnalyticsController extends BaseController
             $directCount = $base()
                 ->where(function ($q) {
                     $q->whereNull('referer')
-                      ->orWhere('referer', '-')
-                      ->orWhere('referer', '');
+                        ->orWhere('referer', '-')
+                        ->orWhere('referer', '');
                 })
                 ->count();
 
@@ -296,23 +310,23 @@ class AnalyticsController extends BaseController
             );
 
             return response()->json([
-                'total_clicks'      => $totalClicks,
-                'unique_visitors'   => $uniqueVisitors,
-                'avg_daily_clicks'  => $avgDailyClicks,
-                'conversion_rate'   => $conversionRate,
-                'clicks_over_time'  => $clicksOverTime,
+                'total_clicks' => $totalClicks,
+                'unique_visitors' => $uniqueVisitors,
+                'avg_daily_clicks' => $avgDailyClicks,
+                'conversion_rate' => $conversionRate,
+                'clicks_over_time' => $clicksOverTime,
                 'clicks_by_country' => $clicksByCountry,
-                'clicks_by_device'  => $clicksByDevice,
+                'clicks_by_device' => $clicksByDevice,
                 'clicks_by_referer' => $clicksByReferer,
                 'link_info' => [
-                    'id'           => $link->id,
-                    'slug'         => $link->slug,
-                    'title'        => $link->title,
+                    'id' => $link->id,
+                    'slug' => $link->slug,
+                    'title' => $link->title,
                     'original_url' => $link->original_url,
-                    'shorted_url'  => $link->getShortedUrl(),
-                    'created_at'   => $link->created_at,
-                    'is_active'    => $link->is_active,
-                    'expires_at'   => $link->expires_at,
+                    'shorted_url' => $link->getShortedUrl(),
+                    'created_at' => $link->created_at,
+                    'is_active' => $link->is_active,
+                    'expires_at' => $link->expires_at,
                 ],
             ]);
         } catch (\Exception $e) {

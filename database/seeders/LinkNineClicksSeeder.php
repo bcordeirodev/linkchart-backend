@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 class LinkNineClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder para o Link ID 9 - Post LinkedIn (Case de Sucesso)
      * Foco: Desktop dominante, público profissional global, tráfego orgânico LinkedIn

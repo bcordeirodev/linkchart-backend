@@ -20,7 +20,7 @@ class RequestContextProcessorTest extends TestCase
     private function rec(): LogRecord
     {
         return new LogRecord(
-            datetime: new DateTimeImmutable(),
+            datetime: new DateTimeImmutable,
             channel: 'app',
             level: Level::Info,
             message: 'test',
@@ -32,7 +32,7 @@ class RequestContextProcessorTest extends TestCase
     public function test_injects_fields_from_active_context(): void
     {
         RequestContext::set(new RequestContext('req_xy', userId: 7, ip: '1.2.3.4', route: 'link.redirect'));
-        $p = new RequestContextProcessor();
+        $p = new RequestContextProcessor;
 
         $out = $p($this->rec());
 
@@ -45,7 +45,7 @@ class RequestContextProcessorTest extends TestCase
 
     public function test_omits_request_id_when_no_active_context(): void
     {
-        $p = new RequestContextProcessor();
+        $p = new RequestContextProcessor;
 
         $out = $p($this->rec());
 
@@ -57,10 +57,10 @@ class RequestContextProcessorTest extends TestCase
     public function test_does_not_overwrite_existing_extra_fields(): void
     {
         RequestContext::set(new RequestContext('req_xy'));
-        $p = new RequestContextProcessor();
+        $p = new RequestContextProcessor;
 
         $rec = new LogRecord(
-            datetime: new DateTimeImmutable(),
+            datetime: new DateTimeImmutable,
             channel: 'app',
             level: Level::Info,
             message: 'test',

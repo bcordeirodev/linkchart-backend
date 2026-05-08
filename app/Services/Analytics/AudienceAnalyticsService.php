@@ -17,40 +17,40 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
 
         if (! Click::where('link_id', $linkId)->exists()) {
             return [
-                'device_breakdown'             => [],
-                'browser_breakdown'            => [],
-                'os_breakdown'                 => [],
-                'browsers'                     => [],
-                'operating_systems'            => [],
-                'device_performance'           => [],
-                'languages'                    => [],
-                'language_breakdown'           => [],
-                'platform_breakdown'           => [],
-                'data_saver'                   => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
-                'connection_type_breakdown'    => [],
-                'rendering_engine'             => [],
+                'device_breakdown' => [],
+                'browser_breakdown' => [],
+                'os_breakdown' => [],
+                'browsers' => [],
+                'operating_systems' => [],
+                'device_performance' => [],
+                'languages' => [],
+                'language_breakdown' => [],
+                'platform_breakdown' => [],
+                'data_saver' => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
+                'connection_type_breakdown' => [],
+                'rendering_engine' => [],
                 'navigation_context_breakdown' => [],
-                'return_visitor_stats'         => ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0],
-                'quality_breakdown'            => ['tiers' => [], 'bot_clicks' => 0, 'bot_percentage' => 0.0, 'avg_fingerprint_score' => 0.0],
+                'return_visitor_stats' => ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0],
+                'quality_breakdown' => ['tiers' => [], 'bot_clicks' => 0, 'bot_percentage' => 0.0, 'avg_fingerprint_score' => 0.0],
             ];
         }
 
         return [
-            'device_breakdown'             => $this->getDeviceBreakdown($linkId),
-            'browser_breakdown'            => $this->getBrowserBreakdown($linkId),
-            'os_breakdown'                 => $this->getOSBreakdown($linkId),
-            'browsers'                     => $this->getBrowserDistribution($linkId),
-            'operating_systems'            => $this->getOSDistribution($linkId),
-            'device_performance'           => $this->getDevicePerformance($linkId),
-            'languages'                    => $this->getLanguageDistribution($linkId),
-            'language_breakdown'           => $this->getLanguageBreakdown($linkId),
-            'platform_breakdown'           => $this->getPlatformBreakdown($linkId),
-            'data_saver'                   => $this->getDataSaverStats($linkId),
-            'connection_type_breakdown'    => $this->getConnectionTypeBreakdown($linkId),
-            'rendering_engine'             => $this->getRenderingEngineBreakdown($linkId),
+            'device_breakdown' => $this->getDeviceBreakdown($linkId),
+            'browser_breakdown' => $this->getBrowserBreakdown($linkId),
+            'os_breakdown' => $this->getOSBreakdown($linkId),
+            'browsers' => $this->getBrowserDistribution($linkId),
+            'operating_systems' => $this->getOSDistribution($linkId),
+            'device_performance' => $this->getDevicePerformance($linkId),
+            'languages' => $this->getLanguageDistribution($linkId),
+            'language_breakdown' => $this->getLanguageBreakdown($linkId),
+            'platform_breakdown' => $this->getPlatformBreakdown($linkId),
+            'data_saver' => $this->getDataSaverStats($linkId),
+            'connection_type_breakdown' => $this->getConnectionTypeBreakdown($linkId),
+            'rendering_engine' => $this->getRenderingEngineBreakdown($linkId),
             'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId),
-            'return_visitor_stats'         => $this->getReturnVisitorStats($linkId),
-            'quality_breakdown'            => $this->getQualityBreakdown($linkId),
+            'return_visitor_stats' => $this->getReturnVisitorStats($linkId),
+            'quality_breakdown' => $this->getQualityBreakdown($linkId),
         ];
     }
 
@@ -204,7 +204,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * Uses the pre-parsed `primary_language` and `language_region` columns (Phase 1),
      * so results only include clicks recorded after the Phase 1 migration.
      *
-     * @param  int  $linkId
      * @return array<int, array{language: string, region: ?string, clicks: int, percentage: float}>
      */
     private function getLanguageBreakdown(int $linkId): array
@@ -220,9 +219,9 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->limit(10)
             ->get()
             ->map(fn ($r) => [
-                'language'   => $r->language,
-                'region'     => $r->language_region,
-                'clicks'     => (int) $r->clicks,
+                'language' => $r->language,
+                'region' => $r->language_region,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -234,7 +233,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * The ch_platform column is populated from the Sec-CH-UA-Platform header (Phase 1).
      * Results only include clicks from Chromium-based browsers that send this header.
      *
-     * @param  int  $linkId
      * @return array<int, array{platform: string, clicks: int, percentage: float}>
      */
     private function getPlatformBreakdown(int $linkId): array
@@ -250,8 +248,8 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->limit(10)
             ->get()
             ->map(fn ($r) => [
-                'platform'   => $r->platform,
-                'clicks'     => (int) $r->clicks,
+                'platform' => $r->platform,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -263,7 +261,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * Populated from Phase 2 ISP keyword classification. Clicks before Phase 2
      * have null connection_type and are coalesced to 'unknown'.
      *
-     * @param  int  $linkId
      * @return array<int, array{type: string, clicks: int, percentage: float}>
      */
     private function getConnectionTypeBreakdown(int $linkId): array
@@ -277,8 +274,8 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->get()
             ->map(fn ($r) => [
-                'type'       => $r->type,
-                'clicks'     => (int) $r->clicks,
+                'type' => $r->type,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -290,7 +287,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * Derived from browser name in Phase 2. Clicks before Phase 2 have null
      * rendering_engine and are coalesced to 'unknown'.
      *
-     * @param  int  $linkId
      * @return array<int, array{engine: string, clicks: int, percentage: float}>
      */
     private function getRenderingEngineBreakdown(int $linkId): array
@@ -304,8 +300,8 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->get()
             ->map(fn ($r) => [
-                'engine'     => $r->engine,
-                'clicks'     => (int) $r->clicks,
+                'engine' => $r->engine,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -318,7 +314,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * NULL entries (clicks before Phase 1) are grouped as 'unknown' only if they
      * represent more than 1 % of total clicks.
      *
-     * @param  int  $linkId
      * @return array<int, array{context: string, clicks: int, percentage: float}>
      */
     private function getNavigationContextBreakdown(int $linkId): array
@@ -337,11 +332,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 if ($r->context !== 'unknown') {
                     return true;
                 }
+
                 return $total > 0 && ($r->clicks / $total) > 0.01;
             })
             ->map(fn ($r) => [
-                'context'    => $r->context,
-                'clicks'     => (int) $r->clicks,
+                'context' => $r->context,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
             ])
             ->values()
@@ -354,7 +350,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * is_return_visitor is set when the same IP+UA fingerprint was seen before (Phase 2).
      * session_clicks counts how many clicks occurred in the visitor's session.
      *
-     * @param  int  $linkId
      * @return array{return_rate: float, new_rate: float, avg_session_clicks: float}
      */
     private function getReturnVisitorStats(int $linkId): array
@@ -366,14 +361,14 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
         }
 
         $returnCount = Click::where('link_id', $linkId)->where('is_return_visitor', true)->count();
-        $avgSession  = DB::table('clicks')
+        $avgSession = DB::table('clicks')
             ->where('link_id', $linkId)
             ->whereNotNull('session_clicks')
             ->avg('session_clicks');
 
         return [
-            'return_rate'        => round($returnCount / $total * 100, 2),
-            'new_rate'           => round(($total - $returnCount) / $total * 100, 2),
+            'return_rate' => round($returnCount / $total * 100, 2),
+            'new_rate' => round(($total - $returnCount) / $total * 100, 2),
             'avg_session_clicks' => round((float) ($avgSession ?? 0), 2),
         ];
     }
@@ -384,7 +379,6 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      * Clicks with null quality_tier (before Phase 3) are excluded from the tiers array
      * but still counted in the bot_percentage denominator.
      *
-     * @param  int  $linkId
      * @return array{tiers: array, bot_clicks: int, bot_percentage: float, avg_fingerprint_score: float}
      */
     private function getQualityBreakdown(int $linkId): array
@@ -399,21 +393,21 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->get()
             ->map(fn ($r) => [
-                'tier'       => $r->quality_tier,
-                'clicks'     => (int) $r->clicks,
+                'tier' => $r->quality_tier,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
             ])
             ->toArray();
 
-        $botClicks      = Click::where('link_id', $linkId)->where('is_bot', true)->count();
+        $botClicks = Click::where('link_id', $linkId)->where('is_bot', true)->count();
         $avgFingerprint = DB::table('clicks')
             ->where('link_id', $linkId)
             ->avg('fingerprint_score');
 
         return [
-            'tiers'                 => $tiers,
-            'bot_clicks'            => $botClicks,
-            'bot_percentage'        => $total > 0 ? round($botClicks / $total * 100, 2) : 0.0,
+            'tiers' => $tiers,
+            'bot_clicks' => $botClicks,
+            'bot_percentage' => $total > 0 ? round($botClicks / $total * 100, 2) : 0.0,
             'avg_fingerprint_score' => round((float) ($avgFingerprint ?? 0), 2),
         ];
     }
@@ -423,20 +417,19 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * The is_data_saver flag is derived from the Save-Data: on HTTP header (Phase 1).
      *
-     * @param  int  $linkId
      * @return array{clicks: int, total: int, percentage: float}
      */
     private function getDataSaverStats(int $linkId): array
     {
-        $total     = Click::where('link_id', $linkId)->count();
+        $total = Click::where('link_id', $linkId)->count();
         $dataSaver = DB::table('clicks')
             ->where('link_id', $linkId)
             ->where('is_data_saver', true)
             ->count();
 
         return [
-            'clicks'     => $dataSaver,
-            'total'      => $total,
+            'clicks' => $dataSaver,
+            'total' => $total,
             'percentage' => $total > 0 ? round($dataSaver / $total * 100, 2) : 0,
         ];
     }

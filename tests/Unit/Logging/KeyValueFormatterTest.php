@@ -24,7 +24,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_formats_simple_key_value_pairs(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('redirect.started', ['slug' => 'abc', 'link_id' => 42]));
 
@@ -36,7 +36,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_quotes_strings_with_spaces(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('og.fetch_failed', ['error' => 'connection refused']));
 
@@ -45,7 +45,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_escapes_inner_quotes(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('test.event', ['msg' => 'he said "hi"']));
 
@@ -54,7 +54,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_serializes_arrays_as_inline_json(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('audit.link_change', ['diff' => ['title' => 'X']]));
 
@@ -63,7 +63,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_omits_null_values(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('redirect.started', ['slug' => 'abc', 'user_id' => null]));
 
@@ -73,7 +73,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_includes_timestamp_level_and_channel(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('redirect.started'));
 
@@ -84,7 +84,7 @@ class KeyValueFormatterTest extends TestCase
 
     public function test_emits_extra_fields(): void
     {
-        $f = new KeyValueFormatter();
+        $f = new KeyValueFormatter;
 
         $line = $f->format($this->record('redirect.started', ['slug' => 'abc'], ['request_id' => 'req_x12']));
 

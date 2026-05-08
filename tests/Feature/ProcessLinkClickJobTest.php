@@ -146,7 +146,8 @@ class ProcessLinkClickJobTest extends TestCase
         $link = $this->makeLink();
         \App\Logging\Context\RequestContext::clear();
 
-        $spy = new class extends \App\Services\Links\LinkTrackingService {
+        $spy = new class extends \App\Services\Links\LinkTrackingService
+        {
             public ?\App\Logging\Context\RequestContext $capturedContext = null;
 
             public function registrarCliqueFromPayload(int $linkId, array $payload): void
@@ -168,7 +169,8 @@ class ProcessLinkClickJobTest extends TestCase
         $link = $this->makeLink();
         \App\Logging\Context\RequestContext::clear();
 
-        $spy = new class extends \App\Services\Links\LinkTrackingService {
+        $spy = new class extends \App\Services\Links\LinkTrackingService
+        {
             public ?\App\Logging\Context\RequestContext $capturedContext = null;
 
             public function registrarCliqueFromPayload(int $linkId, array $payload): void

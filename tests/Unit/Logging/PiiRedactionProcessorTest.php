@@ -13,7 +13,7 @@ class PiiRedactionProcessorTest extends TestCase
     private function rec(array $context, array $extra = []): LogRecord
     {
         return new LogRecord(
-            datetime: new DateTimeImmutable(),
+            datetime: new DateTimeImmutable,
             channel: 'app',
             level: Level::Info,
             message: 'test',
@@ -24,7 +24,7 @@ class PiiRedactionProcessorTest extends TestCase
 
     public function test_redacts_sensitive_keys(): void
     {
-        $p = new PiiRedactionProcessor();
+        $p = new PiiRedactionProcessor;
 
         $out = $p($this->rec(['password' => 'hunter2', 'token' => 'jwt.xxx', 'safe' => 'ok']));
 
@@ -35,7 +35,7 @@ class PiiRedactionProcessorTest extends TestCase
 
     public function test_masks_email_partially(): void
     {
-        $p = new PiiRedactionProcessor();
+        $p = new PiiRedactionProcessor;
 
         $out = $p($this->rec(['email' => 'bcordeiro@example.com']));
 
@@ -44,7 +44,7 @@ class PiiRedactionProcessorTest extends TestCase
 
     public function test_masks_ipv4(): void
     {
-        $p = new PiiRedactionProcessor();
+        $p = new PiiRedactionProcessor;
 
         $out = $p($this->rec(['ip' => '187.10.50.20']));
 
@@ -53,7 +53,7 @@ class PiiRedactionProcessorTest extends TestCase
 
     public function test_recurses_into_nested_arrays(): void
     {
-        $p = new PiiRedactionProcessor();
+        $p = new PiiRedactionProcessor;
 
         $out = $p($this->rec(['payload' => ['password' => 'secret', 'email' => 'a@b.com']]));
 
@@ -63,7 +63,7 @@ class PiiRedactionProcessorTest extends TestCase
 
     public function test_processes_extra_field_too(): void
     {
-        $p = new PiiRedactionProcessor();
+        $p = new PiiRedactionProcessor;
 
         $out = $p($this->rec(context: [], extra: ['ip' => '1.2.3.4', 'request_id' => 'req_x']));
 
@@ -73,7 +73,7 @@ class PiiRedactionProcessorTest extends TestCase
 
     public function test_keeps_non_string_values_intact(): void
     {
-        $p = new PiiRedactionProcessor();
+        $p = new PiiRedactionProcessor;
 
         $out = $p($this->rec(['link_id' => 42, 'count' => 0]));
 

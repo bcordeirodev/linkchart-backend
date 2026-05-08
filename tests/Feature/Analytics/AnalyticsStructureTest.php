@@ -101,10 +101,10 @@ class AnalyticsStructureTest extends TestCase
     {
         $link = $this->makeLink();
         Click::factory()->count(2)->create([
-            'link_id'   => $link->id,
-            'latitude'  => -23.5,
+            'link_id' => $link->id,
+            'latitude' => -23.5,
             'longitude' => -46.6,
-            'country'   => 'Brazil',
+            'country' => 'Brazil',
         ]);
 
         $payload = app(GeographicAnalyticsService::class)->getLinkGeographicAnalytics($link->id);

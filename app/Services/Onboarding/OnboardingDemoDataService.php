@@ -113,14 +113,14 @@ class OnboardingDemoDataService
         $slug = $this->generateUniqueSlug();
 
         $link = Link::create([
-            'user_id'      => $user->id,
-            'slug'         => $slug,
+            'user_id' => $user->id,
+            'slug' => $slug,
             'original_url' => 'https://linkcharts.com.br',
-            'title'        => '✨ Demo Link — See Analytics in Action',
-            'description'  => 'This is a sample link created automatically so you can explore the full power of Link Charts analytics. The '.self::TOTAL_CLICKS.' clicks shown here are simulated data spread across '.self::DAYS_BACK.' days, covering multiple countries, devices, and traffic sources — exactly what your real links will look like after your audience starts clicking. Feel free to delete this link whenever you\'re ready.',
-            'is_active'    => true,
-            'is_demo'      => true,
-            'clicks'       => 0,
+            'title' => '✨ Demo Link — See Analytics in Action',
+            'description' => 'This is a sample link created automatically so you can explore the full power of Link Charts analytics. The '.self::TOTAL_CLICKS.' clicks shown here are simulated data spread across '.self::DAYS_BACK.' days, covering multiple countries, devices, and traffic sources — exactly what your real links will look like after your audience starts clicking. Feel free to delete this link whenever you\'re ready.',
+            'is_active' => true,
+            'is_demo' => true,
+            'clicks' => 0,
         ]);
 
         $this->insertClicks($link->id);

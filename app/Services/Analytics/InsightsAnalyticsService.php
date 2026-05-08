@@ -42,16 +42,17 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         $totalClicks = Click::where('link_id', $linkId)->count();
 
         $analyticsData = [
-            'retention'          => $this->getReturnVisitorRate($linkId),
-            'session_depth'      => $this->getSessionDepthAnalysis($linkId),
-            'traffic_sources'    => $this->getTrafficSourceAnalysis($linkId),
+            'retention' => $this->getReturnVisitorRate($linkId),
+            'session_depth' => $this->getSessionDepthAnalysis($linkId),
+            'traffic_sources' => $this->getTrafficSourceAnalysis($linkId),
             'navigation_context' => $this->getNavigationContextBreakdown($linkId),
-            'http_protocol'      => $this->getHttpProtocolBreakdown($linkId),
-            'quality'            => $this->getQualityBreakdown($linkId),
+            'http_protocol' => $this->getHttpProtocolBreakdown($linkId),
+            'quality' => $this->getQualityBreakdown($linkId),
         ];
 
         if ($totalClicks === 0) {
             $analyticsData['quality'] = ['avg_quality_score' => null, 'tier_breakdown' => [], 'organic_percentage' => 0];
+
             return [
                 'insights' => [],
                 'summary' => [
@@ -336,7 +337,6 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      * since browsers do not suppress Sec-Fetch headers via Referrer-Policy.
      * Only includes clicks recorded after the Phase 1 migration.
      *
-     * @param  int  $linkId
      * @return array<int, array{context: string, clicks: int, percentage: float}>
      */
     private function getNavigationContextBreakdown(int $linkId): array
@@ -351,8 +351,8 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ->orderBy('clicks', 'desc')
             ->get()
             ->map(fn ($r) => [
-                'context'    => $r->context,
-                'clicks'     => (int) $r->clicks,
+                'context' => $r->context,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -364,7 +364,6 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      * HTTP protocol is captured from the SERVER_PROTOCOL server variable (Phase 1).
      * High HTTP/2 percentage indicates modern browser traffic.
      *
-     * @param  int  $linkId
      * @return array<int, array{protocol: string, clicks: int, percentage: float}>
      */
     private function getHttpProtocolBreakdown(int $linkId): array
@@ -378,8 +377,8 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ->orderBy('clicks', 'desc')
             ->get()
             ->map(fn ($r) => [
-                'protocol'   => $r->protocol,
-                'clicks'     => (int) $r->clicks,
+                'protocol' => $r->protocol,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
             ])
             ->toArray();
@@ -392,7 +391,6 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      * and average quality_score. Only includes clicks scored after the Phase 3
      * migration (null values are coalesced to 'unknown').
      *
-     * @param  int  $linkId
      * @return array{avg_quality_score: float|null, tier_breakdown: array, organic_percentage: float}
      */
     private function getQualityBreakdown(int $linkId): array
@@ -406,10 +404,10 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ->orderBy('clicks', 'desc')
             ->get()
             ->map(fn ($r) => [
-                'tier'       => $r->tier,
-                'clicks'     => (int) $r->clicks,
+                'tier' => $r->tier,
+                'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
-                'avg_score'  => (float) ($r->avg_score ?? 0),
+                'avg_score' => (float) ($r->avg_score ?? 0),
             ])
             ->toArray();
 
@@ -419,8 +417,8 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ->avg('quality_score');
 
         return [
-            'avg_quality_score'  => $avgScore ? round((float) $avgScore, 1) : null,
-            'tier_breakdown'     => $tiers,
+            'avg_quality_score' => $avgScore ? round((float) $avgScore, 1) : null,
+            'tier_breakdown' => $tiers,
             'organic_percentage' => collect($tiers)->firstWhere('tier', 'organic')['percentage'] ?? 0,
         ];
     }

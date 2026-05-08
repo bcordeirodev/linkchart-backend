@@ -10,6 +10,7 @@ use Illuminate\Database\Seeder;
 class Or4S64ClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder específico para o link or4S64 (ID 35)
      * Cria dados realísticos para testar o front-end

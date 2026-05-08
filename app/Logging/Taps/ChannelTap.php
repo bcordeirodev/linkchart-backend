@@ -24,23 +24,23 @@ final class ChannelTap
      * Apply standard logging configuration to the channel.
      *
      * @param  Logger  $logger  Illuminate logger wrapping a Monolog instance.
-     * @param  string  $mode    'skip-redaction' to omit the PII redactor; anything else applies it.
+     * @param  string  $mode  'skip-redaction' to omit the PII redactor; anything else applies it.
      */
     public function __invoke(Logger $logger, string $mode = ''): void
     {
         $skipRedaction = $mode === 'skip-redaction';
         $monolog = $logger->getLogger();
 
-        $formatter = new KeyValueFormatter();
+        $formatter = new KeyValueFormatter;
         foreach ($monolog->getHandlers() as $handler) {
             if (method_exists($handler, 'setFormatter')) {
                 $handler->setFormatter($formatter);
             }
         }
 
-        $monolog->pushProcessor(new RequestContextProcessor());
+        $monolog->pushProcessor(new RequestContextProcessor);
         if (! $skipRedaction) {
-            $monolog->pushProcessor(new PiiRedactionProcessor());
+            $monolog->pushProcessor(new PiiRedactionProcessor);
         }
     }
 }

@@ -10,6 +10,7 @@ use Illuminate\Database\Seeder;
 class LinkFiveClicksSeeder extends Seeder
 {
     use ClickEnrichmentTrait;
+
     /**
      * Seeder para o Link ID 5 - E-commerce Campaign
      * Foco: Tráfego principalmente mobile, alta concentração BR/US

@@ -39,7 +39,6 @@ class LinkTrackingService
      *     save_data?: bool,
      *     server_protocol?: ?string
      * }  $payload  Serializable request payload extracted in the controller
-     * @return void
      */
     public function registrarCliqueFromPayload(int $linkId, array $payload): void
     {
@@ -65,46 +64,46 @@ class LinkTrackingService
         $performanceData = $this->collectPerformanceData($acceptLanguage, $httpResponseMs);
 
         $navigationData = $this->enrichNavigationContext($payload);
-        $languageData   = $this->parseAcceptLanguage($payload['accept_language'] ?? null);
+        $languageData = $this->parseAcceptLanguage($payload['accept_language'] ?? null);
 
         // Phase 2 — contextual intelligence
-        $velocityData   = app(\App\Services\Links\ClickVelocityService::class)->record($link->id);
+        $velocityData = app(\App\Services\Links\ClickVelocityService::class)->record($link->id);
 
-        $isoCode        = $locationData['iso_code'] ?? '';
-        $holidayData    = $isoCode
+        $isoCode = $locationData['iso_code'] ?? '';
+        $holidayData = $isoCode
             ? $this->enrichHoliday($isoCode, now())
             : ['is_holiday' => null, 'holiday_name' => null];
-        $seasonData     = $isoCode
+        $seasonData = $isoCode
             ? ['season' => $this->enrichSeason($isoCode, now())]
             : ['season' => null];
         $connectionData = ['connection_type' => $this->classifyConnectionType($locationData['isp'] ?? null)];
-        $engineData     = ['rendering_engine' => $this->deriveRenderingEngine($deviceData['browser'] ?? null)];
+        $engineData = ['rendering_engine' => $this->deriveRenderingEngine($deviceData['browser'] ?? null)];
 
         // Phase 3 — quality scoring
-        $allFields   = array_merge($deviceData, $behaviorData, $navigationData, $velocityData, $connectionData);
+        $allFields = array_merge($deviceData, $behaviorData, $navigationData, $velocityData, $connectionData);
         $qualityData = $this->calculateQualityScore($allFields);
 
         $click = Click::create(array_merge([
-            'link_id'      => $link->id,
-            'ip'           => $ip,
-            'user_agent'   => $userAgent,
-            'referer'      => $referer,
-            'country'      => $locationData['country'],
-            'city'         => $locationData['city'],
-            'device'       => $this->resolveDevice($userAgent),
-            'iso_code'     => $locationData['iso_code'],
-            'state'        => $locationData['state'],
-            'state_name'   => $locationData['state_name'],
-            'postal_code'  => $locationData['postal_code'],
-            'latitude'     => $locationData['latitude'],
-            'longitude'    => $locationData['longitude'],
-            'timezone'     => $locationData['timezone'],
-            'continent'    => $locationData['continent'],
-            'currency'     => $locationData['currency'],
+            'link_id' => $link->id,
+            'ip' => $ip,
+            'user_agent' => $userAgent,
+            'referer' => $referer,
+            'country' => $locationData['country'],
+            'city' => $locationData['city'],
+            'device' => $this->resolveDevice($userAgent),
+            'iso_code' => $locationData['iso_code'],
+            'state' => $locationData['state'],
+            'state_name' => $locationData['state_name'],
+            'postal_code' => $locationData['postal_code'],
+            'latitude' => $locationData['latitude'],
+            'longitude' => $locationData['longitude'],
+            'timezone' => $locationData['timezone'],
+            'continent' => $locationData['continent'],
+            'currency' => $locationData['currency'],
         ], $deviceData, $temporalData, $behaviorData, $performanceData,
-           $navigationData, $languageData,
-           $velocityData, $holidayData, $seasonData, $connectionData, $engineData,
-           $qualityData));
+            $navigationData, $languageData,
+            $velocityData, $holidayData, $seasonData, $connectionData, $engineData,
+            $qualityData));
 
         DB::table('links')->where('id', $link->id)->increment('clicks');
 
@@ -432,22 +431,22 @@ class LinkTrackingService
         $site = $payload['sec_fetch_site'] ?? null;
         $mode = $payload['sec_fetch_mode'] ?? null;
 
-        $context = match(true) {
-            in_array($mode, ['prefetch', 'preload'], true)                              => 'preload',
-            $site === 'none' && $mode === 'navigate'                                    => 'browser_direct',
+        $context = match (true) {
+            in_array($mode, ['prefetch', 'preload'], true) => 'preload',
+            $site === 'none' && $mode === 'navigate' => 'browser_direct',
             in_array($site, ['cross-site', 'same-site'], true) && $mode === 'navigate' => 'browser_referral',
-            in_array($site, ['cross-site', 'same-site'], true) && $mode === 'no-cors'  => 'in_app_webview',
-            $site === null && $mode === null                                             => 'api_programmatic',
-            default                                                                     => 'browser_referral',
+            in_array($site, ['cross-site', 'same-site'], true) && $mode === 'no-cors' => 'in_app_webview',
+            $site === null && $mode === null => 'api_programmatic',
+            default => 'browser_referral',
         };
 
         return [
             'navigation_context' => $context,
-            'fetch_dest'         => $payload['sec_fetch_dest'] ?? null,
-            'ch_platform'        => !empty($payload['ch_platform']) ? $payload['ch_platform'] : null,
-            'ch_is_mobile'       => $payload['ch_is_mobile'] ?? null,
-            'is_data_saver'      => (bool) ($payload['save_data'] ?? false),
-            'http_protocol'      => $payload['server_protocol'] ?? null,
+            'fetch_dest' => $payload['sec_fetch_dest'] ?? null,
+            'ch_platform' => ! empty($payload['ch_platform']) ? $payload['ch_platform'] : null,
+            'ch_is_mobile' => $payload['ch_is_mobile'] ?? null,
+            'is_data_saver' => (bool) ($payload['save_data'] ?? false),
+            'http_protocol' => $payload['server_protocol'] ?? null,
         ];
     }
 
@@ -458,17 +457,17 @@ class LinkTrackingService
      * Correctly handles complex subtags like script codes (e.g. zh-Hant-TW → language=zh, region=TW).
      * Example: "pt-BR,pt;q=0.9,en;q=0.8" → ['primary_language' => 'pt', 'language_region' => 'BR']
      *
-     * @param  string|null $raw  Raw Accept-Language header value
+     * @param  string|null  $raw  Raw Accept-Language header value
      * @return array{primary_language: ?string, language_region: ?string}
      */
     private function parseAcceptLanguage(?string $raw): array
     {
-        if (!$raw) {
+        if (! $raw) {
             return ['primary_language' => null, 'language_region' => null];
         }
-        $first  = trim(explode(';', explode(',', $raw)[0])[0]);
-        $parts  = explode('-', $first);
-        $lang   = strtolower($parts[0]) ?: null;
+        $first = trim(explode(';', explode(',', $raw)[0])[0]);
+        $parts = explode('-', $first);
+        $lang = strtolower($parts[0]) ?: null;
         // Skip script subtags (e.g. "Hant" in zh-Hant-TW) — only take 2-letter region codes
         $region = null;
         foreach (array_slice($parts, 1) as $subtag) {
@@ -477,6 +476,7 @@ class LinkTrackingService
                 break;
             }
         }
+
         return ['primary_language' => $lang, 'language_region' => $region];
     }
 
@@ -499,32 +499,32 @@ class LinkTrackingService
      * Accounts for southern hemisphere inversion — BR, AR, AU, etc. experience
      * opposite seasons to northern-hemisphere countries at the same time of year.
      *
-     * @param  string             $isoCode   ISO 3166-1 alpha-2 country code (e.g. 'BR', 'US')
-     * @param  \DateTimeInterface $clickedAt Click timestamp (used for month extraction)
+     * @param  string  $isoCode  ISO 3166-1 alpha-2 country code (e.g. 'BR', 'US')
+     * @param  \DateTimeInterface  $clickedAt  Click timestamp (used for month extraction)
      * @return string One of: spring, summer, fall, winter
      */
     private function enrichSeason(string $isoCode, \DateTimeInterface $clickedAt): string
     {
-        $month    = (int) $clickedAt->format('n');
+        $month = (int) $clickedAt->format('n');
         $southern = ['BR', 'AR', 'CL', 'AU', 'NZ', 'ZA', 'PE', 'BO', 'PY', 'UY'];
-        $isSouth  = in_array(strtoupper($isoCode), $southern, true);
+        $isSouth = in_array(strtoupper($isoCode), $southern, true);
 
-        $northSeason = match(true) {
+        $northSeason = match (true) {
             in_array($month, [12, 1, 2], true) => 'winter',
-            in_array($month, [3, 4, 5], true)  => 'spring',
-            in_array($month, [6, 7, 8], true)  => 'summer',
-            default                            => 'fall',
+            in_array($month, [3, 4, 5], true) => 'spring',
+            in_array($month, [6, 7, 8], true) => 'summer',
+            default => 'fall',
         };
 
         if (! $isSouth) {
             return $northSeason;
         }
 
-        return match($northSeason) {
+        return match ($northSeason) {
             'winter' => 'summer',
             'spring' => 'fall',
             'summer' => 'winter',
-            'fall'   => 'spring',
+            'fall' => 'spring',
         };
     }
 
@@ -534,7 +534,7 @@ class LinkTrackingService
      * Uses keyword matching against the ISP string from GeoIP. Returns 'unknown'
      * when ISP is null (e.g. free GeoLite2-City without ISP data).
      *
-     * @param  string|null $isp  ISP name from GeoIP lookup, or null
+     * @param  string|null  $isp  ISP name from GeoIP lookup, or null
      * @return string One of: datacenter, mobile, education, residential, unknown
      */
     private function classifyConnectionType(?string $isp): string
@@ -546,10 +546,10 @@ class LinkTrackingService
         $lower = strtolower($isp);
 
         $datacenter = ['amazon', 'google', 'digitalocean', 'hetzner', 'ovh', 'vultr',
-                       'linode', 'azure', 'cloudflare', 'akamai', 'fastly', 'microsoft'];
-        $mobile     = ['claro', 'vivo', 'tim ', 'oi ', 'nextel', 't-mobile',
-                       'verizon', 'at&t', 'sprint', 'net mobile'];
-        $education  = ['university', 'universidade', 'instituto', 'college', 'escola'];
+            'linode', 'azure', 'cloudflare', 'akamai', 'fastly', 'microsoft'];
+        $mobile = ['claro', 'vivo', 'tim ', 'oi ', 'nextel', 't-mobile',
+            'verizon', 'at&t', 'sprint', 'net mobile'];
+        $education = ['university', 'universidade', 'instituto', 'college', 'escola'];
 
         foreach ($datacenter as $kw) {
             if (str_contains($lower, $kw)) {
@@ -576,17 +576,17 @@ class LinkTrackingService
      * Maps browser names (as returned by jenssegers/agent) to their underlying
      * rendering engine family.
      *
-     * @param  string|null $browser  Browser name from parseUserAgent(), e.g. 'Chrome', 'Safari'
+     * @param  string|null  $browser  Browser name from parseUserAgent(), e.g. 'Chrome', 'Safari'
      * @return string One of: blink, gecko, webkit, trident, unknown
      */
     private function deriveRenderingEngine(?string $browser): string
     {
-        return match(true) {
+        return match (true) {
             in_array($browser, ['Chrome', 'Edge', 'Opera', 'Brave', 'Vivaldi'], true) => 'blink',
-            in_array($browser, ['Firefox'], true)                                      => 'gecko',
-            in_array($browser, ['Safari'], true)                                       => 'webkit',
-            in_array($browser, ['IE'], true)                                           => 'trident',
-            default                                                                    => 'unknown',
+            in_array($browser, ['Firefox'], true) => 'gecko',
+            in_array($browser, ['Safari'], true) => 'webkit',
+            in_array($browser, ['IE'], true) => 'trident',
+            default => 'unknown',
         };
     }
 
@@ -597,8 +597,8 @@ class LinkTrackingService
      * supported by yasumi or when the library throws. Requires `composer require
      * azuyalabs/yasumi` to have been run (Docker must be up for this step).
      *
-     * @param  string             $isoCode   ISO 3166-1 alpha-2 country code
-     * @param  \DateTimeInterface $clickedAt Click timestamp
+     * @param  string  $isoCode  ISO 3166-1 alpha-2 country code
+     * @param  \DateTimeInterface  $clickedAt  Click timestamp
      * @return array{is_holiday: ?bool, holiday_name: ?string}
      */
     private function enrichHoliday(string $isoCode, \DateTimeInterface $clickedAt): array
@@ -616,13 +616,13 @@ class LinkTrackingService
         }
 
         try {
-            $year      = (int) $clickedAt->format('Y');
-            $holidays  = \Yasumi\Yasumi::create($supported[$iso], $year);
-            $date      = new \DateTime($clickedAt->format('Y-m-d'));
+            $year = (int) $clickedAt->format('Y');
+            $holidays = \Yasumi\Yasumi::create($supported[$iso], $year);
+            $date = new \DateTime($clickedAt->format('Y-m-d'));
             $isHoliday = $holidays->isHoliday($date);
 
             return [
-                'is_holiday'   => $isHoliday,
+                'is_holiday' => $isHoliday,
                 'holiday_name' => $isHoliday ? ($holidays->whatObservance($date)?->getName() ?? null) : null,
             ];
         } catch (\Throwable) {
@@ -649,7 +649,7 @@ class LinkTrackingService
             return ['quality_score' => 0, 'quality_tier' => 'likely_fraud', 'fingerprint_score' => 0];
         }
 
-        $score       = 100;
+        $score = 100;
         $fingerprint = 0;
 
         if (($fields['connection_type'] ?? 'unknown') === 'datacenter') {
@@ -682,28 +682,28 @@ class LinkTrackingService
         }
 
         $chMobile = $fields['ch_is_mobile'] ?? null;
-        $uaMobile = $fields['is_mobile']    ?? false;
+        $uaMobile = $fields['is_mobile'] ?? false;
         if ($chMobile !== null && (bool) $chMobile !== (bool) $uaMobile) {
             $fingerprint++;
             $score -= 10;
         }
 
-        $browser    = $fields['browser']     ?? null;
+        $browser = $fields['browser'] ?? null;
         $chPlatform = $fields['ch_platform'] ?? null;
         if (in_array($browser, ['Chrome', 'Edge'], true) && empty($chPlatform)) {
             $fingerprint++;
         }
 
-        $score       = max(0, $score);
-        $qualityTier = match(true) {
+        $score = max(0, $score);
+        $qualityTier = match (true) {
             $score >= 80 => 'organic',
             $score >= 50 => 'suspicious',
-            default      => 'likely_fraud',
+            default => 'likely_fraud',
         };
 
         return [
-            'quality_score'     => $score,
-            'quality_tier'      => $qualityTier,
+            'quality_score' => $score,
+            'quality_tier' => $qualityTier,
             'fingerprint_score' => $fingerprint,
         ];
     }

@@ -10,6 +10,7 @@ use Monolog\Processor\ProcessorInterface;
  *
  * - Sensitive keys are replaced with '[REDACTED]' regardless of value.
  * - PII keys (email, ip) are masked partially so the log keeps debug value
+ *
  *   ('b***@example.com', '187.10.x.x') without leaking the full identifier.
  * - Recurses into nested arrays.
  *
@@ -33,7 +34,7 @@ final class PiiRedactionProcessor implements ProcessorInterface
         'cvv',
     ];
 
-    /** @inheritDoc */
+    /** {@inheritDoc} */
     public function __invoke(LogRecord $record): LogRecord
     {
         return $record->with(
@@ -52,26 +53,31 @@ final class PiiRedactionProcessor implements ProcessorInterface
         foreach ($data as $key => $value) {
             if (is_array($value)) {
                 $out[$key] = $this->redact($value);
+
                 continue;
             }
 
             if (in_array(strtolower((string) $key), self::SENSITIVE_KEYS, true)) {
                 $out[$key] = '[REDACTED]';
+
                 continue;
             }
 
             if ($key === 'email' && is_string($value)) {
                 $out[$key] = $this->maskEmail($value);
+
                 continue;
             }
 
             if ($key === 'ip' && is_string($value)) {
                 $out[$key] = $this->maskIp($value);
+
                 continue;
             }
 
             $out[$key] = $value;
         }
+
         return $out;
     }
 
@@ -84,6 +90,7 @@ final class PiiRedactionProcessor implements ProcessorInterface
         if ($at === false || $at < 1) {
             return '[REDACTED_EMAIL]';
         }
+
         return $email[0].'***'.substr($email, $at);
     }
 
@@ -96,6 +103,7 @@ final class PiiRedactionProcessor implements ProcessorInterface
         if (count($parts) !== 4) {
             return '[REDACTED_IP]';
         }
+
         return $parts[0].'.'.$parts[1].'.x.x';
     }
 }

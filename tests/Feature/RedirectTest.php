@@ -232,6 +232,7 @@ class RedirectTest extends TestCase
 
         Queue::assertPushed(ProcessLinkClickJob::class, function (ProcessLinkClickJob $job) use ($rid) {
             $this->assertSame($rid, $job->payload['request_id'] ?? null);
+
             return true;
         });
     }
@@ -250,6 +251,7 @@ class RedirectTest extends TestCase
 
         Queue::assertPushed(ProcessLinkClickJob::class, function (ProcessLinkClickJob $job) {
             $this->assertSame('req_external_abc', $job->payload['request_id'] ?? null);
+
             return true;
         });
     }

@@ -116,8 +116,8 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Current rank is the most recent non-null viral_rank value. Distribution
      * shows the count per rank bucket for the requested time window.
      *
-     * @param  int          $linkId  Link ID
-     * @param  Carbon|null  $since   Optional time window start (null = all time)
+     * @param  int  $linkId  Link ID
+     * @param  Carbon|null  $since  Optional time window start (null = all time)
      * @return array{current_rank: string, distribution: array}
      */
     private function getViralRankSummary(int $linkId, ?Carbon $since): array
@@ -480,8 +480,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Provides counts per tier (organic, suspicious, likely_fraud) plus organic
      * percentage — used by the dashboard "Qualidade" card.
      *
-     * @param  int          $linkId
-     * @param  Carbon|null  $since   Time window start, or null for all time
+     * @param  Carbon|null  $since  Time window start, or null for all time
      * @return array{organic: int, suspicious: int, likely_fraud: int, unscored: int, organic_percentage: float}
      */
     private function getQualitySummary(int $linkId, ?Carbon $since): array
@@ -507,10 +506,10 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->count();
 
         return [
-            'organic'            => $organic,
-            'suspicious'         => $suspicious,
-            'likely_fraud'       => $fraud,
-            'unscored'           => $total - $organic - $suspicious - $fraud,
+            'organic' => $organic,
+            'suspicious' => $suspicious,
+            'likely_fraud' => $fraud,
+            'unscored' => $total - $organic - $suspicious - $fraud,
             'organic_percentage' => $total > 0 ? round($organic / $total * 100, 1) : 0,
         ];
     }
