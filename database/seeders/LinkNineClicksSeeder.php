@@ -8,6 +8,7 @@ use Illuminate\Database\Seeder;
 
 class LinkNineClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder para o Link ID 9 - Post LinkedIn (Case de Sucesso)
      * Foco: Desktop dominante, público profissional global, tráfego orgânico LinkedIn
@@ -119,7 +120,7 @@ class LinkNineClicksSeeder extends Seeder
             $userAgent = $this->getUserAgent($device);
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 9,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -138,7 +139,7 @@ class LinkNineClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             if (count($clicks) >= $batchSize) {
                 Click::insert($clicks);

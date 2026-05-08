@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 
 class LinkOneClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Dados realísticos para gerar clicks diversos
      */
@@ -191,7 +192,7 @@ class LinkOneClicksSeeder extends Seeder
             // Selecionar referrer
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 1,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -210,7 +211,7 @@ class LinkOneClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             // Inserir em lotes
             if (count($clicks) >= $batchSize) {

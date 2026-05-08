@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 
 class LinkFourClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder para o Link ID 4 - Analytics Dashboard Test
      * Cria dados variados e realísticos para testar todos os endpoints de analytics
@@ -222,7 +223,7 @@ class LinkFourClicksSeeder extends Seeder
             // Selecionar referrer
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 4,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -241,7 +242,7 @@ class LinkFourClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             // Inserir em lotes
             if (count($clicks) >= $batchSize) {

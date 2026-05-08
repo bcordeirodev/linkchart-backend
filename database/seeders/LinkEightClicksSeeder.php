@@ -8,6 +8,7 @@ use Illuminate\Database\Seeder;
 
 class LinkEightClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder para o Link ID 8 - Tutorial YouTube
      * Foco: Mobile-first, forte BR, tráfego via YouTube e social
@@ -111,7 +112,7 @@ class LinkEightClicksSeeder extends Seeder
             $userAgent = $this->getUserAgent($device);
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 8,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -130,7 +131,7 @@ class LinkEightClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             if (count($clicks) >= $batchSize) {
                 Click::insert($clicks);

@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 
 class LinkSixClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Seeder para o Link ID 6 - Tech Blog International
      * Foco: Tráfego global diversificado, principalmente desktop, tráfego orgânico
@@ -127,7 +128,7 @@ class LinkSixClicksSeeder extends Seeder
             $userAgent = $this->getUserAgent($device);
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 6,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -146,7 +147,7 @@ class LinkSixClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             if (count($clicks) >= $batchSize) {
                 Click::insert($clicks);

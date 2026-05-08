@@ -9,6 +9,7 @@ use Illuminate\Database\Seeder;
 
 class LinkThreeClicksSeeder extends Seeder
 {
+    use ClickEnrichmentTrait;
     /**
      * Dados realísticos para gerar clicks diversos para o link ID 3
      */
@@ -177,7 +178,7 @@ class LinkThreeClicksSeeder extends Seeder
             // Selecionar referrer
             $referer = $this->getReferer();
 
-            $clicks[] = [
+            $clicks[] = array_merge([
                 'link_id' => 3,
                 'ip' => $ip,
                 'user_agent' => $userAgent,
@@ -196,7 +197,7 @@ class LinkThreeClicksSeeder extends Seeder
                 'device' => $device,
                 'created_at' => $clickDate,
                 'updated_at' => $clickDate,
-            ];
+            ], $this->enrichClickData($userAgent, $device, $referer, $clickDate, $country['iso']));
 
             // Inserir em lotes
             if (count($clicks) >= $batchSize) {
