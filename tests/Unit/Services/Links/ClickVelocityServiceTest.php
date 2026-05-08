@@ -8,9 +8,6 @@ use Tests\TestCase;
 
 class ClickVelocityServiceTest extends TestCase
 {
-    /**
-     * @test
-     */
     public function test_viral_rank_is_cold_when_below_all_thresholds(): void
     {
         Redis::shouldReceive('pipeline')
@@ -31,9 +28,6 @@ class ClickVelocityServiceTest extends TestCase
         $this->assertNull($result['seconds_since_last_click']);
     }
 
-    /**
-     * @test
-     */
     public function test_viral_rank_is_viral_when_5min_count_exceeds_threshold(): void
     {
         $prevTs = now()->timestamp - 5;
@@ -56,9 +50,6 @@ class ClickVelocityServiceTest extends TestCase
         $this->assertGreaterThanOrEqual(4, $result['seconds_since_last_click']);
     }
 
-    /**
-     * @test
-     */
     public function test_viral_rank_is_trending_when_5min_count_exceeds_trending_threshold(): void
     {
         Redis::shouldReceive('pipeline')
@@ -78,9 +69,6 @@ class ClickVelocityServiceTest extends TestCase
         $this->assertEquals('trending', $result['viral_rank']);
     }
 
-    /**
-     * @test
-     */
     public function test_viral_rank_is_warming_when_only_1h_count_exceeds_threshold(): void
     {
         Redis::shouldReceive('pipeline')
@@ -100,9 +88,6 @@ class ClickVelocityServiceTest extends TestCase
         $this->assertEquals('warming', $result['viral_rank']);
     }
 
-    /**
-     * @test
-     */
     public function test_seconds_since_last_click_is_computed_from_previous_timestamp(): void
     {
         $prevTs = now()->timestamp - 30;
