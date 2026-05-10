@@ -537,11 +537,92 @@ All 8 generators implement `InsightGeneratorInterface` and are registered in `In
 
 ## 3. Repositories
 
-_To be filled in Task 1.4._
+### LinkRepository
+
+- **Contract:** `Contracts\Repositories\LinkRepositoryInterface`
+- **Model:** `Link`
+- **Public methods:**
+  - `getAllByUser(): Collection` — returns all links for the currently authenticated user, ordered `created_at DESC`.
+  - `findByIdAndUser(string $id, int $userId): ?Link` — finds a link by `id` scoped to `user_id`.
+  - `findBySlug(string $slug): ?Link` — finds an active link by `slug` (`is_active = true`).
+  - `create(array $data): Link` — thin `Link::create` wrapper.
+  - `update(string $id, array $data, int $userId): ?Link` — delegates to `findByIdAndUser`, calls `update` + `fresh()`.
+  - `delete(string $id, int $userId): bool` — delegates to `findByIdAndUser`, calls `delete()`.
+  - `incrementClicks(string $slug): bool` — increments `links.clicks` via `Link::where('slug',...)->where('is_active', true)->increment('clicks')`.
+  - `slugExists(string $slug): bool` — `Link::where('slug', $slug)->exists()`.
+- **Non-trivial queries:**
+  - `getAllByUser()` — filters by `user_id` + `is_active` indirectly via `idx_links_user_active` (`links.user_id, is_active, created_at`) defined in `2025_09_14_140100_add_performance_indexes_simple.php`.
+  - `findBySlug()` — filters by `slug` + `is_active`; benefits from `idx_links_user_active` only partially (no composite slug index). The slug column has a unique index from the original create-links migration.
+  - `incrementClicks()` — update query on `slug` + `is_active`; same index note as `findBySlug`.
+- **Notes:**
+  - `incrementClicks` is effectively dead code: its only caller is `LinkService::processRedirect`, which itself has no callers in `app/`, `routes/`, or `tests/` (verified in Task 1.3). The active click counter increment happens in `LinkTrackingService::registrarCliqueFromPayload` via a raw `DB::table('links')->increment` call that bypasses this repository entirely.
+  - Auth context (`auth()->guard('api')->id()`) is resolved directly inside `getAllByUser()` rather than being passed as a parameter — couples the repository to the HTTP request context.
+
+---
+
+### ChartRepository
+
+- **Contract:** `none` (no interface; not bound in `AppServiceProvider`)
+- **Model:** `Click`, `Link`, `User` (all three queried directly)
+- **Public methods:**
+  - `totalClicks($userId = null, $linkId = null)` — `COUNT(*)` on `clicks`, optionally filtered by user (via `whereHas('link', user_id)`) or `link_id`.
+  - `clicksByDay($days = 30, $userId = null, $linkId = null)` — `DATE(created_at)` grouped by day, limited to `$days` rows.
+  - `clicksByCountry($userId = null, $linkId = null)` — `COUNT(*)` grouped by `country`.
+  - `clicksByCity($userId = null, $linkId = null)` — `COUNT(*)` grouped by `city`.
+  - `clicksByDevice($userId = null, $linkId = null)` — `COUNT(*)` grouped by `device`.
+  - `clicksByReferer($userId = null, $linkId = null)` — `COUNT(*)` grouped by `referer`.
+  - `clicksByCampaign($userId = null, $linkId = null)` — three-table join (`link_utms → clicks → links`); `COUNT(*)` grouped by `utm_campaign`.
+  - `clicksPerLinkByDay($linkId = null, $days = 30)` — `DATE(created_at)` grouped by day for one or all links.
+  - `topLinks($limit = 10, $userId = null)` — `Link::withCount('clicks')` ordered by `clicks_count DESC`.
+  - `clicksByUser()` — joins `users → links → clicks`, `COUNT(clicks.id)` grouped by `users.id, users.name`.
+  - `clicksGroupedByLinkAndDay($userId = null, $linkId = null)` — `link_id + DATE(created_at)` grouped.
+  - `clicksByUserAgent($userId = null, $linkId = null)` — `COUNT(*)` grouped by `user_agent`.
+  - `linksCreatedByDay($userId = null, $days = 30)` — `DATE(created_at)` grouped by day on `links`.
+- **Non-trivial queries:**
+  - `clicksByDay`, `clicksPerLinkByDay`, `clicksGroupedByLinkAndDay` — all filter/group on `created_at`; benefit from `idx_clicks_link_date` (`clicks.link_id, created_at`) defined in `2025_09_14_140100_add_performance_indexes_simple.php` when `link_id` is supplied.
+  - `clicksByCountry`, `clicksByCity` — filter on `link_id, country, city`; served by `idx_clicks_geo` (`clicks.link_id, country, city`) from the same migration.
+  - `clicksByReferer` — filters on `link_id, referer`; served by `idx_clicks_referer` (`clicks.link_id, referer`).
+  - `clicksByUserAgent` — filters on `link_id, user_agent`; served by `idx_clicks_user_agent` (`clicks.link_id, user_agent`).
+  - `clicksByCampaign` — explicit three-table join via raw `DB::table('link_utms')→join('clicks',...)→join('links',...)`. No dedicated composite index for this join path.
+  - `topLinks` — uses `withCount('clicks')` which produces a sub-select; benefits from `idx_clicks_link_date` (full scan of `clicks` per link).
+  - `clicksByUser` — explicit two-join chain (`users → links → clicks`) with `GROUP BY users.id, users.name`; `idx_links_user_active` helps the `links.user_id` join leg.
+- **Notes:**
+  - No callers found in `app/`, `routes/`, or `tests/` — `ChartRepository` appears to be an **orphan class** (no route, no controller, no service injects it). Flagged as dead code for Task 1.10.
+  - All parameters are untyped (no PHP type hints); all methods lack return-type declarations.
+  - The `whereHas` approach used for user-scoped filtering triggers a correlated sub-query on `links.user_id`; a direct `join` would be more efficient for large datasets.
+
+---
+
+### WordRepository
+
+- **Contract:** `none` (no interface; not bound in `AppServiceProvider`)
+- **Model:** `Word` — referenced in the `use App\Models\Word` import but **no `app/Models/Word.php` file exists** in the codebase.
+- **Public methods:**
+  - `getAll(): Collection` — `Word::all()`.
+  - `find(string $id): ?Word` — `Word::find($id)`.
+  - `create(array $data): Word` — `Word::create($data)`.
+  - `update(string $id, array $data): ?Word` — `Word::find + update()`.
+  - `delete(string $id): ?Word` — `Word::find + delete()`, returns the deleted model.
+- **Non-trivial queries:** none — all are simple CRUD wrappers.
+- **Notes:**
+  - **Dead orphan:** no callers found anywhere in `app/`, `routes/`, or `tests/`. The `Word` model it imports does not exist. This class cannot be instantiated without a fatal autoload error. Flagged for removal in Task 1.10.
+  - All return types are declared only in PHPDoc `@return` annotations, not as PHP type hints.
 
 ## 4. Contracts
 
-_To be filled in Task 1.4._
+### Contracts → Implementations
+
+| Contract | Implementer | Bound in (file:line) |
+|---|---|---|
+| `Contracts\Repositories\LinkRepositoryInterface` | `Repositories\LinkRepository` | AppServiceProvider:17 |
+| `Contracts\Services\LinkServiceInterface` | `Services\Links\LinkService` | AppServiceProvider:22 |
+| `Contracts\Analytics\DashboardAnalyticsInterface` | `Services\Analytics\DashboardAnalyticsService` | AppServiceProvider:26 |
+| `Contracts\Analytics\GeographicAnalyticsInterface` | `Services\Analytics\GeographicAnalyticsService` | AppServiceProvider:27 |
+| `Contracts\Analytics\TemporalAnalyticsInterface` | `Services\Analytics\TemporalAnalyticsService` | AppServiceProvider:28 |
+| `Contracts\Analytics\AudienceAnalyticsInterface` | `Services\Analytics\AudienceAnalyticsService` | AppServiceProvider:29 |
+| `Contracts\Analytics\InsightsAnalyticsInterface` | `Services\Analytics\InsightsAnalyticsService` | AppServiceProvider:30 |
+
+**Notes:** All 7 contract bindings live exclusively in `AppServiceProvider::register()` — there is no second binding location. `LinkAnalyticsOrchestrator` is the only analytics orchestration class that has **no contract** (confirmed in Task 1.3): `AnalyticsController` injects it as a concrete class, bypassing the container's interface resolution. `ChartRepository` and `WordRepository` have no contracts and are not bound. The five analytics interfaces (`DashboardAnalyticsInterface`, `GeographicAnalyticsInterface`, `TemporalAnalyticsInterface`, `AudienceAnalyticsInterface`, `InsightsAnalyticsInterface`) each define a single method — they are minimal contracts that exactly mirror the public surface of their concrete implementations.
 
 ## 5. DTOs
 
