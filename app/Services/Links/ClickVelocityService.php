@@ -2,7 +2,7 @@
 
 namespace App\Services\Links;
 
-use Illuminate\Support\Facades\Log;
+use App\Logging\AppLogger;
 use Illuminate\Support\Facades\Redis;
 
 /**
@@ -41,7 +41,7 @@ class ClickVelocityService
                 $pipe->getset($keyLast, now()->timestamp);
             });
         } catch (\Throwable $e) {
-            Log::warning('ClickVelocityService: Redis unavailable, returning cold rank', [
+            AppLogger::event('tracking', 'warning', 'click_velocity.redis_unavailable', [
                 'link_id' => $linkId,
                 'error' => $e->getMessage(),
             ]);

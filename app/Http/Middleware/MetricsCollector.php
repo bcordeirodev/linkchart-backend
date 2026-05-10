@@ -6,7 +6,6 @@ use App\Logging\AppLogger;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -142,7 +141,7 @@ class MetricsCollector
         try {
             // Verificar se Cache está disponível antes de usar
             if (! $this->isCacheAvailable()) {
-                Log::debug('Cache not available, skipping metrics collection');
+                AppLogger::event('app', 'debug', 'metrics.cache_unavailable_skip', []);
 
                 return;
             }
@@ -249,7 +248,9 @@ class MetricsCollector
 
                     return true;
                 } catch (\Exception $redisError) {
-                    Log::debug('Redis cache not available, falling back to file cache: '.$redisError->getMessage());
+                    AppLogger::event('app', 'debug', 'metrics.redis_cache_unavailable_fallback', [
+                        'error' => $redisError->getMessage(),
+                    ]);
                     $cacheDriver = 'file'; // Fallback para file
                 }
             }
@@ -261,7 +262,9 @@ class MetricsCollector
                 if (! is_dir($cachePath)) {
                     // Tentar criar com permissões corretas
                     if (! mkdir($cachePath, 0777, true) && ! is_dir($cachePath)) {
-                        Log::debug('Cache directory could not be created: '.$cachePath);
+                        AppLogger::event('app', 'debug', 'metrics.cache_dir_create_failed', [
+                            'path' => $cachePath,
+                        ]);
 
                         return false;
                     }
@@ -271,7 +274,9 @@ class MetricsCollector
                 }
 
                 if (! is_writable($cachePath)) {
-                    Log::debug('Cache directory not writable: '.$cachePath);
+                    AppLogger::event('app', 'debug', 'metrics.cache_dir_not_writable', [
+                        'path' => $cachePath,
+                    ]);
                     // Tentar corrigir permissões
                     @chmod($cachePath, 0777);
                     if (! is_writable($cachePath)) {
@@ -286,7 +291,9 @@ class MetricsCollector
             return true;
 
         } catch (\Exception $e) {
-            Log::debug('Cache completely unavailable: '.$e->getMessage());
+            AppLogger::event('app', 'debug', 'metrics.cache_completely_unavailable', [
+                'error' => $e->getMessage(),
+            ]);
 
             return false;
         }
@@ -338,7 +345,7 @@ class MetricsCollector
     {
         try {
             if (! $this->isCacheAvailable()) {
-                Log::debug('Cache not available, logging error directly', $errorData);
+                AppLogger::event('app', 'debug', 'metrics.cache_unavailable_error_direct', $errorData);
 
                 return;
             }
