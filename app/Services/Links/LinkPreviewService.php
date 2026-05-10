@@ -15,7 +15,6 @@ class LinkPreviewService
             'timeout' => 5,
             'connect_timeout' => 3,
             'allow_redirects' => ['max' => 5],
-            'verify' => false,
         ]);
     }
 
