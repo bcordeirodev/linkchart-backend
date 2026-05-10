@@ -52,7 +52,6 @@ Route::prefix('public')->controller(PublicLinkController::class)->group(function
 Route::prefix('auth')->middleware('throttle:login')->controller(AuthController::class)->group(function () {
     Route::post('/login', 'login');
     Route::post('/register', 'register');
-    Route::post('/google', 'googleLogin');
 
     // === VERIFICAÇÃO DE EMAIL ===
     Route::post('/verify-email', 'verifyEmail');
