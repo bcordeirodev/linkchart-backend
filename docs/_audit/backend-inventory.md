@@ -11,10 +11,10 @@
 
 **Constructor dependencies:** _None._
 
-**Public/protected helpers:**
-- `findOwnedLink(int|string $id, string $by = 'id'): ?Link` — queries the authenticated user's links by the given field; returns `null` if unauthenticated or link not found.
-- `linkNotFound(): JsonResponse` — returns a 404 JSON response with a generic Portuguese "not found / no permission" message.
-- `serverError(string $message, \Throwable $e): JsonResponse` — logs the exception via `AppLogger::httpServerError`, then returns a 500 JSON response (debug detail included only when `APP_DEBUG=true`).
+**Protected helpers:**
+- **protected** `findOwnedLink(int|string $id, string $by = 'id'): ?Link` — queries the authenticated user's links by the given field; returns `null` if unauthenticated or link not found.
+- **protected** `linkNotFound(): JsonResponse` — returns a 404 JSON response with a generic Portuguese "not found / no permission" message.
+- **protected** `serverError(string $message, \Throwable $e): JsonResponse` — logs the exception via `AppLogger::httpServerError`, then returns a 500 JSON response (debug detail included only when `APP_DEBUG=true`).
 
 **Notes:**
 - Has no routes; never registered in `routes/api.php` or `routes/web.php`.
@@ -42,13 +42,13 @@
 | me | GET /api/me | api.auth:api | — | — |
 | logout | POST /api/logout | api.auth:api | — | — |
 | checkEmailVerificationStatus | GET /api/email-verification-status | api.auth:api | — | — |
-| resendVerificationEmail | POST /api/resend-verification-email | api.auth:api | throttle:login | — | — |
+| resendVerificationEmail | POST /api/resend-verification-email | api.auth:api | — | — |
 | updateProfile | PUT /api/profile | api.auth:api, verified | — | — |
 | changePassword | PUT /api/change-password | api.auth:api, verified | — | — |
 
 **Notes:**
 - `googleLogin` is declared as a route (`POST /api/auth/google`) but the corresponding method does **not exist** in the controller file — this is a stub / dead route.
-- `resendVerificationEmail` is mounted under `api.auth:api` (no `throttle:login` in the route file itself), but the `throttle:login` group wraps the entire `/auth` prefix block; `resendVerificationEmail` sits outside that block and has no explicit rate limit on the route.
+- `resendVerificationEmail` sits in the `api.auth:api`-only group (lines 69–77 of `routes/api.php`), NOT in the `throttle:login` group — carries no rate limit.
 - All validation is done inline via `Validator::make`; no FormRequest classes are used in this controller.
 
 ---
@@ -77,7 +77,7 @@
 
 **Notes:**
 - `getClicksData` and `getClicksList` are mounted under the singular prefix `/api/link/{id}/...` (not `/api/links`), as noted in lines 110–113 of `routes/api.php`.
-- `showBySlug` has no route registered in either `routes/api.php` or `routes/web.php` — it is an orphan method (verify in Task 1.10).
+- A separate `PublicLinkController::showBySlug` (line 65) handles `GET /api/public/link/{slug}`. The `LinkController::showBySlug` method (line 476) appears to be a duplicate/leftover with no route registration — verify in Task 1.10.
 - `auditHistory` is defined in the controller but has no matching route in `routes/api.php` — it is an orphan method (verify in Task 1.10).
 - `GET /api/links/{id}/analytics` is mounted on the `links` prefix group but dispatches to `AnalyticsController::getLinkLegacyAnalytics` (see AnalyticsController notes).
 
