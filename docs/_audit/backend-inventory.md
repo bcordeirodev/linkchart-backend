@@ -205,7 +205,335 @@
 
 ## 2. Services
 
-_To be filled in Task 1.3._
+### Sub-folder: root (`app/Services/`)
+
+#### EmailService
+
+- **Role:** Low-level email dispatcher — sends transactional email via the SendGrid HTTP API or Laravel's native `Mail` facade (SMTP); also exposes test and config-inspection helpers.
+- **Contract:** none
+- **Constructor dependencies:** _None._ (Guzzle-backed `SendGrid` client instantiated inline from config.)
+- **Public methods:**
+  - `sendEmailViaSendGridAPI($toEmail, $subject, $htmlContent, $textContent = null, $toName = null): array`
+  - `sendTestEmailViaSendGridAPI($toEmail, $toName = null): array`
+  - `testSendGridAPI(): array`
+  - `getSendGridConfiguration(): array`
+  - `sendTestEmail($toEmail, $toName = null): array`
+  - `testConnection(): array`
+  - `getMailConfiguration(): array`
+  - `sendCustomEmail($toEmail, $subject, $htmlContent, $textContent = null): array`
+- **Side effects:** sends email via SendGrid HTTP API (`sendgrid/sendgrid`); sends email via Laravel `Mail` facade; logs to `app` channel (`AppLogger::emailSent`, `AppLogger::emailFailed`, `AppLogger::emailTestFailed`).
+- **Notes:**
+  - All public methods lack PHP type hints on parameters — every argument is untyped.
+  - `testConnection()` sends a real email to the hardcoded address `test@example.com` when called.
+  - `getSendGridConfiguration()` and `getMailConfiguration()` are pure read-only helpers with no side effects.
+
+---
+
+#### EmailVerificationService
+
+- **Role:** Orchestrates email-based verification and password-reset flows: creates tokens, sends emails via `EmailService`, marks tokens used, and updates user state.
+- **Contract:** none
+- **Constructor dependencies:**
+  - `EmailService $emailService`
+- **Public methods:**
+  - `sendVerificationEmail(User $user, ?Request $request = null): array`
+  - `verifyEmail(string $token): array`
+  - `sendPasswordResetEmail(string $email, ?Request $request = null): array`
+  - `resetPassword(string $token, string $newPassword): array`
+- **Side effects:** writes to `email_verification_tokens` (`EmailVerificationToken::createEmailVerificationToken`, `EmailVerificationToken::createPasswordResetToken`, `EmailVerificationToken::markAsUsed`); writes to `users` (`User::markEmailAsVerified`, `User::markVerificationEmailSent`, `User::update` for password); sends email via `EmailService::sendEmailViaSendGridAPI`; logs to `auth` channel (`AppLogger::authEmailVerificationSent`, `AppLogger::authEmailVerified`, `AppLogger::authPasswordResetRequested`, `AppLogger::authPasswordResetCompleted`, `AppLogger::authError`).
+- **Notes:**
+  - `sendPasswordResetEmail` always returns `success: true` even when the user is not found (security: email enumeration prevention).
+  - Renders Blade views (`emails.verification`, `emails.verification-text`, `emails.password-reset`, `emails.password-reset-text`) to produce email body strings.
+
+---
+
+### Sub-folder: Services/Links
+
+#### ClickVelocityService
+
+- **Role:** Tracks per-link click velocity using Redis sliding windows (5 min and 60 min) and classifies links into viral-rank tiers (viral, trending, warming, cold).
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `record(int $linkId): array`
+- **Side effects:** reads/writes Redis keys `link:{id}:v5`, `link:{id}:v60`, `link:{id}:last_click` via a Redis pipeline; logs a `warning` via `Log::warning` (not `AppLogger`) on Redis downtime — **flagged for Task 1.10** (inconsistent logging facade).
+- **Notes:**
+  - Degrades gracefully when Redis is unavailable: returns `['viral_rank' => 'cold', 'seconds_since_last_click' => null]`.
+  - Thresholds read from `config/tracking.php` under `viral_thresholds`.
+  - `getset` (deprecated in Redis ≥ 6.2) is used for the `last_click` timestamp swap.
+
+---
+
+#### LinkAuditService
+
+- **Role:** Records create/update/delete operations on links into the `link_audits` table for audit, security, and compliance purposes.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `logCreated(Link $link, int $userId, Request $request): void`
+  - `logUpdated(Link $link, array $oldValues, int $userId, Request $request): void`
+  - `logDeleted(Link $link, int $userId, Request $request): void`
+  - `getLinkHistory(int $linkId, int $userId): \Illuminate\Database\Eloquent\Collection`
+  - `getUserHistory(int $userId, int $limit = 50): \Illuminate\Database\Eloquent\Collection`
+- **Side effects:** writes to `link_audits` (`LinkAudit::create`); logs to `audit` channel on failure (`AppLogger::auditFailed`).
+- **Notes:**
+  - `getLinkHistory` and `getUserHistory` are pure reads (no writes or cache).
+  - Audit failures are swallowed — they log to the `audit` channel but do not propagate the exception, so the primary operation (link CRUD) is never blocked by audit errors.
+
+---
+
+#### LinkPreviewService
+
+- **Role:** Fetches Open Graph metadata (title, image) and favicon URL for a given destination URL.
+- **Contract:** none
+- **Constructor dependencies:** _None._ (Constructs a `GuzzleHttp\Client` with 5 s timeout internally.)
+- **Public methods:**
+  - `fetchPreview(string $url): array`
+- **Side effects:** outbound HTTP GET to the destination URL via Guzzle.
+- **Notes:**
+  - TLS verification is disabled (`'verify' => false`) in the Guzzle client — flagged for Task 1.10.
+  - Favicon is always resolved via `https://www.google.com/s2/favicons?domain=…` (external HTTP call to Google).
+  - On Guzzle `RequestException`, returns empty metadata but still attempts to build the favicon URL.
+
+---
+
+#### LinkSafetyService
+
+- **Role:** Checks a URL against the Google Safe Browsing API v4 for malware, phishing, unwanted software, and harmful applications.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `checkUrl(string $url): array`
+- **Side effects:** outbound HTTP POST to `https://safebrowsing.googleapis.com/v4/threatMatches:find` via Laravel `Http` facade; logs to `app` channel (`AppLogger::safetyUrlFlagged`, `AppLogger::safetyApiUnavailable`, `AppLogger::safetyApiError`).
+- **Notes:**
+  - When the API key is missing or the request fails, it fails open (returns `safe: true`) and sets `api_available: false`.
+
+---
+
+#### LinkService
+
+- **Role:** Business-logic layer for authenticated link CRUD (create, read, update, delete, redirect resolution, public shortening, slug generation).
+- **Contract:** `Contracts\Services\LinkServiceInterface`
+- **Constructor dependencies:**
+  - `LinkRepositoryInterface $linkRepository`
+- **Public methods:**
+  - `getAllUserLinks(): Collection`
+  - `getUserLink(string $id): ?Link`
+  - `createLink(CreateLinkDTO $linkDTO): Link`
+  - `updateLink(string $id, UpdateLinkDTO $linkDTO): ?Link`
+  - `deleteLink(string $id): bool`
+  - `processRedirect(string $slug): ?string`
+  - `createPublicLink(CreatePublicLinkDTO $linkDTO): Link`
+  - `generateUniqueSlug(int $length = 6): string`
+- **Side effects:** delegates all persistence to `LinkRepositoryInterface` (reads and writes `links` table); `processRedirect` calls `linkRepository->incrementClicks` which updates the `links.clicks` column.
+- **Notes:**
+  - All auth-scoped reads use `auth()->guard('api')->id()` inline.
+  - `processRedirect` is not used by `RedirectController` in production — `RedirectController` uses `Link::findActiveBySlugCached()` directly and dispatches `ProcessLinkClickJob`. `processRedirect` may be dead code — flagged for Task 1.10.
+
+---
+
+#### LinkTrackingService
+
+- **Role:** Enriches a click payload with geo-location (GeoIP), user-agent parsing, temporal data, visitor behavior, navigation context, viral rank, quality score, and holiday/season signals, then persists the enriched `Click` record and any UTM data.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `registrarCliqueFromPayload(int $linkId, array $payload): void`
+  - `resolveRealUserIP(Request $request): string`
+- **Side effects:** reads from `clicks` (for behavior analysis); writes to `clicks` (`Click::create`); writes to `link_utms` (`LinkUtm::create`); increments `links.clicks` via `DB::table('links')->increment('clicks')`; resolves geo-location via `app('geoip')` (torann/geoip); records viral rank via `app(ClickVelocityService::class)->record()` (Redis pipeline); calls `azuyalabs/yasumi` for holiday detection; logs to `tracking` channel (`AppLogger::trackingClickRegistered`, `AppLogger::trackingLinkNotFound`, `AppLogger::geoipDefaultLocation`, `AppLogger::geoipFailed`, `AppLogger::userAgentParseFailed`, `AppLogger::trackingTemporalEnrichmentFailed`, `AppLogger::trackingBehaviorAnalysisFailed`, `AppLogger::event('tracking', 'warning', 'tracking.invalid_timezone', …)`).
+- **Notes:**
+  - Called exclusively from `ProcessLinkClickJob` (asynchronous) — never on the HTTP request path.
+  - `resolveRealUserIP` is a pure utility method with no side effects; called in `RedirectController` before dispatching the job.
+  - Uses `app()->make(ClickVelocityService::class)` rather than constructor injection — flagged for Task 1.10.
+  - `links.clicks` is incremented here AND in `RedirectController` (via `DB::table->increment`). This appears to be a double-increment — **flagged for Task 1.10**.
+
+---
+
+### Sub-folder: Services/Onboarding
+
+#### OnboardingDemoDataService
+
+- **Role:** Seeds a new user's account with a demo link and 1,200 realistic synthetic clicks spread across 60 days to populate analytics from day one.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `run(User $user): void`
+- **Side effects:** writes one row to `links` (`Link::create`, `Link::update`); writes up to 1,200 rows to `clicks` in batches of 500 (`Click::insert`); reads `links` to check for existing demo data.
+- **Notes:**
+  - Idempotent: exits early if any link with `is_demo = true` already exists for the user.
+  - All writes bypass the tracking pipeline (no job dispatch, no GeoIP, no UTM parsing) — data is synthetic.
+  - Uses `mt_rand` for IP and timestamp generation — not cryptographically random, which is acceptable for demo data.
+
+---
+
+### Sub-folder: Services/Analytics
+
+#### AudienceAnalyticsService
+
+- **Role:** Aggregates audience-dimension analytics for a link: device, browser, OS, language, platform (Client Hints), connection type, rendering engine, navigation context, return-visitor rate, and quality tier breakdown.
+- **Contract:** `Contracts\Analytics\AudienceAnalyticsInterface`
+- **Constructor dependencies:**
+  - `UserAgentParser $uaParser`
+- **Public methods:**
+  - `getLinkAudienceAnalytics(int $linkId): array`
+- **Side effects:** reads `clicks` and `links` tables (read-only aggregations via `DB::table` and `Click`/`Link` Eloquent queries). _None observed_ (pure query service).
+
+---
+
+#### DashboardAnalyticsService
+
+- **Role:** Produces the full dashboard payload for a single link — summary KPIs (click totals, unique visitors, success rate, response time, viral rank, quality), temporal patterns, geographic heatmap, and audience breakdowns — with optional time-window filtering.
+- **Contract:** `Contracts\Analytics\DashboardAnalyticsInterface`
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `getLinkDashboardAnalytics(int $linkId, int $hours = 0): array`
+- **Side effects:** reads `clicks` and `links` tables (read-only aggregations). _None observed_ (pure query service).
+- **Notes:**
+  - Contains its own `extractPrimaryLanguage` helper, duplicating the same logic that exists in `UserAgentParser::extractPrimaryLanguage` and `DashboardAnalyticsService` itself — flagged for Task 1.10.
+  - SQLite-aware: switches between `EXTRACT(HOUR FROM …)` (PostgreSQL) and `strftime('%H', …)` (SQLite) in several private methods.
+
+---
+
+#### GeographicAnalyticsService
+
+- **Role:** Aggregates geographic analytics for a link: heatmap data points, top countries/states/cities, and continent distribution.
+- **Contract:** `Contracts\Analytics\GeographicAnalyticsInterface`
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `getLinkGeographicAnalytics(int $linkId): array`
+- **Side effects:** reads `clicks` and `links` tables (read-only aggregations). _None observed_ (pure query service).
+
+---
+
+#### InsightsAnalyticsService
+
+- **Role:** Generates business insights for a link by running all registered `InsightGeneratorInterface` implementations and computing supplemental analytics (retention, session depth, traffic sources, navigation context, HTTP protocol, quality tier breakdown).
+- **Contract:** `Contracts\Analytics\InsightsAnalyticsInterface`
+- **Constructor dependencies:** _None._ (Instantiates `InsightGeneratorRegistry` and all 8 generators directly in `__construct`.)
+- **Public methods:**
+  - `getLinkInsightsAnalytics(int $linkId): array`
+- **Side effects:** reads `clicks` and `links` tables (read-only aggregations). _None observed_ (pure query service).
+- **Notes:**
+  - All 8 generators are constructed inline (`new GeographicInsightGenerator`, etc.) rather than being injected — this makes them untestable in isolation and prevents swapping implementations via the container. Flagged for Task 1.10.
+
+---
+
+#### LinkAnalyticsOrchestrator
+
+- **Role:** Thin orchestrator that fan-outs analytics requests to the five domain analytics services (dashboard, geographic, temporal, audience, insights) and assembles a combined payload.
+- **Contract:** none (concrete class, not bound to an interface)
+- **Constructor dependencies:**
+  - `DashboardAnalyticsInterface $dashboard`
+  - `GeographicAnalyticsInterface $geographic`
+  - `TemporalAnalyticsInterface $temporal`
+  - `AudienceAnalyticsInterface $audience`
+  - `InsightsAnalyticsInterface $insights`
+- **Public methods:**
+  - `getComprehensiveLinkAnalytics(int $linkId): array`
+  - `getLinkDashboardAnalytics(int $linkId, int $hours = 0): array`
+  - `getLinkGeographicAnalytics(int $linkId): array`
+  - `getLinkTemporalAnalytics(int $linkId): array`
+  - `getLinkAudienceAnalytics(int $linkId): array`
+  - `getLinkInsightsAnalytics(int $linkId): array`
+- **Side effects:** delegates entirely to injected services — reads `clicks` and `links` tables indirectly. _None observed_ beyond what the delegates produce.
+- **Notes:**
+  - This class has no contract (no interface, not bound in `AppServiceProvider`) — it is resolved directly by `AnalyticsController`. If a second orchestrator were ever needed, swapping would require changing the controller. Flagged for Task 1.10.
+
+---
+
+#### MetricsService
+
+- **Role:** Provides cached per-user and per-link metric aggregations (click totals, performance stats, geographic reach, audience device types, sparkline series, trend comparison) used by `LinkMetaController` and `MetricsController`.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `getUserBasicMetrics(int $userId, int $hours = 24): array`
+  - `getUserPerformanceMetrics(int $userId, int $hours = 24): array`
+  - `getLinkMetrics(int $linkId): array`
+  - `getUserGeographicMetrics(int $userId): array`
+  - `getUserAudienceMetrics(int $userId): array`
+  - `clearUserMetricsCache(int $userId): void`
+  - `getUserTopLinks(int $userId, int $limit = 5): array`
+  - `getUserChartData(int $userId, int $hours = 24): array`
+  - `getLinkSparkline(int $linkId, int $days = 7): array`
+  - `getLinkTrend(int $linkId, int $window = 7): array`
+- **Side effects:** reads from cache (`Cache::remember`, `Cache::get`); `clearUserMetricsCache` calls `Cache::forget` for per-user metric keys; reads `clicks` and `links` tables; logs to `app` channel on error in `getUserChartData` (`AppLogger::analyticsError`).
+- **Notes:**
+  - `clearUserMetricsCache` uses literal pattern strings (e.g. `"metrics:user:{$userId}:*"`) with `Cache::forget` — glob patterns are not supported by the standard `Cache::forget` API and will silently fail if the cache driver is not Redis with pattern-delete support. Flagged for Task 1.10.
+  - `calculateAverageResponseTime` reads hourly redirect-metrics cache keys (`redirect_metrics:hour:{date}`) written by `RedirectMetricsCollector` middleware — creates an implicit dependency on that middleware's cache format.
+  - `getUserChartData` contains hardcoded `EXTRACT(DOW FROM …)` PostgreSQL syntax (not SQLite-safe), unlike the analytics services which are dual-driver.
+
+---
+
+#### TemporalAnalyticsService
+
+- **Role:** Aggregates temporal analytics for a link: clicks by hour and day-of-week, local hourly patterns, weekend vs. weekday, business hours, holiday impact, seasonal distribution, and a full advanced-temporal payload with weekly/monthly trends, heatmap matrix, and device-by-period breakdown.
+- **Contract:** `Contracts\Analytics\TemporalAnalyticsInterface`
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `getLinkTemporalAnalytics(int $linkId): array`
+  - `getAdvancedTemporalAnalytics(int $linkId): array`
+- **Side effects:** reads `clicks` and `links` tables (read-only aggregations). _None observed_ (pure query service).
+- **Notes:**
+  - `getAdvancedTemporalAnalytics` loads all clicks for a link into memory (`Click::where(...)->get()`) and processes them in PHP — may be slow for links with many clicks. Flagged for Task 1.10.
+  - SQLite-aware in `getLinkTemporalAnalytics` methods but not in `getAdvancedTemporalAnalytics` (which relies on Carbon's `startOfWeek`/`format` on the Eloquent model — acceptable).
+
+---
+
+### Sub-folder: Services/Analytics/Support
+
+#### UserAgentParser
+
+- **Role:** Lightweight regex-based parser for extracting browser name, OS name, and primary language from raw `User-Agent` / `Accept-Language` strings.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `extractBrowser(?string $ua): string`
+  - `extractOS(?string $ua): string`
+  - `extractPrimaryLanguage(?string $acceptLanguage): ?string`
+- **Side effects:** _None observed._ (Pure string processing.)
+- **Notes:**
+  - `extractPrimaryLanguage` contains the same language-name mapping as `DashboardAnalyticsService::extractPrimaryLanguage` — duplicated logic. Flagged for Task 1.10.
+  - Used only by `AudienceAnalyticsService`; `DashboardAnalyticsService` has its own inline copy instead of injecting this class.
+
+---
+
+### Sub-folder: Services/Analytics/Insights
+
+#### InsightGeneratorInterface
+
+Contract for all insight generators. Declares a single method:
+
+- `generate(int $linkId, int $totalClicks): ?array` — returns an insight array if the condition is met, or `null` to skip this generator.
+
+---
+
+#### InsightGeneratorRegistry
+
+- **Role:** Holds an ordered list of `InsightGeneratorInterface` instances and runs them all against a link, collecting non-null results.
+- **Contract:** none
+- **Constructor dependencies:** _None._
+- **Public methods:**
+  - `register(InsightGeneratorInterface $generator): void`
+  - `generate(int $linkId, int $totalClicks): array`
+- **Side effects:** delegates to each registered generator's `generate()` call — reads `clicks` table indirectly. _None observed_ at this layer.
+
+---
+
+### Sub-folder: Services/Analytics/Insights/Generators
+
+All 8 generators implement `InsightGeneratorInterface` and are registered in `InsightGeneratorRegistry` (instantiated inline by `InsightAnalyticsService::__construct`). Each exposes exactly one public method: `generate(int $linkId, int $totalClicks): ?array`. They are pure read-only aggregators against the `clicks` table with no cache, queue, or log side effects.
+
+| Generator | One-line role | Notable inputs |
+|---|---|---|
+| `DeviceInsightGenerator` | Identifies the dominant device type and its share of total clicks | `clicks.device` |
+| `DiversityInsightGenerator` | Fires when a link has reached more than 5 distinct countries | `clicks.country` |
+| `EngagementInsightGenerator` | Detects week-over-week growth or decline exceeding 20 % | `clicks.created_at` |
+| `GeographicInsightGenerator` | Identifies the top country and its percentage of total clicks | `clicks.country` |
+| `PerformanceInsightGenerator` | Flags slow average response time (> 500 ms) or confirms good performance | `clicks.response_time` |
+| `RetentionInsightGenerator` | Reports return-visitor rate and benchmarks it against thresholds (15 %, 25 %) | `clicks.is_return_visitor`, `clicks.ip` |
+| `SecurityInsightGenerator` | Flags any IP with more than 50 clicks as potentially abnormal | `clicks.ip` |
+| `TemporalInsightGenerator` | Identifies the peak hour of click activity | `clicks.hour_of_day`, `clicks.created_at` |
 
 ## 3. Repositories
 
