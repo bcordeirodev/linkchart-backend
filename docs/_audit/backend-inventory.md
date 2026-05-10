@@ -1206,16 +1206,382 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 
 ## 16. Oportunidades de refactor
 
-_To be filled in Task 1.10._
+> Each item lists what to do, why, risk level, and the call-site footprint.
+> **Phase 2 executes only items the human approves.** Items marked `alto` require explicit secondary confirmation per the plan's Hard Rules.
+
+### Baixo risco
+
+#### R-01 — Delete `LinkService::processRedirect` and `LinkRepository::incrementClicks` (verified dead)
+
+- **What:** delete `LinkService::processRedirect` (line 97), `LinkRepository::incrementClicks` (line ~115), and the matching contract entries `LinkServiceInterface::processRedirect` and `LinkRepositoryInterface::incrementClicks`.
+- **Rationale:** zero callers in `app/`, `tests/`, or `routes/` (verified via grep). The live counter increment happens exclusively in `LinkTrackingService::registrarCliqueFromPayload` via `DB::table('links')->increment`. Both methods exist only because of a prior redirect architecture that was decommissioned when `/api/r/{slug}` was disabled on 04/11/2025.
+- **Risk:** baixo. No callers, no tests exercise these methods, no contract consumer depends on them.
+- **Impact:** 4 files (`app/Services/Links/LinkService.php`, `app/Contracts/Services/LinkServiceInterface.php`, `app/Repositories/LinkRepository.php`, `app/Contracts/Repositories/LinkRepositoryInterface.php`). 0 call-site updates needed. Reversible from git history.
+
+---
+
+#### R-02 — Delete `WordRepository.php` (broken + orphan)
+
+- **What:** delete `app/Repositories/WordRepository.php`. Also run `grep -rn "Word\b" database/ app/` before deletion to confirm no seed/factory references exist.
+- **Rationale:** imports `App\Models\Word` which does not exist — the class will fatal on any instantiation. Zero callers in `app/`, `routes/`, or `tests/`. No contract, not bound in the service container.
+- **Risk:** baixo. Fatal class cannot be in use; deletion is safe.
+- **Impact:** 1 file deleted. Reversible from git history.
+
+---
+
+#### R-03 — Delete `ChartRepository.php` (orphan)
+
+- **What:** delete `app/Repositories/ChartRepository.php`. Verify once more with `grep -rn "ChartRepository" app/ routes/ tests/` before deletion.
+- **Rationale:** zero callers in `app/`, `routes/`, or `tests/`. No contract, not bound in the service provider. Was likely a legacy analytics utility that was superseded by the domain analytics services (`DashboardAnalyticsService`, `GeographicAnalyticsService`, etc.).
+- **Risk:** baixo (verify with one grep immediately before deletion).
+- **Impact:** 1 file deleted. Reversible from git history. Note: if R-03 is approved, item R-19 (covering index for `ChartRepository::clicksByCampaign`) becomes moot.
+
+---
+
+#### R-04 — Delete `LinkDTO.php` (superseded + orphan)
+
+- **What:** delete `app/DTOs/LinkDTO.php`.
+- **Rationale:** zero callers in `app/` or `tests/`. Every use site uses `CreateLinkDTO`, `UpdateLinkDTO`, or `CreatePublicLinkDTO` instead. `LinkDTO` covers only 7 of the 20+ `Link` model fields, and the API layer uses `LinkResource` for output — `LinkDTO::fromModel` has no functional role.
+- **Risk:** baixo. Zero callers; no tests exercise it.
+- **Impact:** 1 file deleted. Reversible from git history.
+
+---
+
+#### R-05 — Delete `MetricsController.php` (orphan, never wired)
+
+- **What:** delete `app/Http/Controllers/MetricsController.php`.
+- **Rationale:** no route in `routes/api.php` or `routes/web.php` mounts any of its 5 actions. The class PHPDoc describes it as a planned "consolidation" that was never integrated. `MetricsService` (which it injects) is fully used by `LinkMetaController` — the consolidation intent is already served by an existing routed controller.
+- **Risk:** baixo. No route, no callers, no tests.
+- **Impact:** 1 file deleted. Reversible from git history.
+
+---
+
+#### R-06 — Delete orphan methods `LinkController::auditHistory` and `LinkController::showBySlug`
+
+- **What:** delete the method bodies for `auditHistory` (line 433) and `showBySlug` (line 476) from `app/Http/Controllers/Links/LinkController.php`.
+- **Rationale:** `auditHistory` has no matching route (audit history is served by `LinkAuditService::getLinkHistory` only when called internally by `LinkController` itself, not via this action). `showBySlug` is duplicated by the actively routed `PublicLinkController::showBySlug`. Leaving dead controller actions creates a misleading surface area during future route additions.
+- **Risk:** baixo. No routes mount them, no tests call them.
+- **Impact:** 1 file (`app/Http/Controllers/Links/LinkController.php`). 0 call-site updates. Reversible from git history.
+
+---
+
+#### R-07 — Delete `UpdateExistingLinksUrls` artisan command (scaffold stub, never implemented)
+
+- **What:** delete `app/Console/Commands/UpdateExistingLinksUrls.php`.
+- **Rationale:** `handle()` is empty, description is the Laravel scaffold placeholder `"Command description"`. This is either an abandoned one-shot migration or a dead placeholder that was never implemented. There is no Artisan registration outside of auto-discovery, and it has no callers.
+- **Risk:** baixo. Empty command with no business logic.
+- **Impact:** 1 file deleted. Reversible from git history.
+
+---
+
+#### R-08 — Remove unused `metrics.collector` middleware alias from `bootstrap/app.php`
+
+- **What:** remove the alias registration for `metrics.collector` (lines 47–52 of `bootstrap/app.php`). Keep `metrics.redirect` — it is actively applied on both redirect routes.
+- **Rationale:** the alias exists but `MetricsCollector` is not applied to any route. Leaving the alias in place creates an implicit contract that it "should" be used somewhere, and it imports the class even when it is never invoked.
+- **Risk:** baixo. No routes reference `metrics.collector`.
+- **Impact:** 1 file (`bootstrap/app.php`). Reversible from git history.
+
+---
+
+#### R-10 — Replace direct `Log::*` calls with `AppLogger::*` (CLAUDE.md convention)
+
+- **What:** in `app/Services/Links/ClickVelocityService.php:44`, replace `Log::warning(...)` with an appropriate `AppLogger::event('app', 'warning', 'click_velocity.redis_unavailable', [...])` call (or a new semantic method if this event warrants one). In `app/Http/Middleware/MetricsCollector.php` and `app/Http/Middleware/RedirectMetricsCollector.php`, replace all `Log::debug(...)` calls with `AppLogger::event(...)` or suppress them (these middlewares are debug-only calls; see R-08 for `MetricsCollector` itself).
+- **Rationale:** CLAUDE.md explicitly prohibits direct `Log::*` usage. Three files violate this convention. `ClickVelocityService` is on the hot path (Redis pipeline).
+- **Risk:** baixo. Pure logging replacement; no logic changes.
+- **Impact:** 3 files (`app/Services/Links/ClickVelocityService.php`, `app/Http/Middleware/MetricsCollector.php`, `app/Http/Middleware/RedirectMetricsCollector.php`). 0 functional call-site changes.
+
+---
+
+#### R-11 — Extract shared `extractPrimaryLanguage` into `UserAgentParser` (DRY)
+
+- **What:** confirm `UserAgentParser::extractPrimaryLanguage` is the canonical implementation. Remove the duplicate private `extractPrimaryLanguage` method from `DashboardAnalyticsService` and inject `UserAgentParser` into `DashboardAnalyticsService` (add constructor parameter). Update the 1 call-site inside `DashboardAnalyticsService` to use the injected parser.
+- **Rationale:** the same language-name mapping array is duplicated in two files. Any update to the mapping (e.g., adding a new language code) must be made in both places — a maintenance hazard.
+- **Risk:** baixo. `DashboardAnalyticsService` already has no constructor; adding a constructor-injected `UserAgentParser` (which has no dependencies itself) is a clean change. `AppServiceProvider` already binds `DashboardAnalyticsInterface` — adding `UserAgentParser` to its constructor is auto-resolved by the container.
+- **Impact:** 2 files (`app/Services/Analytics/DashboardAnalyticsService.php`, `app/Services/Analytics/Support/UserAgentParser.php`). 0 external call-site changes (the interface `DashboardAnalyticsInterface` is unchanged).
+
+---
+
+#### R-12 — Replace `app()->make(ClickVelocityService::class)` with constructor injection in `LinkTrackingService`
+
+- **What:** add `ClickVelocityService $clickVelocityService` to `LinkTrackingService::__construct`, remove the `app()->make(ClickVelocityService::class)` service-locator call inside `registrarCliqueFromPayload`, and use the injected dependency instead.
+- **Rationale:** service-locator pattern (`app()->make(...)`) bypasses the DI container's visibility, makes dependencies implicit, and prevents the test double from being injected cleanly. `LinkTrackingService` is instantiated by `ProcessLinkClickJob` via `new LinkTrackingService()` (check `ProcessLinkClickJob::handle` before applying).
+- **Risk:** baixo — but verify: if `ProcessLinkClickJob` calls `new LinkTrackingService()` directly (not via container), constructor injection requires updating the job to resolve via container or pass `ClickVelocityService` explicitly. If resolved via `app()->make(LinkTrackingService::class)`, no change is needed in the job.
+- **Impact:** 2 files (`app/Services/Links/LinkTrackingService.php`, possibly `app/Jobs/ProcessLinkClickJob.php`). Reversible from git history.
+
+---
+
+#### R-13 — Introduce a `LinkAnalyticsOrchestratorInterface` contract
+
+- **What:** create `app/Contracts/Analytics/LinkAnalyticsOrchestratorInterface.php` exposing the 6 public methods. Bind it in `AppServiceProvider::register()`. Update `AnalyticsController` to type-hint the interface instead of the concrete class.
+- **Rationale:** `LinkAnalyticsOrchestrator` is the only analytics orchestration class not behind an interface, making `AnalyticsController` the only analytics controller that injects a concrete. Inconsistent with the rest of the analytics layer and blocks test substitution.
+- **Risk:** baixo. Purely additive — new interface, new binding, controller type-hint change only.
+- **Impact:** 3 files (new `app/Contracts/Analytics/LinkAnalyticsOrchestratorInterface.php`, `app/Providers/AppServiceProvider.php`, `app/Http/Controllers/Analytics/AnalyticsController.php`).
+
+---
+
+#### R-14 — Add PHP type hints to `EmailService` public method parameters
+
+- **What:** add parameter type hints and return types to all 8 public methods in `app/Services/EmailService.php`. The types are inferrable from usage and internal doc comments.
+- **Rationale:** `EmailService` is the only service in the codebase where public method parameters are entirely untyped. This is inconsistent with the rest of the codebase and was flagged in the audit.
+- **Risk:** baixo. Type hints are additive; no behavior changes. Existing callers pass strings — no incompatibility.
+- **Impact:** 1 file (`app/Services/EmailService.php`). Callers in `EmailVerificationService` will benefit from IDE-checked types.
+
+---
+
+#### R-20 — Rewrite misleading docblock above `RedirectController::dispatchTracking()` (Phase 3 candidate)
+
+- **What:** fix the docblock at line 117 of `app/Http/Controllers/Links/RedirectController.php` which says "increment the denormalised click counter directly via DB" — the method only dispatches `ProcessLinkClickJob`; the counter increment happens inside the job.
+- **Rationale:** the misleading comment will cause future developers to misunderstand the click-tracking flow and look in the wrong place when debugging counter discrepancies.
+- **Risk:** baixo. Documentation-only change; zero functional impact.
+- **Impact:** 1 file (`app/Http/Controllers/Links/RedirectController.php`). Listed here for completeness; scheduled for Phase 3 PHPDoc pass.
+
+---
+
+#### R-21 — Clean up the 31 phpstan baseline errors
+
+- **What:** fix the 31 real errors reported across 16 files (see Section 15 — phpstan baseline state). Most are in `nullsafe.neverNull`, `property.notFound` on `Click::$clicks`, `notIdentical.alwaysTrue`, and stale ignore patterns.
+- **Rationale:** the phpstan baseline was pruned of stale entries in commit `3fbf7c0`; the remaining 31 errors are real and can mask new regressions. Resolving them tightens the static analysis net.
+- **Risk:** baixo per error (most are nullsafe / type annotation fixes), but the volume (~16 files) means meaningful time. Suggest deferring to a dedicated post-plan PR rather than folding into Phase 2.
+- **Impact:** 16 files across controllers, services, models. No behavioral changes expected.
+
+---
+
+#### R-MASS-PINT — Run `vendor/bin/pint` over `app/` and `tests/` in an isolated commit
+
+- **What:** run `./vendor/bin/pint app/ tests/` and commit any formatting changes in a single isolated commit with no other changes mixed in.
+- **Rationale:** Pint is installed and the codebase was normalized in commit `1ec4533` but has since received new files. Running Pint idempotently confirms formatting consistency or surfaces new violations for review.
+- **Risk:** baixo. Formatting-only; CI-safe.
+- **Impact:** unknown until run — likely a no-op or near-no-op. If not, that itself is a finding.
+
+---
+
+### Médio risco
+
+#### R-09 — Fix `AuthController::googleLogin` — implement or remove (product decision required)
+
+- **What:** the route `POST /api/auth/google` is declared in `routes/api.php:55` and points to `AuthController@googleLogin`, but the method does not exist in `app/Http/Controllers/Auth/AuthController.php`. Any request to this route will throw a `BadMethodCallException` at runtime.
+- **Decision needed:** either (a) implement `googleLogin` using a Google OAuth flow, or (b) remove the route from `routes/api.php` and remove any frontend reference to `POST /api/auth/google`. **Phase 2 cannot resolve this without a product direction call.**
+- **Rationale:** this is a runtime bug, not a cleanup. If (b), the frontend's Google login button (if any) must also be removed or disabled.
+- **Risk:** médio — affects the auth surface; needs the human to decide direction (implement vs. remove).
+- **Impact:** at minimum 1 file (`routes/api.php`); if implemented, also `app/Http/Controllers/Auth/AuthController.php` plus any OAuth config.
+
+---
+
+#### R-15 — Refactor `InsightsAnalyticsService` to resolve generators via container
+
+- **What:** instead of constructing all 8 generators inline (`new GeographicInsightGenerator`, etc.), accept either a tagged collection from the container (register all generators in `AppServiceProvider` with a tag, inject via `$app->tagged(...)`) or an `InsightGeneratorRegistry` pre-populated by the provider.
+- **Rationale:** generators constructed inline are non-substitutable for testing and cannot be swapped via the service container. This makes `InsightsAnalyticsService` untestable in isolation.
+- **Risk:** médio — changes the seam between `InsightsAnalyticsService` and its generators; requires updating `AppServiceProvider` bindings and potentially the `InsightsAnalyticsInterface` contract (if the interface is unchanged, this is transparent to callers). Needs test coverage update.
+- **Impact:** 3 files (`app/Services/Analytics/InsightsAnalyticsService.php`, `app/Providers/AppServiceProvider.php`, possibly `app/Services/Analytics/Insights/InsightGeneratorRegistry.php`). Existing tests in `AnalyticsStructureTest` exercise the final output shape — those should remain green.
+
+---
+
+#### R-16 — Fix `MetricsService::clearUserMetricsCache` glob no-op
+
+- **What:** `Cache::forget("metrics:user:{$userId}:*")` is a no-op for any cache driver that is not Redis with pattern-delete support. Options: (a) switch the cache store for metrics keys to a Redis store and use `Cache::store('redis')->connection()->del(...)` with a pattern scan, or (b) enumerate the 6–8 specific cache keys that `MetricsService` writes and call `Cache::forget` for each of them explicitly.
+- **Rationale:** the current method silently does nothing — a user clearing their metrics cache via any route that calls this method gets no actual cache invalidation. Option (b) is safer: no Redis-specific dependency, no glob, deterministic.
+- **Risk:** médio — touches cache invariants; any change to metrics cache keys in the future must also be reflected in the explicit forget list. A missed key = stale cache.
+- **Impact:** 1 file (`app/Services/Analytics/MetricsService.php`). No external callers beyond `LinkMetaController::batchMeta` (indirectly) and `MetricsController::clearCache` (orphan — see R-05).
+
+---
+
+#### R-17 — Re-enable TLS verification in `LinkPreviewService` Guzzle client
+
+- **What:** change `'verify' => false` to `'verify' => true` (or remove the key — Guzzle defaults to `true`) in `app/Services/Links/LinkPreviewService.php`'s Guzzle client constructor. Similarly, `LinkHealthCheckJob` also disables SSL verification for `HEAD` requests.
+- **Rationale:** disabling TLS verification (`'verify' => false`) means man-in-the-middle attacks against OG metadata fetches are undetected. A malicious response could return arbitrary metadata for a shortened link's preview. This is a security concern.
+- **Risk:** médio — re-enabling `verify` means some destination URLs with broken or self-signed certificates will fail to fetch a preview (they will return empty metadata instead of potentially spoofed metadata). This is the safer behavior, but it may noticeably affect preview success rate. Needs a product call if preview success rate is tracked.
+- **Impact:** 2 files (`app/Services/Links/LinkPreviewService.php`, `app/Jobs/LinkHealthCheckJob.php`).
+
+---
+
+### Alto risco
+
+#### R-18 — Harden `EmailVerificationToken` token invalidation against race condition
+
+- **What:** the static methods `createEmailVerificationToken` and `createPasswordResetToken` perform a non-atomic `UPDATE` (mark old tokens as used) followed by an `INSERT` (create a new token). Under concurrent identical requests (e.g., double-tap on "resend verification"), both requests can read "no valid token found", each issue their own `INSERT`, and the user ends up with two valid tokens.
+- **Recommended approach:** wrap the two statements in `DB::transaction(...)` with an explicit table lock, or rewrite as a single `INSERT ... ON CONFLICT (email, type) DO UPDATE` with a unique constraint on `(email, type, used)` — but PostgreSQL partial index semantics make this complex. The simplest safe fix is `DB::transaction()` with `NOWAIT` lock escalation.
+- **Risk:** alto — touches the security-critical email verification and password-reset auth flows. Requires careful testing under load and review of the token table schema. **Explicitly requires secondary approval before Phase 2 execution.**
+- **Impact:** 1 file (`app/Models/EmailVerificationToken.php`). Integration tests for concurrent token creation would also be needed.
+
+---
+
+### Condicional
+
+#### R-19 — Add covering composite index for `ChartRepository::clicksByCampaign` join
+
+- **What:** add a migration that creates a composite index on `link_utms` covering `(click_id, utm_campaign)` to support the three-table join in `ChartRepository::clicksByCampaign`.
+- **Rationale:** the join path `link_utms → clicks → links` has no dedicated covering index; the query forces a full scan of `link_utms` for user-scoped aggregation.
+- **Conditional:** this item is **moot if R-03 is approved** — `ChartRepository` is an orphan class that would be deleted. List it here only as a finding for the record. If `ChartRepository` is retained, treat this as baixo-risk (additive migration).
+- **Impact:** 1 new migration file. Conditional on R-03 disposition.
+
+---
 
 ## 17. Suspeitos de código órfão
 
-_To be filled in Task 1.10._
+> Items in this section are *suspected* orphans with less than 100 % confidence, or where deletion requires side-effect investigation that is not yet complete. Confirmed orphans are listed in Section 16 (R-01 through R-08).
+
+| Suspect | Evidence | Confidence | Recommended action |
+|---|---|---|---|
+| `BaseController::serverError` | Declared `protected` — not visible to external callers. Used by subclasses; check all controllers that extend `BaseController` before concluding it is unused within the class hierarchy. | Suspect only — method is `protected` and used internally in error paths. | Verify callers with `grep -rn "serverError" app/Http/Controllers/` before any action. Keep unless zero hits. |
+| `BaseController::linkNotFound` | Same as above — `protected` helper. | Suspect only. | Same: verify with grep. |
+| `MetricsController` (5 actions: `getDashboardMetrics`, `getMetricsByCategory`, `getLinkMetrics`, `compareMetrics`, `clearCache`) | No routes. The class itself is a confirmed orphan (see R-05 in Section 16). Individual action methods are listed here as suspects in case any of them are also referenced as static helpers or in Artisan commands before deletion is approved. | High (confirmed orphan class) | Delete entire class if R-05 is approved. No per-method analysis needed since the class itself is unrouted. |
+| `LinkTrackingService::resolveRealUserIP` | Method is called from `RedirectController` before dispatching the job (Section 2 notes this). Appears active — not an orphan. Listed here because it duplicates logic in `RedirectMetricsCollector::getRealUserIP`. | Low suspicion (likely active) | Not an orphan. Consider extracting shared IP-resolution logic into a standalone helper (not in scope for Phase 2). |
+| `EmailService::testConnection` | Sends a real email to `test@example.com` when called. Likely used only by `TestEmailCommand`. No other callers found in `app/`. | Suspect — may be production-only CLI utility | Verify with `grep -rn "testConnection" app/` — if sole caller is `TestEmailCommand`, the method is intentionally kept for ops use. Keep. |
+| `EmailService::getSendGridConfiguration` and `getMailConfiguration` | Pure read-only helpers. Called from `TestEmailCommand`. No evidence of controller or service callers. | Suspect — may be ops-only | Same: verify, likely keep as intentional ops utilities. |
+| `Link::getShortedUrl()` | Helper method on `Link` model. Verify with `grep -rn "getShortedUrl\|shortedUrl" app/ tests/`. If unused, it is a naming anti-pattern (`shorted` is not standard English) and a deletion candidate. | Suspect — name is non-standard, usage unknown | Run grep before Phase 2; delete if zero callers. |
+| `CreateLinkDTO::toArray` filtering behavior (zero/empty string stripping) | `array_filter(..., fn ($value) => $value !== null)` will preserve `false` but strip `0` and `""`. This may silently drop valid falsy values. Not an orphan but a logic suspect. | Bug suspect, not orphan | Flag for review during Phase 3 PHPDoc pass; add a comment at minimum. |
+| `UpdateExistingLinksUrls` command `handle()` body | Confirmed empty placeholder (see R-07 in Section 16). | High (confirmed orphan command) | Delete if R-07 is approved. |
+| `TemporalAnalyticsService::getAdvancedTemporalAnalytics` full-load | Loads all clicks for a link into PHP memory (`Click::where(...)->get()`). For high-traffic links, this is a memory/performance hazard, not a dead code issue. | Not an orphan — active code with a performance concern | Flag for future optimization. Not in scope for Phase 2. |
+| `InsightGeneratorInterface::generate` and all 8 generators | All 8 generators are constructed inline (see R-15). The interface and generators are active, but the inline construction pattern makes them effectively non-substitutable. Not dead — active on the insights endpoint. | Not orphans — active code | Addressed by R-15. |
+
+---
 
 ## 18. Estado do PHPDoc
 
-_To be filled in Task 1.10._
+> Heuristic: counted `public function` declarations vs `*/` (closing docblock) lines per file. Files where the gap exceeds 1 likely have undocumented public methods. Manual verification required in Phase 3 because `*/` also closes inline block comments.
+
+### Controllers
+
+| File | pubs | docs | gap | Notes |
+|---|---|---|---|---|
+| `app/Http/Controllers/Auth/AuthController.php` | 13 | 12 | 1 | One public method (likely `googleLogin` stub) lacks a docblock. |
+| `app/Http/Controllers/Links/LinkMetaController.php` | 6 | 5 | 1 | One method undocumented. |
+| `app/Http/Controllers/Analytics/AnalyticsController.php` | 8 | 9 | 0 | Well covered. |
+| `app/Http/Controllers/Links/LinkController.php` | 10 | 10 | 0 | Well covered. |
+| `app/Http/Controllers/Links/PublicLinkController.php` | 4 | 4 | 0 | Well covered. |
+| `app/Http/Controllers/Links/RedirectController.php` | 2 | 4 | 0 | Extra `*/` from block comments; well covered. |
+| `app/Http/Controllers/MetricsController.php` | 6 | 6 | 0 | Fully documented (orphan class — see R-05). |
+
+**Controller layer:** mostly well-documented. Two files have a gap of 1; neither is critical for Phase 3.
+
+---
+
+### Services
+
+| File | pubs | docs | gap | Notes |
+|---|---|---|---|---|
+| `app/Services/Analytics/LinkAnalyticsOrchestrator.php` | 7 | 0 | **7** | No docblocks at all. Highest-priority Phase 3 target. |
+| `app/Services/Analytics/Support/UserAgentParser.php` | 3 | 0 | **3** | No docblocks. |
+| `app/Services/Analytics/Insights/InsightGeneratorRegistry.php` | 2 | 0 | **2** | No docblocks. |
+| `app/Services/Analytics/GeographicAnalyticsService.php` | 1 | 0 | 1 | No docblock on sole public method. |
+| `app/Services/Links/LinkPreviewService.php` | 2 | 1 | 1 | One of two public methods undocumented. |
+| `app/Services/Links/LinkSafetyService.php` | 1 | 0 | 1 | No docblock on sole public method. |
+| `app/Services/Onboarding/OnboardingDemoDataService.php` | 1 | 0 | 1 | No docblock on sole public method. |
+| `app/Services/Analytics/Insights/InsightGeneratorInterface.php` | 1 | 0 | 1 | Interface contract method undocumented. |
+| `app/Services/Analytics/Insights/Generators/DeviceInsightGenerator.php` | 1 | 0 | 1 | (×8 generators — same pattern for all 8) |
+| `app/Services/Links/LinkService.php` | 9 | 9 | 0 | Well covered. |
+| `app/Services/EmailService.php` | 8 | 10 | 0 | Well covered. |
+| `app/Services/Analytics/MetricsService.php` | 10 | 20 | 0 | Extra `*/` from section comments; well covered. |
+| `app/Services/Links/LinkTrackingService.php` | 2 | 9 | 0 | Extra `*/` from phase headers; well covered. |
+
+**Service layer:** the analytics sub-layer is the weakest. `LinkAnalyticsOrchestrator` (7 undocumented public methods) and the 8 insight generators (each with 0 docblocks) account for the majority of the PHPDoc deficit. Phase 3 should prioritize this layer.
+
+---
+
+### Repositories
+
+| File | pubs | docs | gap | Notes |
+|---|---|---|---|---|
+| `app/Repositories/ChartRepository.php` | 13 | 13 | 0 | Well covered (orphan — see R-03). |
+| `app/Repositories/LinkRepository.php` | 8 | 9 | 0 | Well covered. |
+| `app/Repositories/WordRepository.php` | 5 | 5 | 0 | Fully documented (orphan — see R-02). |
+
+**Repository layer:** no PHPDoc gap. Both orphan repositories happen to be well-documented — another sign they were never completed or tested rather than gradually abandoned.
+
+---
+
+### Models
+
+| File | pubs | docs | gap | Notes |
+|---|---|---|---|---|
+| `app/Models/Link.php` | 7 | 0 | **7** | No docblocks at all. Highest-priority model target for Phase 3. |
+| `app/Models/Click.php` | 2 | 1 | 1 | One method undocumented. |
+| `app/Models/LinkPreview.php` | 1 | 0 | 1 | No docblock. |
+| `app/Models/LinkUtm.php` | 1 | 0 | 1 | No docblock. |
+| `app/Models/User.php` | 8 | 10 | 0 | Well covered. |
+| `app/Models/EmailVerificationToken.php` | 3 | 8 | 0 | Well covered (extra `*/` from helper comments). |
+| `app/Models/LinkAudit.php` | 2 | 4 | 0 | Well covered. |
+
+**Model layer:** `Link` is the critical gap — 7 public methods with zero docblocks. Given that `Link` is the core domain model (cache helpers, expiry, click-limit logic), Phase 3 must document it first.
+
+---
+
+### Jobs
+
+| File | pubs | docs | gap | Notes |
+|---|---|---|---|---|
+| `app/Jobs/FetchLinkPreviewJob.php` | 2 | 0 | **2** | No docblocks. |
+| `app/Jobs/LinkHealthCheckJob.php` | 1 | 0 | 1 | No docblock. |
+| `app/Jobs/ProcessLinkClickJob.php` | 2 | 3 | 0 | Well covered. |
+| `app/Jobs/SeedDemoLinkJob.php` | 3 | 3 | 0 | Well covered. |
+
+**Job layer:** `FetchLinkPreviewJob` and `LinkHealthCheckJob` are undocumented. Phase 3 should cover these in the same pass as models.
+
+---
+
+### DTOs
+
+| File | pubs | docs | gap | Notes |
+|---|---|---|---|---|
+| `app/DTOs/CreateLinkDTO.php` | 3 | 4 | 0 | Well covered. |
+| `app/DTOs/CreatePublicLinkDTO.php` | 4 | 5 | 0 | Well covered. |
+| `app/DTOs/LinkDTO.php` | 2 | 4 | 0 | Well covered (orphan — see R-04). |
+| `app/DTOs/UpdateLinkDTO.php` | 4 | 5 | 0 | Well covered. |
+
+**DTO layer:** no PHPDoc gap.
+
+---
+
+### PHPDoc summary by layer
+
+The **analytics services sub-layer** (particularly `LinkAnalyticsOrchestrator`, the 8 insight generators, and `UserAgentParser`) and the **`Link` model** are the most underdocumented areas of the codebase. Controllers and DTOs are in good shape. Phase 3 should prioritize in this order: (1) `Link` model, (2) `LinkAnalyticsOrchestrator`, (3) the 8 generators and `InsightGeneratorRegistry`, (4) the remaining undocumented services (`GeographicAnalyticsService`, `LinkPreviewService`, `LinkSafetyService`, `OnboardingDemoDataService`), (5) jobs (`FetchLinkPreviewJob`, `LinkHealthCheckJob`).
+
+---
 
 ## 19. Resumo executivo
 
-_To be filled in Task 1.10._
+- **Snapshot:** the backend has 8 controllers (7 routed + 1 orphan `MetricsController`), ~15 services (spanning links, analytics, email, onboarding, and velocity tracking), 3 repositories (1 active, 2 orphan), 4 jobs, 4 DTOs (1 orphan), and 22 migrations. The layered architecture (Controllers → Services → Repositories → Models, with Contracts at the seam) is well-respected across the active code surface. PHPUnit coverage exists for the two most critical paths (redirect + click tracking) and for the core analytics endpoints.
+
+- **Top 3 must-fix findings:**
+  1. **`AuthController::googleLogin` is a ghost route** — `POST /api/auth/google` is registered in `routes/api.php` but the method does not exist in the controller. Any invocation throws a `BadMethodCallException`. This is a live bug in the auth surface. Requires a product decision: implement or remove (R-09).
+  2. **`WordRepository` will fatal on any call** — it imports `App\Models\Word` which does not exist. The class cannot be instantiated. Zero callers, but its presence in the codebase creates confusion. Delete (R-02).
+  3. **TLS verification is disabled in `LinkPreviewService`** — `'verify' => false` in the Guzzle client allows MITM attacks against OG metadata fetches. `LinkHealthCheckJob` has the same issue. Re-enable (R-17), pending a product call on acceptable preview failure rate for sites with broken certs.
+
+- **Top 3 high-value cleanup opportunities:**
+  1. **Delete all confirmed dead code in one batch** (R-01 through R-08): 6 dead files / methods, 2 interface entries, 1 bootstrap alias. Zero call-site updates needed. This removes ~450 lines of misleading code from the active surface.
+  2. **Centralize logging via AppLogger** (R-10): 3 files use `Log::*` directly in violation of CLAUDE.md. Replacing them closes the logging convention gap and ensures Redis-downtime events in `ClickVelocityService` are correlated by `request_id`.
+  3. **Tighten phpstan baseline** (R-21): 31 real errors across 16 files represent the largest static-analysis debt. Resolving them makes future type regressions detectable.
+
+- **PHPDoc gap by layer:** analytics services (especially `LinkAnalyticsOrchestrator`, 8 generators) and the `Link` model are the most underdocumented — combined gap of ~18 undocumented public methods. Controllers and DTOs are well-covered. Phase 3 should begin with `Link` and `LinkAnalyticsOrchestrator`.
+
+- **Surprising findings during audit:**
+  - `MetricsService::clearUserMetricsCache` is effectively a no-op: `Cache::forget` with a glob pattern silently does nothing on non-Redis cache drivers (R-16). This means any feature that allows users to "refresh" their metrics cache is currently broken.
+  - `ChartRepository` is a fully-documented, well-indexed 13-method class with absolutely zero callers anywhere in the codebase. It was likely the original analytics layer, entirely superseded by the domain analytics services, but never deleted.
+  - The two orphan repositories (`ChartRepository` and `WordRepository`) happen to have complete PHPDoc coverage — suggesting they were carefully written and then abandoned rather than gradually decaying.
+  - `resendVerificationEmail` sits in the `api.auth:api`-only group with no rate limit, while all other auth-adjacent endpoints are under `throttle:login` (5/min). This means an authenticated user with an unverified email can hammer the resend endpoint without limit.
+
+- **Recommended Phase 2 execution order (baixo-risk batch):**
+  The following items can be batched together in Phase 2 with no cross-item dependencies and no call-site updates required from external code:
+  1. **R-02** — Delete `WordRepository.php` (fatal on instantiation; zero callers)
+  2. **R-04** — Delete `LinkDTO.php` (zero callers)
+  3. **R-07** — Delete `UpdateExistingLinksUrls` command (empty stub)
+  4. **R-05** — Delete `MetricsController.php` (unrouted; zero callers) — approve R-03 first to confirm `ChartRepository` (its implicit sibling) is also gone
+  5. **R-03** — Delete `ChartRepository.php` (verify one grep first)
+  6. **R-08** — Remove `metrics.collector` alias from `bootstrap/app.php`
+  7. **R-06** — Remove orphan methods from `LinkController` (`auditHistory`, `showBySlug`)
+  8. **R-01** — Remove `processRedirect` / `incrementClicks` from service + repository + interfaces
+  9. **R-10** — Replace `Log::*` with `AppLogger::*` in 3 files
+  10. **R-11** — Extract shared `extractPrimaryLanguage` (DRY)
+  11. **R-13** — Introduce `LinkAnalyticsOrchestratorInterface`
+  12. **R-14** — Add type hints to `EmailService`
+  13. **R-12** — Replace service-locator in `LinkTrackingService` (verify job instantiation pattern first)
+  14. **R-MASS-PINT** — Run Pint in an isolated commit after all functional changes above
+  Medium-risk items (R-15, R-16, R-17) and the alto-risk item (R-18) require explicit approval each, per the plan's Hard Rules.
+
+- **Open questions for the human (approval gate):**
+  1. **R-09 — `googleLogin`:** should the Google OAuth flow be implemented, or should the route and any frontend reference be removed? This is the only finding that requires a product direction call before Phase 2 can proceed on auth.
+  2. **R-17 — TLS verify:** should TLS verification be re-enabled in `LinkPreviewService` and `LinkHealthCheckJob`, accepting that some sites with broken or self-signed certificates will no longer produce previews?
+  3. **R-15 — Generator injection:** is it acceptable to refactor `InsightsAnalyticsService` to resolve generators via the container (changes the DI seam and requires updating `AppServiceProvider`)? This enables generator-level unit testing but adds provider boilerplate.
+  4. **R-16 — Metrics cache:** should option (a) (Redis-tagged store) or option (b) (explicit key enumeration) be used to fix `clearUserMetricsCache`?
+  5. **R-18 — Race condition:** is hardening `EmailVerificationToken` invalidation against concurrent requests (race condition in token creation) in scope for Phase 2, given that it requires careful transaction testing on the security-critical auth flow?
+  6. **`resendVerificationEmail` rate limit gap:** the endpoint sits in the `api.auth:api` group with no `throttle:login`, unlike every other auth endpoint. Should a rate limit be added (not currently in the refactor list — would become R-22)?
