@@ -121,54 +121,6 @@ parameters:
 			path: app/Http/Controllers/Links/RedirectController.php
 
 		-
-			message: '#^Call to method clearUserMetricsCache\(\) on an unknown class App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Call to method getLinkMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Call to method getUserAudienceMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 2
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Call to method getUserBasicMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 5
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Call to method getUserGeographicMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 2
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Call to method getUserPerformanceMetrics\(\) on an unknown class App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 2
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Parameter \$metricsService of method App\\Http\\Controllers\\MetricsController\:\:__construct\(\) has invalid type App\\Services\\MetricsService\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/MetricsController.php
-
-		-
-			message: '#^Property App\\Http\\Controllers\\MetricsController\:\:\$metricsService has unknown class App\\Services\\MetricsService as its type\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/MetricsController.php
-
-		-
 			message: '#^Return type \(void\) of method App\\Http\\Middleware\\ApiAuthenticate\:\:unauthenticated\(\) should be compatible with return type \(never\) of method Illuminate\\Auth\\Middleware\\Authenticate\:\:unauthenticated\(\)$#'
 			identifier: method.childReturnType
 			count: 1
