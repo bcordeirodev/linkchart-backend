@@ -328,7 +328,7 @@
 - **Side effects:** delegates all persistence to `LinkRepositoryInterface` (reads and writes `links` table); `processRedirect` calls `linkRepository->incrementClicks` which updates the `links.clicks` column.
 - **Notes:**
   - All auth-scoped reads use `auth()->guard('api')->id()` inline.
-  - `processRedirect` is not used by `RedirectController` in production — `RedirectController` uses `Link::findActiveBySlugCached()` directly and dispatches `ProcessLinkClickJob`. `processRedirect` may be dead code — flagged for Task 1.10.
+  - `processRedirect(string $slug)` (line 97) is dead code: it has no callers in `app/`, `tests/`, or `routes/` (verified via grep). It is the only caller of `LinkRepository::incrementClicks(string $slug)`, so that repository method is also effectively dead. Both are flagged for Task 1.10 review (potential removal). The active increment of `links.clicks` happens exclusively in `LinkTrackingService::registrarCliqueFromPayload` (line 108), invoked by `ProcessLinkClickJob`.
 
 ---
 
@@ -345,7 +345,7 @@
   - Called exclusively from `ProcessLinkClickJob` (asynchronous) — never on the HTTP request path.
   - `resolveRealUserIP` is a pure utility method with no side effects; called in `RedirectController` before dispatching the job.
   - Uses `app()->make(ClickVelocityService::class)` rather than constructor injection — flagged for Task 1.10.
-  - `links.clicks` is incremented here AND in `RedirectController` (via `DB::table->increment`). This appears to be a double-increment — **flagged for Task 1.10**.
+  - The docblock above `RedirectController::dispatchTracking()` (line 117) says "increment the denormalised click counter directly via DB" — this is misleading because the method itself only dispatches the job; the increment happens later inside the job. Rewrite candidate for Phase 3 PHPDoc work.
 
 ---
 
