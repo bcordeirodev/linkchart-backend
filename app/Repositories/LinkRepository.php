@@ -84,16 +84,6 @@ class LinkRepository implements LinkRepositoryInterface
     }
 
     /**
-     * Incrementa o contador de cliques de um link.
-     */
-    public function incrementClicks(string $slug): bool
-    {
-        return Link::where('slug', $slug)
-            ->where('is_active', true)
-            ->increment('clicks') > 0;
-    }
-
-    /**
      * Verifica se um slug já existe.
      */
     public function slugExists(string $slug): bool

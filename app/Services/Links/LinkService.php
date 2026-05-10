@@ -92,38 +92,6 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Processa o redirecionamento de um link encurtado.
-     */
-    public function processRedirect(string $slug): ?string
-    {
-        $link = $this->linkRepository->findBySlug($slug);
-
-        if (! $link) {
-            return null;
-        }
-
-        // Verifica se o link não expirou
-        if ($link->expires_at && now()->isAfter($link->expires_at)) {
-            return null;
-        }
-
-        // Verifica se já pode ser usado (starts_in)
-        if ($link->starts_in && now()->isBefore($link->starts_in)) {
-            return null;
-        }
-
-        // Verifica se atingiu o limite de cliques
-        if ($link->hasReachedClickLimit()) {
-            return null;
-        }
-
-        // Incrementa contador de cliques
-        $this->linkRepository->incrementClicks($slug);
-
-        return $link->original_url;
-    }
-
-    /**
      * Cria um novo link público encurtado (sem usuário).
      */
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link
