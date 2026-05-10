@@ -865,7 +865,65 @@ All 8 generators implement `InsightGeneratorInterface` and are registered in `In
 
 ## 7. Jobs
 
-_To be filled in Task 1.6._
+### ProcessLinkClickJob
+
+- **Trigger:** `RedirectController::dispatchTracking()` line 143 — `ProcessLinkClickJob::dispatch($link->id, $payload)`. Dispatched for every human (non-bot) redirect hit, immediately before the 302 response is returned.
+- **Queue:** `default` (no explicit `onQueue()` call and no `$queue` property set).
+- **Retry policy:** `$tries = 3`, `$backoff = 10` (seconds), `$timeout = 30` (seconds).
+- **Side effects:**
+  - Calls `LinkTrackingService::registrarCliqueFromPayload($linkId, $payload)` which writes one `Click` row to `clicks` and optionally one `LinkUtm` row to `link_utms` (if UTM params are present).
+  - Enriches the click with GeoIP data via `torann/geoip`, User-Agent data via `jenssegers/agent`, temporal/behavioral/performance fields.
+  - Logs to the `jobs` channel (`AppLogger::jobStarted`, `AppLogger::jobSucceeded`, `AppLogger::jobFailed`).
+  - Logs to the `tracking` channel via `AppLogger::trackingClickRegistered` (and warning variants on GeoIP/UA failure).
+- **Idempotency:** **not idempotent** — each invocation inserts a new `Click` row unconditionally. On retry after a partial failure (e.g., a crash after inserting `Click` but before the job ack), a duplicate click row will be written. No deduplication guard exists.
+- **On final failure:** after exhausting all 3 tries, Laravel moves the job to the failed-jobs table. There is no `failed()` method on this class; the last `AppLogger::jobFailed` call in the `catch` block is the final log entry before the exception propagates and the framework records failure.
+- **Notes:** uses the `HasLogContext` trait. `pushLogContext()` is called at the start of `handle()` and `popLogContext()` is called in a `finally` block, propagating the originating HTTP request's `request_id` (from `$payload['request_id']`) into every log line emitted during job execution.
+
+---
+
+### SeedDemoLinkJob
+
+- **Trigger:** `UserObserver::created()` — `SeedDemoLinkJob::dispatch($user->id)`. Fired immediately after a new user is persisted, before the registration HTTP response is sent.
+- **Queue:** `default` (no explicit `onQueue()` call).
+- **Retry policy:** `$tries = 3`, `$backoff = 30` (seconds), `$timeout = 60` (seconds).
+- **Side effects:**
+  - Calls `OnboardingDemoDataService::run($user)` which seeds demo `Link` rows and 1,200 synthetic `Click` rows for the new user.
+  - Logs to the `jobs` channel (`AppLogger::jobStarted`, `AppLogger::jobSucceeded`, `AppLogger::jobFailed`).
+  - If the user is not found at execution time, the job exits early (treating it as success) — no error is raised.
+- **Idempotency:** **not idempotent** — each invocation calls `OnboardingDemoDataService::run` which creates additional demo links and clicks. A retry after partial failure will result in duplicate demo data. In practice, the early-exit guard (user not found) is the only safety net.
+- **On final failure:** has an explicit `failed(Throwable $e): void` method that calls `AppLogger::jobFailed(static::class, $e, $this->tries)` as the final-failure callback. The failed job is also recorded in the failed-jobs table by the framework.
+- **Notes:** uses the `HasLogContext` trait. `logContextRequestId()` returns `null` (no originating request_id — the job is dispatched after the registration response is sent), so `pushLogContext()` generates a fallback `job_<hex>` id. `logContextUserId()` returns `$this->userId` so logs carry the new user's id.
+
+---
+
+### FetchLinkPreviewJob
+
+- **Trigger:** dispatched from two places in `LinkMetaController`:
+  - `batchMeta()` line 47 — `FetchLinkPreviewJob::dispatch((int) $id, $link->original_url)` — triggered when a preview is missing or stale (older than 24 hours) for any link in the batch.
+  - `preview()` line 100 — `FetchLinkPreviewJob::dispatch($link->id, $link->original_url)` — same staleness check for a single link preview endpoint.
+- **Queue:** `default` (no explicit `onQueue()` call).
+- **Retry policy:** `$tries = 2`, no explicit `$backoff` property (Laravel default: 0 seconds), `$timeout = 30` (seconds).
+- **Side effects:**
+  - Calls `LinkPreviewService::fetchPreview($url)` which performs an external HTTP request to fetch OG metadata from the original URL.
+  - Writes to the `link_previews` table via `LinkPreview::updateOrCreate(['link_id' => $linkId], [..., 'fetched_at' => now()])`.
+- **Idempotency:** **idempotent via `updateOrCreate`** — retrying produces an upsert on `link_id`, so no duplicate rows are created. The `fetched_at` field is always overwritten with `now()`.
+- **On final failure:** no `failed()` method and no `AppLogger` calls — failures are silently swallowed after exhausting retries (job moves to failed-jobs table with no domain-level side effect).
+- **Notes:** does not use the `HasLogContext` trait — log lines from this job carry no `request_id` correlation.
+
+---
+
+### LinkHealthCheckJob
+
+- **Trigger:** scheduler only — `bootstrap/app.php` line 10 — `$schedule->job(new \App\Jobs\LinkHealthCheckJob)->hourly()->withoutOverlapping()`. Not dispatched from any application code.
+- **Queue:** `default` (no explicit `onQueue()` call).
+- **Retry policy:** `$tries = 1` (no retries), no explicit `$backoff`, `$timeout = 300` (seconds — 5 minutes for the full scan).
+- **Side effects:**
+  - Issues an HTTP `HEAD` request to every active link's `original_url` via Guzzle (timeout 5s, connect-timeout 3s, up to 5 redirects, SSL verification disabled).
+  - Processes links in chunks of 50 via `Link::where('is_active', true)->chunk(50, ...)`.
+  - For each link: updates `links.health_status` (`ok` or `error`) and `links.health_checked_at` via `DB::table('links')->where('id', $link->id)->update(...)`.
+- **Idempotency:** **idempotent** — each run overwrites `health_status` and `health_checked_at` in place. Re-running produces the same result (assuming the target URL's state is unchanged).
+- **On final failure:** no `failed()` method and no `AppLogger` calls. Individual URL check failures are caught and silently recorded as `status = 'error'`; a catastrophic failure of the whole job moves it to the failed-jobs table with no domain-level notification.
+- **Notes:** does not use the `HasLogContext` trait. `withoutOverlapping()` prevents a second scheduler invocation while the previous run is still processing — important given the potentially long scan duration across all active links.
 
 ## 8. Middlewares
 
