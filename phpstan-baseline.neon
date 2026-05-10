@@ -1,12 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Parameter \#1 \$id of class App\\DTOs\\LinkDTO constructor expects string\|null, int given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/DTOs/LinkDTO.php
-
-		-
 			message: '#^Access to an undefined property App\\Http\\Controllers\\Analytics\\AnalyticsController\:\:\$advancedAnalyticsService\.$#'
 			identifier: property.notFound
 			count: 5
