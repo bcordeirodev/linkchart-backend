@@ -44,13 +44,6 @@ interface LinkServiceInterface
     public function deleteLink(string $id): bool;
 
     /**
-     * Processa o redirecionamento de um link encurtado.
-     *
-     * @return string|null URL original ou null se não encontrado
-     */
-    public function processRedirect(string $slug): ?string;
-
-    /**
      * Cria um novo link público encurtado (sem usuário).
      */
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link;

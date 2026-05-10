@@ -46,11 +46,6 @@ interface LinkRepositoryInterface
     public function delete(string $id, int $userId): bool;
 
     /**
-     * Incrementa o contador de cliques de um link.
-     */
-    public function incrementClicks(string $slug): bool;
-
-    /**
      * Verifica se um slug já existe.
      */
     public function slugExists(string $slug): bool;
