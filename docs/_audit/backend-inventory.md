@@ -626,11 +626,242 @@ All 8 generators implement `InsightGeneratorInterface` and are registered in `In
 
 ## 5. DTOs
 
-_To be filled in Task 1.5._
+### CreateLinkDTO
+
+- **Direction:** input
+- **Properties:**
+  - `string $original_url` (required)
+  - `int $user_id` (required)
+  - `?string $title`
+  - `?string $description`
+  - `?string $expires_at`
+  - `bool $is_active` (default `true`)
+  - `?string $starts_in`
+  - `?string $custom_slug`
+  - `?int $click_limit`
+  - `?string $utm_source`, `?string $utm_medium`, `?string $utm_campaign`, `?string $utm_term`, `?string $utm_content`
+- **Used by:**
+  - `LinkController::store` — calls `CreateLinkDTO::fromRequest($request)` to build the DTO (consumer).
+  - `LinkService::createLink(CreateLinkDTO $linkDTO)` — accepts it and delegates to `LinkRepository::create($dto->toArray())`.
+  - `LinkServiceInterface::createLink` — declares it in the method signature.
+- **Notes:**
+  - `readonly` properties (PHP 8.1 style, assigned via constructor body).
+  - Static factory `fromRequest(Request $request): self` resolves `user_id` via `Auth::id()` internally — couples instantiation to the HTTP context.
+  - `toArray()` uses `array_filter(..., fn ($value) => $value !== null)` which silently drops `is_active = false` if that value is `false` but not null — a subtle bug candidate (false is not null, so this is safe; `false` passes `!== null`). However `0` and `""` would be dropped — flagged for Task 1.10.
+  - Additional helpers: `isValidUrl(): bool` (pure URL validation).
+
+---
+
+### CreatePublicLinkDTO
+
+- **Direction:** input
+- **Properties:**
+  - `string $original_url` (required)
+  - `?string $title`
+  - `?string $slug`
+  - `bool $is_active` (default `true`)
+  - `?int $user_id` (always `null` for public links, documented in comment)
+- **Used by:**
+  - `PublicLinkController::store` — calls `CreatePublicLinkDTO::fromRequest($request)` (consumer).
+  - `LinkService::createPublicLink(CreatePublicLinkDTO $linkDTO)` — accepts it.
+  - `LinkServiceInterface::createPublicLink` — declares it in the method signature.
+- **Notes:**
+  - `readonly` constructor-promoted properties (PHP 8.1 syntax).
+  - Static factory `fromRequest(CreatePublicLinkRequest $request): self` — typed to the specific `FormRequest` subclass, unlike `CreateLinkDTO::fromRequest` which accepts the base `Request`.
+  - `toArray()` hardcodes `'clicks' => 0`, `'created_at' => now()`, `'updated_at' => now()` — sets audit timestamps inside the DTO, which is unusual and bypasses Eloquent's automatic timestamp management.
+  - Additional helpers: `isValidUrl(): bool`, `hasValidData(): bool`.
+
+---
+
+### LinkDTO
+
+- **Direction:** both (can represent input from a request or output from a model)
+- **Properties:**
+  - `?string $id`
+  - `string $original_url`
+  - `string $expires_at`
+  - `bool $is_active`
+  - `string $created_at`
+  - `string $updated_at`
+  - `string $starts_in`
+- **Used by:** _use site not found in `app/` or `tests/`_ — this DTO is an orphan with no callers.
+- **Notes:**
+  - **Not** `readonly`; all properties are mutable public fields.
+  - Has both `fromRequest(Request $request): self` and `fromModel(Link $link): self` static factories.
+  - Covers only 7 of the 20+ fields on `Link` (no `slug`, no UTM fields, no `click_limit`, no `title`/`description`) — likely superseded by the `LinkResource` API resource and the dedicated Create/Update DTOs. Flagged for removal in Task 1.10.
+  - `expires_at`, `created_at`, `updated_at`, `starts_in` are typed as `string` rather than `?Carbon` or `?datetime` — no null handling.
+
+---
+
+### UpdateLinkDTO
+
+- **Direction:** input
+- **Properties:**
+  - `?string $original_url`
+  - `?string $title`
+  - `?string $slug`
+  - `?string $description`
+  - `?string $expires_at`
+  - `?bool $is_active`
+  - `?string $starts_in`
+  - `?int $click_limit`
+  - `?string $utm_source`, `?string $utm_medium`, `?string $utm_campaign`, `?string $utm_term`, `?string $utm_content`
+- **Used by:**
+  - `LinkController::update` — calls `UpdateLinkDTO::fromRequest($request)` (consumer).
+  - `LinkService::updateLink(string $id, UpdateLinkDTO $linkDTO)` — accepts it.
+  - `LinkServiceInterface::updateLink` — declares it in the method signature.
+- **Notes:**
+  - `readonly` properties (PHP 8.1 style, assigned via constructor body).
+  - All properties nullable; `fromRequest` uses `$request->has('is_active')` to distinguish "not sent" from `false` — correctly avoids treating absent fields as explicit nulls.
+  - `toArray()` same `array_filter` pattern as `CreateLinkDTO` — strips all null values, preventing accidental overwrites of existing data on partial updates.
+  - Additional helpers: `hasDataToUpdate(): bool`, `isValidUrl(): bool`.
 
 ## 6. Models (and Observers)
 
-_To be filled in Task 1.5._
+### User
+
+- **Table:** `users`
+- **Relationships:**
+  - `links()` — `HasMany Link`
+  - `emailVerificationTokens()` — `HasMany EmailVerificationToken` (foreign key `email`, local key `email`)
+- **Casts:** `email_verified_at` → `datetime`; `email_verification_sent_at` → `datetime`; `email_verified` → `boolean`; `password` → `hashed`.
+- **Scopes:** _None._
+- **Observers:** registered via `User::observe(UserObserver::class)` in `AppServiceProvider::boot()` (line 35).
+- **Cache:** none.
+- **Helpers:**
+  - `hasVerifiedEmail(): bool` — checks both `email_verified` flag and `email_verified_at` being non-null.
+  - `markEmailAsVerified(): void` — sets `email_verified = true` and `email_verified_at = now()`.
+  - `canResendVerificationEmail(): bool` — enforces a 2-minute re-send cooldown via `email_verification_sent_at`.
+  - `markVerificationEmailSent(): void` — updates `email_verification_sent_at = now()`.
+  - `getJWTIdentifier()` / `getJWTCustomClaims()` — required by `JWTSubject` (tymon/jwt-auth).
+- **Notes:**
+  - Implements `JWTSubject` for `tymon/jwt-auth`.
+  - `$hidden` includes `password` and `remember_token`.
+  - The email-verification contract (`MustVerifyEmail`) is commented out; verification is handled by the custom `email_verified` boolean column rather than Laravel's built-in verification system.
+
+---
+
+### Link
+
+- **Table:** `links`
+- **Relationships:**
+  - `user()` — `BelongsTo User`
+  - `clicks()` — `HasMany Click`
+  - `preview()` — `HasOne LinkPreview`
+- **Casts:** `expires_at` → `datetime`; `starts_in` → `datetime`; `is_active` → `boolean`; `is_demo` → `boolean`; `health_checked_at` → `datetime`.
+- **Scopes:** _None._
+- **Observers:** none via `AppServiceProvider`. Cache invalidation is self-registered inside `static::booted()` — `saved` and `deleted` model events.
+- **Cache:**
+  - Key: `link:slug:{slug}` (via `slugCacheKey(string $slug): string`).
+  - TTL: `600` seconds (constant `CACHE_TTL_SECONDS = 600`).
+  - Invalidation triggered by `saved` event when: link was just created (`wasRecentlyCreated = true`) OR any of `[slug, is_active, expires_at, starts_in, original_url, click_limit]` changed.
+  - On slug rename: also forgets the previous slug key (`getOriginal('slug')`).
+  - `deleted` event always forgets the slug key.
+  - Public static access: `Link::findActiveBySlugCached(string $slug): ?self`.
+- **Helpers:**
+  - `isExpired(): bool` — returns `true` if `expires_at` is set and in the past.
+  - `hasReachedClickLimit(): bool` — returns `true` if `click_limit !== null && clicks >= click_limit`.
+  - `getRemainingClicks(): ?int` — returns `null` for unlimited; otherwise `max(0, click_limit - clicks)`.
+  - `getShortedUrl(): string` — returns `{config('app.redirect_url')}/{slug}`.
+- **Notes:**
+  - `is_demo` boolean differentiates real links from demo seed data (used by `OnboardingDemoDataService`).
+  - `health_status` and `health_checked_at` fields are present for link health monitoring (populated by `FetchLinkPreviewJob`).
+
+---
+
+### Click
+
+- **Table:** `clicks`
+- **Relationships:**
+  - `link()` — `BelongsTo Link`
+  - `utm()` — `HasOne LinkUtm`
+- **Casts:** none declared (all columns queried as raw types).
+- **Scopes:** _None._
+- **Observers:** none.
+- **Cache:** none.
+- **Helpers:** none.
+- **Notes:**
+  - The most column-rich model in the codebase: 50+ fillable fields spanning geographic data, device/browser/OS details, temporal enrichment (hour, day-of-week, month, weekend flag, business-hours flag), behavioral signals (return visitor, session clicks), navigation context (Sec-Fetch headers, Client Hints, HTTP protocol, language), viral/seasonal context, and quality scoring (Phase 1–3 enrichment migrations).
+  - No casts are declared despite several boolean-like fields (`is_mobile`, `is_tablet`, `is_desktop`, `is_bot`, `is_return_visitor`, `is_weekend`, `is_business_hours`, `is_holiday`, `is_data_saver`) — these are stored as the DB's native type and returned as integers or strings depending on the driver.
+
+---
+
+### LinkAudit
+
+- **Table:** `link_audits`
+- **Relationships:**
+  - `link()` — `BelongsTo Link`
+  - `user()` — `BelongsTo User`
+- **Casts:** `old_values` → `array`; `new_values` → `array`.
+- **Scopes:** _None._
+- **Observers:** none.
+- **Cache:** none.
+- **Helpers:** none (three class constants: `ACTION_CREATED`, `ACTION_UPDATED`, `ACTION_DELETED`).
+- **Notes:** pure append-only audit log; never updated after creation.
+
+---
+
+### LinkPreview
+
+- **Table:** `link_previews`
+- **Relationships:**
+  - `link()` — `BelongsTo Link`
+- **Casts:** `fetched_at` → `datetime`.
+- **Scopes:** _None._
+- **Observers:** none.
+- **Cache:** none.
+- **Helpers:** none.
+- **Notes:**
+  - `$primaryKey = 'link_id'` (non-standard primary key — the preview is a 1:1 extension of `Link`).
+  - `$incrementing = false` — primary key is not auto-incremented.
+  - `$timestamps = false` — no `created_at`/`updated_at`; `fetched_at` is used as the staleness indicator instead.
+
+---
+
+### LinkUtm
+
+- **Table:** `link_utms`
+- **Relationships:**
+  - `click()` — `BelongsTo Click`
+- **Casts:** none declared.
+- **Scopes:** _None._
+- **Observers:** none.
+- **Cache:** none.
+- **Helpers:** none.
+- **Notes:** stores the five UTM parameters (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`) extracted from the click's referrer URL or query string by `LinkTrackingService`. One row per click that had at least one UTM param.
+
+---
+
+### EmailVerificationToken
+
+- **Table:** `email_verification_tokens`
+- **Relationships:**
+  - `user()` — `BelongsTo User` (foreign key `email`, owner key `email`; non-FK join on email string).
+- **Casts:** `expires_at` → `datetime`; `used_at` → `datetime`; `used` → `boolean`.
+- **Scopes:** _None._
+- **Observers:** none.
+- **Cache:** none.
+- **Helpers:**
+  - `generateToken(): string` (static) — `hash('sha256', Str::random(60))`.
+  - `createEmailVerificationToken(string $email, ...): self` (static) — invalidates previous unused tokens of the same type before creating a new one (24 h TTL).
+  - `createPasswordResetToken(string $email, ...): self` (static) — same pattern with 1 h TTL.
+  - `isValid(): bool` — checks `!used && expires_at->isFuture()`.
+  - `markAsUsed(): void` — sets `used = true`, `used_at = now()`.
+  - `findValidToken(string $token, string $type): ?self` (static) — finds an unexpired, unused token.
+  - `cleanExpiredTokens(): int` (static) — bulk deletes expired or used tokens; intended for a scheduled command.
+- **Notes:**
+  - `type` column distinguishes `email_verification` from `password_reset` tokens.
+  - Token invalidation on `create*` methods is non-atomic (a `UPDATE` followed by an `INSERT`) — potential race condition under concurrent requests.
+
+---
+
+### Observers
+
+#### UserObserver
+
+- **Registered in:** `AppServiceProvider::boot()` line 35 via `User::observe(UserObserver::class)`.
+- **Reacts to:** `User::created` event.
+- **Action:** dispatches `SeedDemoLinkJob::dispatch($user->id)`, which invokes `OnboardingDemoDataService::run` asynchronously to seed a demo link with 1,200 synthetic clicks for the new user.
 
 ## 7. Jobs
 
