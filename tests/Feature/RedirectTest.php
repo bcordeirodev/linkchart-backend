@@ -255,4 +255,41 @@ class RedirectTest extends TestCase
             return true;
         });
     }
+
+    public function test_human_visitor_redirects_via_clean_url_without_r_prefix(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink(['original_url' => 'https://example.com/destino']);
+
+        $response = $this->withHeaders(['User-Agent' => self::HUMAN_UA])
+            ->get('/'.$link->slug);
+
+        $response->assertStatus(302);
+        $response->assertHeader('Location', 'https://example.com/destino');
+    }
+
+    public function test_clean_url_bot_receives_open_graph_html(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink(['original_url' => 'https://example.com/landing']);
+
+        $response = $this->withHeaders(['User-Agent' => 'WhatsApp/2.23.24.76 A'])
+            ->get('/'.$link->slug);
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'text/html; charset=UTF-8');
+        $this->assertStringContainsString('<meta property="og:type" content="website">', $response->getContent());
+        Queue::assertNotPushed(ProcessLinkClickJob::class);
+    }
+
+    public function test_clean_url_nonexistent_slug_returns_error_page(): void
+    {
+        Queue::fake();
+
+        $response = $this->withHeaders(['User-Agent' => self::HUMAN_UA])
+            ->get('/does-not-exist');
+
+        $response->assertStatus(404);
+        $this->assertStringContainsString('Link não encontrado', $response->getContent());
+    }
 }

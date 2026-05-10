@@ -56,6 +56,8 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 
+    'redirect_url' => env('REDIRECT_URL', 'http://localhost:8000'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
