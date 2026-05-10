@@ -927,19 +927,128 @@ All 8 generators implement `InsightGeneratorInterface` and are registered in `In
 
 ## 8. Middlewares
 
-_To be filled in Task 1.7._
+| Middleware | Alias | Where applied | Purpose | Notes |
+|---|---|---|---|---|
+| `ApiAuthenticate` | `api.auth` | per-route via `api.auth:api` | Validates JWT and resolves the authenticated user; throws `AuthenticationException` for missing/invalid tokens. | Extends Laravel's built-in `Authenticate`; `redirectTo()` returns `null` for `api/*` or JSON requests so the exception renders as JSON (handled in `bootstrap/app.php`). |
+| `AssignRequestId` | none | `web()` and `api()` stacks (both) | Generates or reuses an inbound `X-Request-Id`; calls `RequestContext::set()` to populate the process-scoped logging context; echoes the id back on the response; clears the context in `finally`. | Must run early — placed before `NormalizeApiResponse` and all domain logic. Format: reuse inbound header or generate `req_<16 hex chars>`. `TrustProxies` is the only middleware that precedes it. |
+| `EnsureEmailIsVerified` | `verified` | per-route, combined with `api.auth:api` | Checks `auth()->user()->hasVerifiedEmail()`; returns a 403 JSON with `type=email_not_verified` and resend metadata if the user has not verified. | Returns 401 if no user is authenticated (defence-in-depth; `api.auth` normally fires first). `can_resend` and `last_sent` fields expose the cooldown state to the frontend. |
+| `MetricsCollector` | `metrics.collector` | aliased — not applied to any route in `routes/api.php` or `routes/web.php` as of this audit | Collects per-request performance metrics (response time, memory, status codes, endpoints) into Redis/file cache. Collects per-hour and per-minute bucketed counters plus per-user and per-day error data. | Contains direct `Log::debug()` and `Log::debug()` calls — does not use `AppLogger` (violation of the logging convention). Not wired to any route; the alias exists but appears unused. |
+| `NormalizeApiResponse` | none | `api()` stack (all API routes) | Wraps every JSON response in the canonical envelope: success → `{data, meta?, message?}`; error (4xx/5xx) → `{error: {code, message, details?}}`. Passes non-JSON responses through unchanged. | Applied globally to the `api` group in `bootstrap/app.php`; controllers may return bare arrays or `success/message` shapes without worrying about the envelope. |
+| `RedirectMetricsCollector` | `metrics.redirect` | per-route on `GET /r/{slug}` and `GET /{slug}` (both redirect routes in `routes/web.php`) | Collects detailed redirect-specific metrics (slug, IP, country via GeoIP, device type, referer domain, response time, status code) into Redis/file cache as hourly and daily buckets. | Contains direct `Log::debug()` calls throughout (violation of the logging convention). `getRealUserIP()` duplicates the IP-resolution logic of `LinkTrackingService`. |
+| `TrustProxies` | none | `web()` and `api()` stacks (both, first in each stack) | Configures Laravel to trust proxy headers (`X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Port`, `X-Forwarded-Proto`) from all proxies (`$proxies = '*'`). | Extends Laravel's built-in `TrustProxies`. Overrides `shouldTrustRequest()`: always trusts in `local`/`development`; in production, trusts only when proxy headers are present (Nginx/Cloudflare). `X-Real-IP` and `CF-Connecting-IP` are handled manually in `LinkTrackingService` / `RedirectMetricsCollector`. |
 
 ## 9. Providers / Bindings
 
-_To be filled in Task 1.7._
+Single service provider: `app/Providers/AppServiceProvider.php`.
+
+### `register()` — Service Container bindings
+
+See **Section 4 (Contracts)** for the full interface-to-implementation table. In summary, `register()` binds:
+- `LinkRepositoryInterface` → `LinkRepository`
+- `LinkServiceInterface` → `LinkService`
+- `DashboardAnalyticsInterface` → `DashboardAnalyticsService`
+- `GeographicAnalyticsInterface` → `GeographicAnalyticsService`
+- `TemporalAnalyticsInterface` → `TemporalAnalyticsService`
+- `AudienceAnalyticsInterface` → `AudienceAnalyticsService`
+- `InsightsAnalyticsInterface` → `InsightsAnalyticsService`
+
+All bindings use `$this->app->bind(...)` (transient — a new instance per resolution).
+
+### `boot()` — Runtime setup
+
+1. **`User::observe(UserObserver::class)`** (line 35) — registers `UserObserver` to fire on `User::created`, dispatching `SeedDemoLinkJob`.
+
+2. **`Request::macro('isApiRequest', fn(): bool)`** (line 37) — adds a macro to Laravel's `Request` object. Returns `true` when the request either sends an `Accept: application/json` header (`$this->expectsJson()`) or has a path matching `api/*` (`$this->is('api/*')`). Used by the exception handler in `bootstrap/app.php` to decide whether to render JSON error responses.
+
+3. **Rate limiter registrations** (`RateLimiter::for(...)`) — four named limiters:
+
+| Name | Window | Key | Limit | Applied to |
+|---|---|---|---|---|
+| `login` | 1 minute | `email` input (or `ip` when absent) | 5 requests | `POST /api/auth/login`, register, google-login, forgot-password, verify-email |
+| `public-shorten` | 1 minute | IP address | 10 requests | `POST /api/public/shorten` |
+| `public-analytics` | 1 minute | IP address | 30 requests | `GET /api/public/analytics/{slug}` |
+| `redirect` | 1 minute | IP address | 600 requests | `GET /r/{slug}` and `GET /{slug}` (flood protection only) |
 
 ## 10. Console (Commands + Schedule)
 
-_To be filled in Task 1.7._
+### OptimizeApiCommand
+
+- **Signature:** `api:optimize`
+- **Description:** `Optimize Laravel API for production (without views)`
+- **Purpose:** Clears config, route, and application caches, then re-caches config and routes. Skips `view:cache` (API-only project has no Blade views in production). If the queue driver is not `sync`, restarts queue workers via `queue:restart`. Intended to be run as part of a production deployment pipeline.
+
+---
+
+### TestEmailCommand
+
+- **Signature:** `email:test {email} {--name= : Nome do destinatário} {--send : Enviar email real}`
+- **Description:** `Testa configuração de email e conectividade SMTP`
+- **Purpose:** Development and ops utility. Always prints the current mail configuration (mailer, host, port, from address) and tests DNS resolution + SMTP connectivity via `EmailService::testConnection()`. With `--send`, actually dispatches a test email to the provided address via `EmailService::sendTestEmail()`. Safe to run in production for smoke-testing email delivery.
+
+---
+
+### UpdateExistingLinksUrls
+
+- **Signature:** `app:update-existing-links-urls`
+- **Description:** `Command description` (placeholder — never filled in)
+- **Purpose:** Unknown and empty — `handle()` contains only a comment stub. **Candidate orphan:** the command body was never implemented; it is likely a one-shot migration scaffold that was run (or abandoned) and never cleaned up. Should be deleted unless there is a documented future use.
+
+---
+
+### Schedule
+
+Defined in `bootstrap/app.php::withSchedule()` (lines 9–11).
+
+| Job | Frequency | Concurrency |
+|---|---|---|
+| `LinkHealthCheckJob` | `hourly()` | `withoutOverlapping()` |
+
+- `routes/console.php` contains only the default Laravel `inspire` Artisan stub (`Artisan::command('inspire', ...)`); scheduling is fully defined in `bootstrap/app.php`, as noted by a comment in that file.
 
 ## 11. Logging
 
-_To be filled in Task 1.7._
+### Architecture
+
+The logging system is built around `App\Logging\AppLogger` — a `final` class of semantic static methods. **Never call `\Log::*` directly anywhere in the codebase; always use `AppLogger`.** If a specific event method does not exist, use the escape hatch `AppLogger::event($channel, $level, $event, $context)`.
+
+**Known violation:** `ClickVelocityService.php:44` calls `Log::warning(...)` directly instead of using `AppLogger`. `MetricsCollector` and `RedirectMetricsCollector` also contain many `Log::debug()` calls.
+
+`AppLogger` has **49 public static methods** (note: spec said 51 — actual count from `grep -c "public static function"` is 49). Each method is named after a domain event (e.g. `redirectStarted`, `jobFailed`, `authLoginSuccess`) and encodes the channel, log level, and event name.
+
+### Components
+
+| File | Role |
+|---|---|
+| `AppLogger.php` | Central logging facade — semantic methods per domain event, each encoding channel + level + event name. |
+| `Context/RequestContext.php` | Process-scoped singleton holding `requestId`, `userId`, `ip`, `route` for the current HTTP request or job. |
+| `Context/HasLogContext.php` | Trait for queued jobs — `pushLogContext()` sets `RequestContext` from the job payload's `request_id`; `popLogContext()` (in `finally`) clears it. |
+| `Taps/ChannelTap.php` | Monolog tap applied to each channel's file handler; configures per-channel processors (including `PiiRedactionProcessor` for non-auth/non-audit channels and `RequestContextProcessor` everywhere). Accepts `:skip-redaction` parameter for `auth` and `audit` channels. |
+| `Taps/SampleRateTap.php` | Monolog tap applied to the `redirect_file` handler only; reads `sample_rate` from channel config and drops records randomly below the configured rate — allows the high-volume redirect channel to be sampled down without changing log level. |
+| `Formatters/KeyValueFormatter.php` | Monolog formatter producing `key=value` text records (as shown in CLAUDE.md). |
+| `Processors/RequestContextProcessor.php` | Stamps every log record with `request_id` (and optionally `user_id`, `ip`, `route`) from `RequestContext::current()`. |
+| `Processors/PiiRedactionProcessor.php` | Redacts `email` and `ip` values in log records before they reach non-auth/non-audit channels. Applied to all channels except `auth_file` and `audit_file` (which use `:skip-redaction` in `ChannelTap`). The `errors` channel applies redaction even when the source was `auth` or `audit`. |
+
+### Channels
+
+Each domain channel is a `stack` that fans out to its own `_file` channel and the central `errors` channel (which collects all `>= ERROR` level records).
+
+| Channel | Retention | Notes |
+|---|---|---|
+| `redirect` | 7 days (`LOG_REDIRECT_DAYS`) | Level configurable via `LOG_REDIRECT_LEVEL` (default `info`). Sampling configurable via `LOG_REDIRECT_SAMPLE_RATE` (default 1.0 = no sampling). `SampleRateTap` applied. |
+| `tracking` | 14 days (`LOG_TRACKING_DAYS`) | Level configurable via `LOG_TRACKING_LEVEL`. |
+| `jobs` | 14 days (`LOG_JOBS_DAYS`) | Level configurable via `LOG_JOBS_LEVEL`. |
+| `auth` | 4 days (`LOG_AUTH_DAYS`) | PII redaction **skipped** — raw email and IP preserved for incident response. Level configurable via `LOG_AUTH_LEVEL`. |
+| `audit` | 10 days (`LOG_AUDIT_DAYS`) | PII redaction **skipped** — raw email and IP preserved. Level fixed at `info` (not env-configurable). |
+| `http` | 14 days (`LOG_HTTP_DAYS`) | Level defaults to `warning` via `LOG_HTTP_LEVEL` — only 4xx (warning) and 5xx (error) requests are logged. |
+| `app` | 14 days (`LOG_APP_DAYS`) | Default channel for email, links, analytics, safety events. Level via `LOG_LEVEL`. |
+| `errors` | 14 days (`LOG_ERRORS_DAYS`) | Central mirror of all `>= ERROR` records from every domain channel. PII redaction **applied** even to records originating from `auth` or `audit`. |
+
+### `request_id` propagation
+
+1. `AssignRequestId` middleware fires at the start of every HTTP request — generates `req_<16 hex chars>` (or reuses the inbound `X-Request-Id`) and calls `RequestContext::set(new RequestContext(requestId: ..., ...))`.
+2. `RequestContextProcessor` (registered via `ChannelTap` on every channel's handler) reads `RequestContext::current()` and stamps each Monolog record with `request_id` (plus `user_id`, `ip`, `route` when available).
+3. For queued jobs, `AssignRequestId` does not run. Instead, `RedirectController::dispatchTracking()` injects the current `RequestContext::current()?->requestId` into the job payload under the `request_id` key. The job's `HasLogContext` trait reads it in `pushLogContext()` and calls `RequestContext::set(...)`, restoring the same id for the duration of the job's `handle()`. `popLogContext()` is called in `finally` to clear the context.
+4. To correlate all log lines for a single click (HTTP redirect → queued job → tracking service), use: `grep -r 'request_id=req_xy123' backend/storage/logs/`.
 
 ## 12. Routes
 
