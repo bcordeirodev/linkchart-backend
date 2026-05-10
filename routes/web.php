@@ -68,3 +68,11 @@ Route::get('/health', function () {
 Route::get('/r/{slug}', [RedirectController::class, 'redirect'])
     ->middleware(['throttle:redirect', 'metrics.redirect'])
     ->name('public.redirect');
+
+// Clean URL alias: redirect.linkcharts.com.br/{slug} (no /r/ prefix)
+// NEXT_PUBLIC_REDIRECT_URL is set without /r/ in production, so frontend-generated
+// short URLs use this path. Must be last to avoid shadowing other routes.
+Route::get('/{slug}', [RedirectController::class, 'redirect'])
+    ->middleware(['throttle:redirect', 'metrics.redirect'])
+    ->name('public.redirect.clean')
+    ->where('slug', '[^/]+');
