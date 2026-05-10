@@ -391,54 +391,6 @@ parameters:
 			path: app/Repositories/ChartRepository.php
 
 		-
-			message: '#^Call to static method all\(\) on an unknown class App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Call to static method create\(\) on an unknown class App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Call to static method find\(\) on an unknown class App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 3
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Method App\\Repositories\\WordRepository\:\:create\(\) has invalid return type App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Method App\\Repositories\\WordRepository\:\:delete\(\) has invalid return type App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Method App\\Repositories\\WordRepository\:\:find\(\) has invalid return type App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Method App\\Repositories\\WordRepository\:\:update\(\) has invalid return type App\\Models\\Word\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
-			message: '#^Type static\(App\\Repositories\\WordRepository\) in generic type Illuminate\\Database\\Eloquent\\Collection\<int, static\(App\\Repositories\\WordRepository\)\> in PHPDoc tag @return is not subtype of template type TModel of Illuminate\\Database\\Eloquent\\Model of class Illuminate\\Database\\Eloquent\\Collection\.$#'
-			identifier: generics.notSubtype
-			count: 1
-			path: app/Repositories/WordRepository.php
-
-		-
 			message: '#^Call to an undefined method Illuminate\\Support\\Carbon\:\:va\(\)\.$#'
 			identifier: method.notFound
 			count: 1
