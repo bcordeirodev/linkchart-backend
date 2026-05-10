@@ -1164,11 +1164,45 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 
 ## 14. Tests coverage
 
-_To be filled in Task 1.9._
+### Test inventory
+
+| File | Type | Coverage area | Notes |
+|---|---|---|---|
+| `tests/Feature/RedirectTest.php` | Feature | `/r/{slug}` + `/{slug}` clean alias — bot vs human, 302, 404, expired, inactive, not-yet-started, OG metadata rendering, preview mode, click counter increment, slug cache | **Gating test** — must stay green for any redirect change. |
+| `tests/Feature/ProcessLinkClickJobTest.php` | Feature | `ProcessLinkClickJob` — payload deserialization, `Click` record creation, UTM extraction from query string and referer, retry config, job serialization | **Gating test** — must stay green for any tracking change. |
+| `tests/Feature/LinkCrudTest.php` | Feature | `LinkController` CRUD — store, index, show, update, destroy; ownership isolation (user A cannot see/edit/delete user B's links) | — |
+| `tests/Feature/LinkMetaControllerTest.php` | Feature | `LinkMetaController` — batch-meta returns correct fields for owned links, ignores other-user links, requires auth; sparkline returns N daily points; trend returns correct structure | — |
+| `tests/Feature/PublicAnalyticsTest.php` | Feature | `PublicLinkController@basicAnalytics` — browser breakdown, day-of-week distribution (7 entries), 200 for active link with no clicks | — |
+| `tests/Feature/Analytics/AnalyticsEndpointsTest.php` | Feature | `AnalyticsController` HTTP layer — 401 without token, 404 for other-user link (all analytics endpoints), 200 for owned link; geographic endpoint shape; removed heatmap endpoint returns 404 | — |
+| `tests/Feature/Analytics/AnalyticsStructureTest.php` | Feature | Analytics service internals — click factory day-of-week, `DashboardAnalyticsService` since-filter, `UserAgentParser` (Chrome, Android, language), `TemporalAnalyticsService` advanced keys, `InsightsAnalyticsService` shape, `GeographicAnalyticsService` heatmap, `LinkAnalyticsOrchestrator` top-level keys | — |
+| `tests/Feature/Analytics/AudienceAnalyticsServiceEnhancedTest.php` | Feature | `AudienceAnalyticsService` enhanced breakdown — navigation context counts/percentages, return-visitor rate, quality-tier distribution and bot rate; edge cases (empty clicks, null tiers) | — |
+| `tests/Feature/Logging/AssignRequestIdMiddlewareTest.php` | Feature | `AssignRequestId` middleware — generates ID when header absent, reuses inbound `X-Request-Id`, populates ip/route in `RequestContext`, clears context after response | — |
+| `tests/Feature/ExampleTest.php` | Feature | — | Laravel scaffold — minimal coverage (GET `/` returns 200). |
+| `tests/Unit/ExampleTest.php` | Unit | — | Laravel scaffold — minimal coverage (`assertTrue(true)`). |
+| `tests/Unit/Logging/KeyValueFormatterTest.php` | Unit | `KeyValueFormatter` — key=value serialisation: simple pairs, quoted strings with spaces, escaped inner quotes, arrays as inline JSON, null omission, timestamp/level/channel, extra fields | — |
+| `tests/Unit/Logging/PiiRedactionProcessorTest.php` | Unit | `PiiRedactionProcessor` — redacts sensitive keys, masks email partially, masks IPv4, recurses into nested arrays, processes `extra` field, preserves non-string values | — |
+| `tests/Unit/Logging/RequestContextProcessorTest.php` | Unit | `RequestContextProcessor` — injects fields from active context, omits `request_id` when no context, does not overwrite existing `extra` fields | — |
+| `tests/Unit/Logging/RequestContextTest.php` | Unit | `RequestContext` value object — `current()` returns null when unset, set/current round-trip, `clear()` resets, set overwrites existing | — |
+| `tests/Unit/Logging/SampleRateTapTest.php` | Unit | `SampleRateTap` — rate=0 drops INFO records, rate=0 keeps WARNING/ERROR, rate=1 keeps everything, missing config keeps everything | — |
+| `tests/Unit/Services/Links/ClickVelocityServiceTest.php` | Unit | `ClickVelocityService` — `viral_rank` classification (cold/warming/trending/viral based on 5-min and 1-hour click counts), `seconds_since_last_click` computation from previous timestamp | — |
+| `tests/Unit/Services/Links/LinkTrackingPhase1Test.php` | Unit | Phase 1 enrichment — `navigation_context` classification from Sec-Fetch headers (browser-direct, referral, in-app-webview, preload, api-programmatic), `is_data_saver` from Save-Data header, language parsing (pt-BR, en, zh-Hant-TW, null) | — |
+| `tests/Unit/Services/Links/LinkTrackingPhase2Test.php` | Unit | Phase 2 enrichment — hemisphere-aware `season` (Brazil vs. Germany/US for January and July), `connection_type` classification from ISP name (datacenter, mobile, education, residential, unknown), `rendering_engine` from browser name (Blink/Gecko/WebKit/unknown) | — |
+| `tests/Unit/Services/Links/LinkTrackingPhase3Test.php` | Unit | Phase 3 quality scoring — `quality_score` for organic clicks, bot clicks (score=0), datacenter connections, api-programmatic without hints, flood patterns; `fingerprint_score` for ch_is_mobile inconsistency; `quality_tier` mapping | — |
+
+> `tests/Concerns/CreatesTestLinks.php` is a shared trait used by Feature tests to create test link fixtures.
 
 ## 15. Backend domain → Frontend feature mapping
 
-_To be filled in Task 1.9._
+| Backend domain (controller / route family) | Frontend feature(s) | Notes |
+|---|---|---|
+| Auth (`Controllers/Auth/AuthController` — `/api/auth/*`, `/api/me`, `/api/logout`, `/api/profile`, `/api/change-password`, `/api/email-verification-status`, `/api/resend-verification-email`) | `profile` (+ app-wide auth state) | JWT issued by `tymon/jwt-auth` (`dev-chore/laravel-12`). `googleLogin` route exists but the controller method is a stub. |
+| Links CRUD (`Controllers/Links/LinkController` — `/api/links/*`, `/api/link/{id}/clicks*`) | `links` | `LinkResource` shape consumed; `/api/link/{id}/clicks` drives real-time clicks component; `/api/link/{id}/clicks-list` drives the ClicksTable tab. |
+| Link metadata (`Controllers/Links/LinkMetaController` — `/api/links/batch-meta`, `/api/links/{id}/sparkline\|trend\|preview\|health`) | `links` (list page sparkline + trend), `analytics` (preview/health) | Response fields locked: `sparkline`, `trend`, `preview`, `health`. |
+| Public shortener (`Controllers/Links/PublicLinkController` — `/api/public/*`) | `shorter`, `public-analytics` | Rate limited by `throttle:public-shorten` (store) and `throttle:public-analytics` (basicAnalytics). `showBySlug` has no rate limit. |
+| Redirect (`Controllers/Links/RedirectController` — `/r/{slug}`, `/{slug}`) | `redirect` (and direct browser hits, plus bot OG previews) | Web routes only (not API). Rate limited by `throttle:redirect`. `/{slug}` clean-URL alias is intended for production domain `redirect.linkcharts.com.br`. |
+| Analytics (`Controllers/Analytics/AnalyticsController` — `/api/analytics/link/{linkId}/*`, `/api/links/{id}/analytics`) | `analytics`, `public-analytics` | Heatmap endpoint removed (returns 404 per `AnalyticsEndpointsTest`). `/api/links/{id}/analytics` is a legacy endpoint preserved for backwards compatibility. |
+
+> The mapping above is by convention, not enforced by the framework — any frontend component can call any backend endpoint. Changes to response shapes in the backend must be coordinated with the corresponding frontend feature directory.
 
 ## 16. Oportunidades de refactor
 
