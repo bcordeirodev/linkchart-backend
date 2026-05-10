@@ -366,7 +366,7 @@ class MetricsService
                     return [
                         'id' => $link->id,
                         'title' => $link->title ?: 'Link sem título',
-                        'short_url' => config('app.redirect_url') . '/' . ($link->slug ?: "link-{$link->id}"),
+                        'short_url' => config('app.redirect_url').'/'.($link->slug ?: "link-{$link->id}"),
                         'original_url' => $link->original_url,
                         'clicks' => $link->clicks ?? 0,
                         'is_active' => $link->is_active,
