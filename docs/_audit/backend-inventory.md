@@ -1052,11 +1052,115 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 
 ## 12. Routes
 
-_To be filled in Task 1.8._
+### routes/web.php
+
+| Method | URI | Name | Action | Middleware (route-specific) |
+|---|---|---|---|---|
+| GET | `/` | — | Closure (returns API status JSON) | — |
+| GET | `/health` | — | Closure (DB + Redis health check, 200/503) | — |
+| GET | `/r/{slug}` | `public.redirect` | `RedirectController@redirect` | `throttle:redirect`, `metrics.redirect` |
+| GET | `/{slug}` | `public.redirect.clean` | `RedirectController@redirect` | `throttle:redirect`, `metrics.redirect` |
+
+> The `storage/{path}` route (GET and PUT) and the `{fallbackPlaceholder}` catch-all are injected automatically by the Laravel framework — they are not defined in `routes/web.php` and carry no application logic.
+
+### routes/api.php
+
+| Method | URI | Name | Action | Middleware (route-specific) |
+|---|---|---|---|---|
+| POST | `/api/auth/login` | — | `AuthController@login` | `throttle:login` |
+| POST | `/api/auth/register` | — | `AuthController@register` | `throttle:login` |
+| POST | `/api/auth/google` | — | `AuthController@googleLogin` | `throttle:login` |
+| POST | `/api/auth/verify-email` | — | `AuthController@verifyEmail` | `throttle:login` |
+| POST | `/api/auth/forgot-password` | — | `AuthController@forgotPassword` | `throttle:login` |
+| POST | `/api/auth/reset-password` | — | `AuthController@resetPassword` | `throttle:login` |
+| GET | `/api/me` | — | `AuthController@me` | `api.auth:api` |
+| POST | `/api/logout` | — | `AuthController@logout` | `api.auth:api` |
+| GET | `/api/email-verification-status` | — | `AuthController@checkEmailVerificationStatus` | `api.auth:api` |
+| POST | `/api/resend-verification-email` | — | `AuthController@resendVerificationEmail` | `api.auth:api` |
+| PUT | `/api/profile` | — | `AuthController@updateProfile` | `api.auth:api`, `verified` |
+| PUT | `/api/change-password` | — | `AuthController@changePassword` | `api.auth:api`, `verified` |
+| GET | `/api/links` | — | `LinkController@index` | `api.auth:api`, `verified` |
+| POST | `/api/links` | — | `LinkController@store` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}` | — | `LinkController@show` | `api.auth:api`, `verified` |
+| PUT | `/api/links/{id}` | — | `LinkController@update` | `api.auth:api`, `verified` |
+| DELETE | `/api/links/{id}` | — | `LinkController@destroy` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}/analytics` | — | `AnalyticsController@getLinkLegacyAnalytics` | `api.auth:api`, `verified` |
+| POST | `/api/links/batch-meta` | — | `LinkMetaController@batchMeta` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}/sparkline` | — | `LinkMetaController@sparkline` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}/trend` | — | `LinkMetaController@trend` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}/preview` | — | `LinkMetaController@preview` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}/health` | — | `LinkMetaController@health` | `api.auth:api`, `verified` |
+| GET | `/api/link/{id}/clicks` | — | `LinkController@getClicksData` | `api.auth:api`, `verified` |
+| GET | `/api/link/{id}/clicks-list` | — | `LinkController@getClicksList` | `api.auth:api`, `verified` |
+| GET | `/api/analytics/link/{linkId}/dashboard` | — | `AnalyticsController@getLinkDashboardData` | `api.auth:api`, `verified` |
+| GET | `/api/analytics/link/{linkId}/comprehensive` | — | `AnalyticsController@getLinkAnalytics` | `api.auth:api`, `verified` |
+| GET | `/api/analytics/link/{linkId}/geographic` | — | `AnalyticsController@getGeographicAnalytics` | `api.auth:api`, `verified` |
+| GET | `/api/analytics/link/{linkId}/insights` | — | `AnalyticsController@getBusinessInsights` | `api.auth:api`, `verified` |
+| GET | `/api/analytics/link/{linkId}/temporal` | — | `AnalyticsController@getTemporalAnalytics` | `api.auth:api`, `verified` |
+| GET | `/api/analytics/link/{linkId}/audience` | — | `AnalyticsController@getAudienceAnalytics` | `api.auth:api`, `verified` |
+| POST | `/api/public/shorten` | — | `PublicLinkController@store` | `throttle:public-shorten` |
+| GET | `/api/public/link/{slug}` | — | `PublicLinkController@showBySlug` | — |
+| GET | `/api/public/analytics/{slug}` | — | `PublicLinkController@basicAnalytics` | `throttle:public-analytics` |
+
+> **`/api/r/{slug}` is intentionally DISABLED.** The original AJAX redirect route was decommissioned on 04/11/2025 and preserved as commented code at `routes/api.php` lines 18–32. It **must not** be re-enabled — redirect handling was migrated to `routes/web.php` to support Open Graph previews and direct browser redirects.
 
 ## 13. Migrations (chronological — schema is intocável)
 
-_To be filled in Task 1.8._
+### Foundation (Laravel scaffold)
+
+- `0001_01_01_000000_create_users_table.php` — base `users` table (id, name, email, password, remember_token) plus `password_reset_tokens` and `sessions` tables.
+- `0001_01_01_000001_create_cache_table.php` — Laravel database `cache` and `cache_locks` tables (unused — Redis is the cache driver).
+- `0001_01_01_000002_create_jobs_table.php` — Laravel database `jobs`, `job_batches`, and `failed_jobs` tables (unused — Redis is the queue driver).
+
+### Auth & access tokens (2024–2025)
+
+- `2024_09_18_000001_create_email_verification_tokens_table.php` — `email_verification_tokens` table (token, type, expires_at, used, ip/UA) plus adds `email_verified` and `email_verification_sent_at` columns to `users`.
+- `2025_02_24_210902_create_personal_access_tokens_table.php` — Sanctum's `personal_access_tokens` table (currently unused — JWT via `tymon/jwt-auth` is the active auth mechanism).
+
+### Core link & click model (2025-04)
+
+- `2025_04_20_032909_create_links_table.php` — core `links` table (user_id FK, slug unique, original_url, expires_at, is_active).
+- `2025_04_20_033001_create_clicks_table.php` — core `clicks` table (link_id FK, ip, user_agent, referer, country, city, device).
+- `2025_04_20_033105_create_link_utm_table.php` — `link_utms` table keyed by click_id FK (utm_source, utm_medium, utm_campaign, utm_term, utm_content).
+- `2025_04_22_135210_update_links.php` — adds `starts_in` timestamp column to `links` (scheduled activation support).
+
+### Hardening & analytics fields (2025-08)
+
+- `2025_08_17_130755_create_link_audits_table.php` — `link_audits` table (link_id/user_id FKs, action, old_values JSON, new_values JSON, ip/UA); used by `LinkAuditService`.
+- `2025_08_17_131403_add_additional_fields_to_links_table.php` — adds `title`, `description`, and UTM parameter columns (`utm_source/medium/campaign/term/content`) to `links`.
+- `2025_08_17_151040_add_clicks_column_to_links_table.php` — adds denormalized `clicks` counter (bigInteger, default 0) to `links`; incremented via direct DB query to avoid observer overhead.
+- `2025_08_17_205843_add_click_limit_to_links_table.php` — adds nullable `click_limit` integer to `links` (NULL = unlimited).
+
+### Geo + UA enrichment (2025-08–2025-09)
+
+- `2025_08_19_160612_add_detailed_location_fields_to_clicks_table.php` — adds detailed geo fields to `clicks`: `iso_code`, `state`, `state_name`, `postal_code`, `latitude`, `longitude`, `timezone`, `continent`, `currency`; plus three composite indexes.
+- `2025_09_11_130817_add_enhanced_tracking_to_clicks_table.php` — adds UA device fields (`browser`, `browser_version`, `os`, `os_version`, `is_mobile/tablet/desktop/bot`), temporal fields (`hour_of_day` through `is_business_hours`), behaviour fields (`is_return_visitor`, `session_clicks`, `click_source`), and performance fields (`response_time`, `accept_language`) to `clicks`.
+- `2025_09_14_140000_allow_null_user_id_simple.php` — makes `links.user_id` nullable to support anonymous public shortener (drops and re-adds FK constraint via raw SQL for PostgreSQL compatibility).
+- `2025_09_14_140100_add_performance_indexes_simple.php` — adds performance indexes via raw `CREATE INDEX IF NOT EXISTS` SQL: `idx_clicks_link_date`, `idx_clicks_geo`, `idx_clicks_user_agent`, `idx_clicks_referer` on `clicks`; `idx_links_user_active`, `idx_links_expiration` on `links`.
+
+### Email verification fields (2025-09)
+
+- `2025_09_18_114131_add_email_verification_fields_to_users_table.php` — idempotent guard (`Schema::hasColumn`) re-adds `email_verified` and `email_verification_sent_at` to `users` in case the 2024 migration did not run (migration order safety net).
+
+### Health, previews, demo (2026-04)
+
+- `2026_04_27_000001_add_health_to_links_table.php` — adds `health_status` (string, default `'unknown'`) and `health_checked_at` timestamp to `links`; populated by `LinkHealthCheckJob`.
+- `2026_04_27_000002_create_link_previews_table.php` — `link_previews` table (link_id PK/FK, favicon_url, og_title, og_image_url, fetched_at); populated by `FetchLinkPreviewJob`.
+- `2026_04_30_000001_add_is_demo_to_links_table.php` — adds `is_demo` boolean (default false) to `links`; used by `SeedDemoLinkJob` to mark demo data.
+
+### Click enrichment Phase 1 (2026-05-07)
+
+- `2026_05_07_000001_add_phase1_enrichment_to_clicks_table.php` — adds Sec-Fetch headers (`navigation_context`, `fetch_dest`), Client Hints (`ch_platform`, `ch_is_mobile`), Save-Data (`is_data_saver`), HTTP protocol (`http_protocol`), and language fields (`primary_language`, `language_region`) to `clicks`.
+
+### Click enrichment Phase 2 (2026-05-07)
+
+- `2026_05_07_000002_add_phase2_contextual_to_clicks_table.php` — adds contextual intelligence fields to `clicks`: `is_holiday`, `holiday_name`, `season`, `viral_rank`, `seconds_since_last_click`, `connection_type`, `rendering_engine`.
+
+### Click enrichment Phase 3 (2026-05-07)
+
+- `2026_05_07_000003_add_phase3_quality_to_clicks_table.php` — adds click quality scoring to `clicks`: `quality_score` (0–100), `quality_tier` (string tier label), `fingerprint_score` (consistency heuristic).
+
+> **Migrations are append-only.** Never edit a merged migration. To change a column, write a new migration. Never run `migrate:fresh` in production. See the future `CONTRIBUTING.md`.
 
 ## 14. Tests coverage
 
