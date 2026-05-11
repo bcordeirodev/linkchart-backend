@@ -14,11 +14,52 @@ use Illuminate\Queue\SerializesModels;
 use Throwable;
 
 /**
- * Onboarding job that seeds demo links and clicks for a freshly registered user.
+ * Seeds demo link data for a newly registered user as part of onboarding.
  *
- * Adopts a fallback request_id via HasLogContext (originating request is not
- * tracked here — the job is dispatched after the registration response was
- * already sent).
+ * Trigger: `UserObserver::created()` (line 10 of
+ * `app/Models/Observers/UserObserver.php`) calls
+ * `SeedDemoLinkJob::dispatch($user->id)` on every `User` `created` event.
+ * The observer is registered in `AppServiceProvider::boot()`.
+ *
+ * Side effects:
+ *   - DB writes: delegates to `OnboardingDemoDataService::run()`, which
+ *     creates one demo `Link` row and seeds multiple historical `clicks` rows
+ *     for that link so the user sees a populated analytics dashboard on first
+ *     login.
+ *   - Cache: none written directly; Eloquent `saved` / `created` events on
+ *     `Link` will fire the Link cache-invalidation observer.
+ *   - Queue: no further jobs are dispatched.
+ *   - Log channels: `jobs` (lifecycle — started / succeeded / failed) via
+ *     `AppLogger::jobStarted`, `AppLogger::jobSucceeded`, `AppLogger::jobFailed`.
+ *     The `app` channel may receive entries from within `OnboardingDemoDataService`.
+ *   - HTTP / external calls: none.
+ *
+ * Request-id propagation (HasLogContext):
+ *   No originating request_id is available because the job is dispatched
+ *   after the HTTP registration response is already sent.
+ *   `logContextRequestId()` returns `null`, so `HasLogContext::pushLogContext()`
+ *   generates a fallback id (`job_<hex>`) that correlates all log lines within
+ *   this job execution. `logContextUserId()` returns `$this->userId` so logs
+ *   are also tagged with the new user's id.
+ *   See {@see \App\Logging\Context\HasLogContext}.
+ *
+ * Retry policy:
+ *   - `$tries = 3` — up to three attempts.
+ *   - `$backoff = 30` — 30 seconds between retries.
+ *   - On final failure: `failed(Throwable $e)` is called, which logs via
+ *     `AppLogger::jobFailed(static::class, $e, $this->tries)` to the `jobs`
+ *     channel.
+ *
+ * Idempotency: NO.
+ *   Running the job twice for the same user creates a second demo Link row
+ *   and another set of seeded clicks. There is no deduplication check (e.g.
+ *   "does this user already have a demo link?"). The only practical guard is
+ *   that `UserObserver::created()` fires exactly once per user registration;
+ *   duplicate dispatches would only occur on infrastructure failure.
+ *
+ * @see \App\Services\Onboarding\OnboardingDemoDataService::run()
+ * @see \App\Models\Observers\UserObserver
+ * @see \App\Logging\Context\HasLogContext
  */
 class SeedDemoLinkJob implements ShouldQueue
 {
