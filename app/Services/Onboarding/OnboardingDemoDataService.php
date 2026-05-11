@@ -8,6 +8,23 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
+/**
+ * Seeds a realistic demo link with synthetic click data for new users.
+ *
+ * Dispatch chain: UserObserver::created → SeedDemoLinkJob::dispatch($user)
+ * → OnboardingDemoDataService::run($user).
+ *
+ * The demo link is idempotent — run() is a no-op if the user already has an
+ * is_demo=true link. It creates exactly one link and inserts TOTAL_CLICKS (1200)
+ * clicks in batches of BATCH_SIZE (500) using Click::insert() for performance.
+ *
+ * Side effects:
+ *   - Writes one row to links (is_demo=true).
+ *   - Writes 1200 rows to clicks via bulk insert.
+ *   - Updates links.clicks = 1200 after insert completes.
+ *   - Does NOT dispatch ProcessLinkClickJob — clicks are inserted directly
+ *     with pre-populated geographic and device fields, bypassing enrichment.
+ */
 class OnboardingDemoDataService
 {
     private const TOTAL_CLICKS = 1200;
@@ -104,6 +121,17 @@ class OnboardingDemoDataService
         'other' => ['https://news.ycombinator.com/', 'https://www.reddit.com/', 'https://medium.com/'],
     ];
 
+    /**
+     * Seeds the demo link and 1200 synthetic clicks for the given user.
+     *
+     * Idempotent: returns immediately if the user already has an is_demo link.
+     * Creates the link, bulk-inserts clicks in batches of 500, then updates
+     * the denormalized links.clicks counter.
+     *
+     * Side effects: writes to links and clicks tables.
+     *
+     * @param  User  $user  The newly created user to onboard.
+     */
     public function run(User $user): void
     {
         if (Link::where('user_id', $user->id)->where('is_demo', true)->exists()) {

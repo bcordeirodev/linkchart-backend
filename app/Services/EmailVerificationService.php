@@ -7,6 +7,22 @@ use App\Models\EmailVerificationToken;
 use App\Models\User;
 use Illuminate\Http\Request;
 
+/**
+ * Handles transactional email flows for account verification and password reset.
+ *
+ * Delegates delivery to EmailService::sendEmailViaSendGridAPI (SendGrid HTTP API).
+ * Token persistence is handled by EmailVerificationToken model:
+ *   - Email verification tokens expire after 24 hours.
+ *   - Password reset tokens expire after 1 hour.
+ *
+ * Known issue (deferred, R-18 from audit): token creation is NOT wrapped in a
+ * database transaction. A partial failure (token created but email not sent)
+ * leaves an orphaned token. Future hardening should wrap the create + send in a
+ * single transaction with rollback on delivery failure.
+ *
+ * Side effects: writes to email_verification_tokens table; logs via AppLogger
+ * (channel: auth for verification, errors on failures).
+ */
 class EmailVerificationService
 {
     private EmailService $emailService;
@@ -17,7 +33,19 @@ class EmailVerificationService
     }
 
     /**
-     * Enviar email de verificação
+     * Sends an email verification link to the given user.
+     *
+     * Enforces a 2-minute resend cooldown via User::canResendVerificationEmail().
+     * Creates an EmailVerificationToken (TYPE_EMAIL_VERIFICATION, 24h TTL),
+     * renders the verification template (resources/views/emails/verification.blade.php),
+     * and delivers via SendGrid API.
+     *
+     * Side effects: writes to email_verification_tokens; calls
+     * User::markVerificationEmailSent(); logs via AppLogger::authEmailVerificationSent.
+     *
+     * @param  User  $user  The user to verify.
+     * @param  Request|null  $request  Used to capture IP + User-Agent for the token record.
+     * @return array{success: bool, message: string, email?: string, expires_at?: string, type?: string, error?: string}
      */
     public function sendVerificationEmail(User $user, ?Request $request = null): array
     {
@@ -94,7 +122,18 @@ class EmailVerificationService
     }
 
     /**
-     * Verificar email usando token
+     * Verifies an email address using a previously issued verification token.
+     *
+     * Looks up a valid (non-expired, non-used) TYPE_EMAIL_VERIFICATION token,
+     * marks the user's email as verified, and marks the token as used.
+     * Idempotent: if the email is already verified, marks the token as used
+     * and returns type=already_verified.
+     *
+     * Side effects: updates users.email_verified_at; updates token as used;
+     * logs via AppLogger::authEmailVerified.
+     *
+     * @param  string  $token  Raw token string from the verification link.
+     * @return array<string, mixed> Keys: success (bool), message (string), type (string, absent on internal errors), user (User, optional), error (string, optional).
      */
     public function verifyEmail(string $token): array
     {
@@ -161,7 +200,18 @@ class EmailVerificationService
     }
 
     /**
-     * Enviar email de recuperação de senha
+     * Sends a password reset link to the given email address.
+     *
+     * Always returns a success-shaped response even when the email is not found
+     * (security: prevents user enumeration). Creates an EmailVerificationToken
+     * (TYPE_PASSWORD_RESET, 1h TTL) and delivers via SendGrid API.
+     *
+     * Side effects: may write to email_verification_tokens; logs via
+     * AppLogger::authPasswordResetRequested on successful delivery.
+     *
+     * @param  string  $email  Target email address.
+     * @param  Request|null  $request  Used to capture IP + User-Agent for the token record.
+     * @return array<string, mixed> Keys: success (bool), message (string), type (string, absent on internal errors), error (string, optional).
      */
     public function sendPasswordResetEmail(string $email, ?Request $request = null): array
     {
@@ -232,7 +282,18 @@ class EmailVerificationService
     }
 
     /**
-     * Redefinir senha usando token
+     * Resets the user's password using a valid password-reset token.
+     *
+     * Validates a TYPE_PASSWORD_RESET token (1h TTL), updates the user's
+     * bcrypt-hashed password, and marks the token as used.
+     * NOT idempotent — each call updates the password and consumes the token.
+     *
+     * Side effects: writes users.password; marks token as used;
+     * logs via AppLogger::authPasswordResetCompleted.
+     *
+     * @param  string  $token  Raw reset token from the password-reset link.
+     * @param  string  $newPassword  The new plaintext password (will be bcrypt-hashed).
+     * @return array<string, mixed> Keys: success (bool), message (string), type (string, absent on internal errors), user (User, optional), error (string, optional).
      */
     public function resetPassword(string $token, string $newPassword): array
     {
