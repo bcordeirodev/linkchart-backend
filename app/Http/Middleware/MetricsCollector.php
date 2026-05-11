@@ -8,6 +8,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
+// TODO(orphan?): the metrics.collector middleware alias was removed in commit ef64a5d (R-08)
+// and no route uses this middleware globally. Verify with grep before deleting in a future
+// cleanup. See docs/_audit/backend-inventory.md §17.
 /**
  * Middleware para coletar métricas de performance e erros
  */
