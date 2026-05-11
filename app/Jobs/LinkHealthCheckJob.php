@@ -24,8 +24,9 @@ use Illuminate\Support\Facades\DB;
  * Side effects:
  *   - HTTP / external calls: issues an HTTP `HEAD` request (via Guzzle) to
  *     each active link's `original_url`. Processes links in chunks of 50 to
- *     limit peak memory usage. SSL verification is disabled (`verify => false`)
- *     to avoid failures on self-signed certificates.
+ *     limit peak memory usage. TLS verification is enabled (Guzzle default);
+ *     links with broken or self-signed certificates will be flagged as
+ *     `health_status = 'error'`.
  *   - DB writes: updates `links.health_status` ('ok' | 'error') and
  *     `links.health_checked_at` for every active link via a direct
  *     `DB::table('links')->update([...])` call (no model events, so the Link
@@ -63,7 +64,6 @@ class LinkHealthCheckJob implements ShouldQueue
             'timeout' => 5,
             'connect_timeout' => 3,
             'allow_redirects' => ['max' => 5],
-            'verify' => false,
             'http_errors' => false,
         ]);
 
