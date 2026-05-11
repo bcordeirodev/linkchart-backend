@@ -161,18 +161,26 @@ class PublicLinkController extends Controller
                 return response()->json(['message' => 'Link não encontrado.'], 404);
             }
 
+            // Links sem cliques retornam imediatamente sem cache, para que o estado
+            // vazio resolva na próxima requisição após o primeiro clique chegar.
+            if ($link->clicks === 0) {
+                return response()->json([
+                    'total_clicks' => 0,
+                    'created_at' => $link->created_at,
+                    'is_active' => $link->is_active,
+                    'short_url' => $link->getShortedUrl(),
+                    'has_analytics' => false,
+                ]);
+            }
+
             $basicData = Cache::remember("public_analytics_{$link->id}", 300, function () use ($link) {
                 $data = [
                     'total_clicks' => $link->clicks,
                     'created_at' => $link->created_at,
                     'is_active' => $link->is_active,
                     'short_url' => $link->getShortedUrl(),
-                    'has_analytics' => $link->clicks > 0,
+                    'has_analytics' => true,
                 ];
-
-                if ($link->clicks === 0) {
-                    return $data;
-                }
 
                 // Top 5 países
                 $topCountries = \App\Models\Click::where('link_id', $link->id)
