@@ -15,6 +15,13 @@ class LinkTrackingService
     public const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
 
     /**
+     * @param  ClickVelocityService  $clickVelocityService  Tracks click velocity via Redis sliding windows.
+     */
+    public function __construct(
+        private readonly ClickVelocityService $clickVelocityService,
+    ) {}
+
+    /**
      * Registra clique a partir de payload serializável (extraído do Request no controller).
      * Ponto de entrada usado pelo ProcessLinkClickJob.
      *
@@ -67,7 +74,7 @@ class LinkTrackingService
         $languageData = $this->parseAcceptLanguage($payload['accept_language'] ?? null);
 
         // Phase 2 — contextual intelligence
-        $velocityData = app(\App\Services\Links\ClickVelocityService::class)->record($link->id);
+        $velocityData = $this->clickVelocityService->record($link->id);
 
         $isoCode = $locationData['iso_code'] ?? '';
         $holidayData = $isoCode
