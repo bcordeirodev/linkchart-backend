@@ -21,7 +21,7 @@ verifica ownership, chama o orchestrator e devolve o payload JSON.
 | GET | /api/analytics/link/{linkId}/insights | `AnalyticsController@getBusinessInsights` | — | required (JWT + verified) |
 | GET | /api/analytics/link/{linkId}/temporal | `AnalyticsController@getTemporalAnalytics` | — | required (JWT + verified) |
 | GET | /api/analytics/link/{linkId}/audience | `AnalyticsController@getAudienceAnalytics` | — | required (JWT + verified) |
-| GET | /api/links/{id}/analytics | `AnalyticsController@getLinkLegacyAnalytics` | — | required (JWT + verified) |
+| GET | /api/links/{id}/analytics | `AnalyticsController@getLinkSummaryAnalytics` | — | required (JWT + verified) |
 
 > `GET /api/links/{id}/analytics` é declarado no grupo de rotas `links/` (linha 96 de
 > `routes/api.php`) mas é tratado por este controller, não pelo `LinkController`. Ver nota
@@ -95,7 +95,7 @@ manter seu próprio cache interno. O `MetricsService` usa as chaves
   por IP — definido em `AppServiceProvider::boot()`. Este controller não tem rate limit
   próprio além do middleware de autenticação.
 
-- **`getLinkLegacyAnalytics` retorna JSON bruto**: diferente dos demais endpoints que usam
+- **`getLinkSummaryAnalytics` retorna JSON bruto**: diferente dos demais endpoints que usam
   `{ success: true, data: ... }`, o legado retorna diretamente os campos
   (`total_clicks`, `clicks_over_time`, etc.) sem envelope. O shape muda quando não há cliques
   (`has_sufficient_data: false`). Manter compatibilidade backward.

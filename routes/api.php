@@ -93,7 +93,7 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{id}', 'show')->where('id', '[0-9]+');            // ✅ USADO: LinkService.findOne()
         Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
         Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
-        Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkLegacyAnalytics'])->where('id', '[0-9]+'); // moved to AnalyticsController
+        Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkSummaryAnalytics'])->where('id', '[0-9]+'); // moved to AnalyticsController
     });
 
     // === META-DADOS DE LINKS (sparkline, trend, preview, health) ===
@@ -107,7 +107,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
 
     // === DADOS DETALHADOS DE LINKS ===
     Route::prefix('link')->controller(LinkController::class)->group(function () {
-        Route::get('/{id}/clicks', 'getClicksData')->where('id', '[0-9]+'); // ✅ USADO: LinkClicksRealTime component
         Route::get('/{id}/clicks-list', 'getClicksList')->where('id', '[0-9]+'); // ✅ USADO: ClicksTable tab em LinkAnalyticsTabs
     });
 
