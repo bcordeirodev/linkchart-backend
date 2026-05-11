@@ -13,7 +13,7 @@ class EmailService
     /**
      * Enviar email usando SendGrid API (solução para porta 587 bloqueada)
      */
-    public function sendEmailViaSendGridAPI($toEmail, $subject, $htmlContent, $textContent = null, $toName = null)
+    public function sendEmailViaSendGridAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
     {
         try {
             $apiKey = config('services.sendgrid.api_key');
@@ -70,7 +70,7 @@ class EmailService
     /**
      * Enviar email de teste usando SendGrid API
      */
-    public function sendTestEmailViaSendGridAPI($toEmail, $toName = null)
+    public function sendTestEmailViaSendGridAPI(string $toEmail, ?string $toName = null): array
     {
         $data = [
             'name' => $toName ?? $toEmail,
@@ -90,7 +90,7 @@ class EmailService
     /**
      * Testar SendGrid API
      */
-    public function testSendGridAPI()
+    public function testSendGridAPI(): array
     {
         try {
             $apiKey = config('services.sendgrid.api_key');
@@ -127,7 +127,7 @@ class EmailService
     /**
      * Obter configurações SendGrid API
      */
-    public function getSendGridConfiguration()
+    public function getSendGridConfiguration(): array
     {
         return [
             'api_key' => config('services.sendgrid.api_key') ? '***CONFIGURADO***' : 'NÃO CONFIGURADO',
@@ -142,7 +142,7 @@ class EmailService
     /**
      * Enviar email de teste usando Laravel Mail nativo
      */
-    public function sendTestEmail($toEmail, $toName = null)
+    public function sendTestEmail(string $toEmail, ?string $toName = null): array
     {
         try {
             $data = [
@@ -185,7 +185,7 @@ class EmailService
     /**
      * Testar configuração do Laravel Mail
      */
-    public function testConnection()
+    public function testConnection(): array
     {
         try {
             // Verificar configurações básicas
@@ -226,7 +226,7 @@ class EmailService
     /**
      * Obter configurações de email atuais
      */
-    public function getMailConfiguration()
+    public function getMailConfiguration(): array
     {
         return [
             'default_mailer' => config('mail.default'),
@@ -245,7 +245,7 @@ class EmailService
     /**
      * Enviar email personalizado
      */
-    public function sendCustomEmail($toEmail, $subject, $htmlContent, $textContent = null)
+    public function sendCustomEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null): array
     {
         try {
             Mail::send([], [], function (Message $message) use ($toEmail, $subject, $htmlContent, $textContent) {
