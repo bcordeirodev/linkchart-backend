@@ -6,11 +6,12 @@ use App\Contracts\Analytics\AudienceAnalyticsInterface;
 use App\Contracts\Analytics\DashboardAnalyticsInterface;
 use App\Contracts\Analytics\GeographicAnalyticsInterface;
 use App\Contracts\Analytics\InsightsAnalyticsInterface;
+use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
 use App\Models\Click;
 use App\Models\Link;
 
-class LinkAnalyticsOrchestrator
+class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
 {
     public function __construct(
         private readonly DashboardAnalyticsInterface $dashboard,

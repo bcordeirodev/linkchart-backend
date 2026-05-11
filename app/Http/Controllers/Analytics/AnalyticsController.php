@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Analytics;
 
+use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
 use App\Http\Controllers\BaseController;
-use App\Services\Analytics\LinkAnalyticsOrchestrator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 class AnalyticsController extends BaseController
 {
     public function __construct(
-        private LinkAnalyticsOrchestrator $analyticsService,
+        private LinkAnalyticsOrchestratorInterface $analyticsService,
         private TemporalAnalyticsInterface $temporalService
     ) {}
 
