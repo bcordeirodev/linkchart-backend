@@ -1,22 +1,16 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Access to an undefined property App\\Http\\Controllers\\Analytics\\AnalyticsController\:\:\$advancedAnalyticsService\.$#'
+			message: '#^Access to an undefined property App\\Models\\Click\:\:\$clicks\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 2
 			path: app/Http/Controllers/Analytics/AnalyticsController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Link\:\:\$short_url\.$#'
-			identifier: property.notFound
-			count: 1
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Click\>::map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 2
 			path: app/Http/Controllers/Analytics/AnalyticsController.php
-
-		-
-			message: '#^Cannot call method toISOString\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Http/Controllers/Auth/AuthController.php
 
 		-
 			message: '#^Parameter \#1 \$forceForever of static method Tymon\\JWTAuth\\JWT\:\:invalidate\(\) expects bool, Tymon\\JWTAuth\\Token\|null given\.$#'
@@ -39,13 +33,13 @@ parameters:
 		-
 			message: '#^Relation ''utm'' is not found in App\\Models\\Click model\.$#'
 			identifier: larastan.relationExistence
-			count: 1
+			count: 2
 			path: app/Http/Controllers/Links/LinkController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Click\:\:\$clicks\.$#'
 			identifier: property.notFound
-			count: 3
+			count: 4
 			path: app/Http/Controllers/Links/PublicLinkController.php
 
 		-
@@ -253,28 +247,10 @@ parameters:
 			path: app/Http/Resources/PublicLinkResource.php
 
 		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Models/Link.php
-
-		-
-			message: '#^Cannot call method addMinutes\(\) on string\.$#'
-			identifier: method.nonObject
-			count: 1
-			path: app/Models/User.php
-
-		-
 			message: '#^Return type \(void\) of method App\\Models\\User\:\:markEmailAsVerified\(\) should be compatible with return type \(bool\) of method Illuminate\\Foundation\\Auth\\User\:\:markEmailAsVerified\(\)$#'
 			identifier: method.childReturnType
 			count: 1
 			path: app/Models/User.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Support\\Carbon\:\:va\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/Analytics/MetricsService.php
 
 		-
 			message: '#^Constant App\\Services\\Analytics\\MetricsService\:\:CACHE_KEYS is unused\.$#'
