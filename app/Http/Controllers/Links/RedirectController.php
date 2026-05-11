@@ -236,7 +236,6 @@ class RedirectController extends Controller
                             'strict' => true,
                             'protocols' => ['http', 'https'],
                         ],
-                        'verify' => false,
                     ])
                     ->get($url);
 
