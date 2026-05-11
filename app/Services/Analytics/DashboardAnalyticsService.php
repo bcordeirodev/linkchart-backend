@@ -8,10 +8,33 @@ use App\Services\Analytics\Support\UserAgentParser;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Assembles the main dashboard analytics payload for a single link.
+ *
+ * @see \App\Contracts\Analytics\DashboardAnalyticsInterface
+ *
+ * Produces a combined payload of summary stats, temporal patterns, geographic
+ * breakdown, and audience data. Designed to be fetched in a single API call from
+ * the frontend dashboard page. When $hours > 0 all sub-queries are time-bounded.
+ *
+ * Aggregates from the clicks table. Contains SQLite/PostgreSQL dual-path expressions
+ * for several hour/DOW extractions (used in tests with SQLite :memory:).
+ *
+ * Side effects: read-only queries. No cache, no queue, no log calls.
+ */
 class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAnalyticsInterface
 {
     public function __construct(private readonly UserAgentParser $uaParser) {}
 
+    /**
+     * Returns the full dashboard analytics payload for a link.
+     *
+     * Returns an empty dashboard structure if the link does not exist (no exception).
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $hours  Time window in hours (0 = all time).
+     * @return array<string, mixed> Keyed: summary, link_info, temporal_data, geographic_data, audience_data.
+     */
     public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
     {
         $since = $hours > 0 ? now()->subHours($hours) : null;

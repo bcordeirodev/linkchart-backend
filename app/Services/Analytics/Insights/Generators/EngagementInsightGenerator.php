@@ -5,8 +5,23 @@ namespace App\Services\Analytics\Insights\Generators;
 use App\Models\Click;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 
+/**
+ * Generates an insight about week-over-week click growth or decline.
+ *
+ * Compares clicks in the last 7 days against the preceding 7 days. Only
+ * fires when the previous period had at least one click and the change
+ * exceeds ±20%. Priority is 'high' when the absolute change exceeds 50%.
+ */
 class EngagementInsightGenerator implements InsightGeneratorInterface
 {
+    /**
+     * Returns a traffic trend insight, or null if previous period has no data
+     * or the change is within ±20%.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @return array<string, mixed>|null
+     */
     public function generate(int $linkId, int $totalClicks): ?array
     {
         $recent = Click::where('link_id', $linkId)

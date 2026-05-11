@@ -6,6 +6,21 @@ use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Computes geographic analytics (heatmap, countries, states, cities, continents) for a link.
+ *
+ * @see \App\Contracts\Analytics\GeographicAnalyticsInterface
+ *
+ * All geo data is sourced from the clicks table columns populated by
+ * LinkTrackingService::resolveDetailedLocation() (torann/geoip). Clicks from
+ * localhost (127.0.0.1, ::1) are stored with country='localhost' and are
+ * explicitly excluded from all geographic aggregations.
+ *
+ * The heatmap query is capped at 500 location groups to keep response size bounded.
+ * Country/state/city top-N queries are capped at 10.
+ *
+ * Side effects: read-only queries. No cache, no queue, no log calls.
+ */
 class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicAnalyticsInterface
 {
     private const CONTINENT_NAMES = [
@@ -18,6 +33,17 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
         'AN' => 'Antártica',
     ];
 
+    /**
+     * Returns geographic analytics data and metadata for the given link.
+     *
+     * Returns empty data arrays when no clicks exist (link must exist or
+     * ModelNotFoundException is thrown via Link::findOrFail).
+     *
+     * @param  int  $linkId  Link primary key.
+     * @return array{data: array{heatmap_data: array, top_countries: array, top_states: array, top_cities: array, continents: array}, meta: array}
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
+     */
     public function getLinkGeographicAnalytics(int $linkId): array
     {
         $link = Link::findOrFail($linkId);

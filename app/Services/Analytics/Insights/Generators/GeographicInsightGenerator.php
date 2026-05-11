@@ -5,8 +5,21 @@ namespace App\Services\Analytics\Insights\Generators;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Generates an insight about the primary country driving link traffic.
+ *
+ * Always fires when there is at least one geo-located click (country != 'localhost').
+ * Priority is 'high' when the top country accounts for more than 50% of clicks.
+ */
 class GeographicInsightGenerator implements InsightGeneratorInterface
 {
+    /**
+     * Returns a top-country insight, or null if no geo-located clicks exist.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $totalClicks  Total click count for percentage calculation.
+     * @return array<string, mixed>|null
+     */
     public function generate(int $linkId, int $totalClicks): ?array
     {
         $top = DB::table('clicks')

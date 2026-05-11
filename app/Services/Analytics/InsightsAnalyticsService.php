@@ -15,6 +15,22 @@ use App\Services\Analytics\Insights\Generators\TemporalInsightGenerator;
 use App\Services\Analytics\Insights\InsightGeneratorRegistry;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Produces AI-flavoured insights and supporting analytics data for a link.
+ *
+ * @see \App\Contracts\Analytics\InsightsAnalyticsInterface
+ *
+ * Owns the InsightGeneratorRegistry and instantiates all 8 generators inline
+ * (GeographicInsightGenerator, DeviceInsightGenerator, TemporalInsightGenerator,
+ * PerformanceInsightGenerator, DiversityInsightGenerator, SecurityInsightGenerator,
+ * EngagementInsightGenerator, RetentionInsightGenerator).
+ *
+ * Note (deferred R-15 from audit): generators are currently newed-up in __construct
+ * rather than injected, making this service harder to test in isolation. Future
+ * hardening should inject the registry via the service container.
+ *
+ * Side effects: read-only queries. No cache, no queue, no log calls.
+ */
 class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnalyticsInterface
 {
     private InsightGeneratorRegistry $registry;
@@ -36,6 +52,18 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         }
     }
 
+    /**
+     * Returns insights and supporting analytics for the given link.
+     *
+     * When no clicks exist returns an empty insights array with zero-value summary.
+     * Otherwise delegates to InsightGeneratorRegistry::generate(), collects all
+     * non-null insight payloads, and computes a summary over them.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @return array{insights: array, summary: array{total_insights: int, high_priority: int, actionable_insights: int, avg_confidence: float}, analytics_data: array, generated_at: string}
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
+     */
     public function getLinkInsightsAnalytics(int $linkId): array
     {
         Link::findOrFail($linkId);

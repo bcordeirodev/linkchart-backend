@@ -5,8 +5,21 @@ namespace App\Services\Analytics\Insights\Generators;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Generates an insight identifying the peak hour of click activity.
+ *
+ * Uses the pre-computed hour_of_day column (Phase 1) with a fallback to
+ * EXTRACT/strftime for older clicks. Always fires when at least one click exists.
+ */
 class TemporalInsightGenerator implements InsightGeneratorInterface
 {
+    /**
+     * Returns a peak-hour insight, or null if no clicks exist.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @return array<string, mixed>|null
+     */
     public function generate(int $linkId, int $totalClicks): ?array
     {
         $sqlite = DB::connection()->getDriverName() === 'sqlite';

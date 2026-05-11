@@ -7,10 +7,40 @@ use App\Models\Link;
 use App\Services\Analytics\Support\UserAgentParser;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Computes audience analytics (device, browser, OS, language, quality) for a link.
+ *
+ * @see \App\Contracts\Analytics\AudienceAnalyticsInterface
+ *
+ * Aggregates data from the clicks table using raw SQL queries for performance.
+ * Phase-aware: several breakdowns (platform_breakdown, connection_type_breakdown,
+ * rendering_engine, navigation_context_breakdown, return_visitor_stats, quality_breakdown)
+ * return partial or empty results for clicks recorded before the corresponding
+ * Phase 1/2/3 schema migrations.
+ *
+ * Side effects: read-only queries on clicks. No cache, no queue, no log calls.
+ *
+ * Language distribution uses two strategies:
+ *   - languages: real-time parsing via UserAgentParser::extractPrimaryLanguage
+ *     (maps accept_language raw string to a display name).
+ *   - language_breakdown: uses pre-parsed primary_language + language_region columns
+ *     (Phase 1), which is faster on large datasets.
+ */
 class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnalyticsInterface
 {
     public function __construct(private readonly UserAgentParser $uaParser) {}
 
+    /**
+     * Returns a comprehensive audience analytics payload for the given link.
+     *
+     * Returns empty arrays for every breakdown when no clicks exist (link must exist
+     * or ModelNotFoundException is thrown by Link::findOrFail).
+     *
+     * @param  int  $linkId  Link primary key.
+     * @return array<string, mixed> Keyed by breakdown name (device_breakdown, browser_breakdown, etc.).
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
+     */
     public function getLinkAudienceAnalytics(int $linkId): array
     {
         Link::findOrFail($linkId);
