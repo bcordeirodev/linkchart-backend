@@ -12,7 +12,6 @@ use App\Http\Resources\LinkResource;
 use App\Services\Links\LinkAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * RESTful controller for authenticated link management (CRUD).
@@ -26,11 +25,10 @@ use Illuminate\Support\Facades\DB;
  *   GET    /api/links/{id}              → show
  *   PUT    /api/links/{id}              → update
  *   DELETE /api/links/{id}              → destroy
- *   GET    /api/link/{id}/clicks        → getClicksData
  *   GET    /api/link/{id}/clicks-list   → getClicksList
  *
  * Cross-mount note: GET /api/links/{id}/analytics is defined in the same route
- * group but is handled by AnalyticsController::getLinkLegacyAnalytics, not by
+ * group but is handled by AnalyticsController::getLinkSummaryAnalytics, not by
  * this controller.
  *
  * Depends on: LinkServiceInterface (injected), LinkAuditService (injected).
@@ -253,144 +251,6 @@ class LinkController extends BaseController
             return response()->json(['message' => 'Link removido com sucesso.']);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao remover link.', $e);
-        }
-    }
-
-    /**
-     * GET /api/link/{id}/clicks
-     *
-     * Return aggregated click statistics for a link: totals, unique IPs, hourly
-     * distribution over the last 24 h, top countries/devices/referrers, UTM
-     * campaigns, and the 10 most recent click records. All aggregations are done
-     * via SQL to avoid loading large datasets into PHP memory.
-     *
-     * Middleware: api.auth:api, verified
-     * Auth: required
-     * Owner check: yes — uses findOwnedLink.
-     *
-     * Response shape: { link_info, stats, recent_clicks } (200)
-     *                 Raw JSON — not wrapped by NormalizeApiResponse.
-     *
-     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
-     */
-    public function getClicksData(string $id): JsonResponse
-    {
-        try {
-            // Buscar link por ID e verificar ownership
-            $link = $this->findOwnedLink($id);
-            if (! $link) {
-                return $this->linkNotFound();
-            }
-
-            $base = fn () => \App\Models\Click::where('link_id', $link->id);
-
-            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
-            $hourExpr = $isSqlite
-                ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
-                : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
-
-            // Estatísticas agregadas via SQL — sem carregar todos os cliques em memória
-            $stats = [
-                'total_clicks' => $base()->count(),
-                'unique_ips' => $base()->distinct('ip')->count('ip'),
-                'last_click' => $base()->max('created_at'),
-                'first_click' => $base()->min('created_at'),
-
-                // Distribuição por hora nas últimas 24h
-                'clicks_by_hour' => $base()
-                    ->where('created_at', '>=', now()->subDay())
-                    ->selectRaw("$hourExpr AS hour, COUNT(*) AS total")
-                    ->groupByRaw($hourExpr)
-                    ->orderBy('hour')
-                    ->pluck('total', 'hour'),
-
-                // Top países
-                'top_countries' => $base()
-                    ->whereNotNull('country')
-                    ->selectRaw('country, COUNT(*) AS total')
-                    ->groupBy('country')
-                    ->orderByDesc('total')
-                    ->limit(5)
-                    ->pluck('total', 'country'),
-
-                // Top dispositivos
-                'top_devices' => $base()
-                    ->whereNotNull('device')
-                    ->selectRaw('device, COUNT(*) AS total')
-                    ->groupBy('device')
-                    ->orderByDesc('total')
-                    ->limit(10)
-                    ->pluck('total', 'device'),
-
-                // Top referrers: agrupa por referer bruto no SQL (limit 50),
-                // depois reagrega por host em PHP somando totais — sem perder dados de hosts repetidos
-                'top_referrers' => $base()
-                    ->whereNotNull('referer')
-                    ->where('referer', '!=', '-')
-                    ->where('referer', '!=', '')
-                    ->selectRaw('referer, COUNT(*) AS total')
-                    ->groupBy('referer')
-                    ->orderByDesc('total')
-                    ->limit(50)
-                    ->pluck('total', 'referer')
-                    ->pipe(function ($collection) {
-                        $hostTotals = [];
-                        foreach ($collection as $referer => $total) {
-                            $host = parse_url($referer, PHP_URL_HOST) ?: 'Unknown';
-                            $hostTotals[$host] = ($hostTotals[$host] ?? 0) + $total;
-                        }
-                        arsort($hostTotals);
-
-                        return collect($hostTotals)->take(5);
-                    }),
-
-                // Cliques com UTM
-                'utm_campaigns' => \App\Models\Click::where('link_id', $link->id)
-                    ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
-                    ->whereNotNull('link_utms.utm_campaign')
-                    ->selectRaw('link_utms.utm_campaign AS campaign, COUNT(*) AS total')
-                    ->groupBy('link_utms.utm_campaign')
-                    ->orderByDesc('total')
-                    ->pluck('total', 'campaign'),
-            ];
-
-            $recent_clicks = $base()
-                ->with('utm')
-                ->orderByDesc('created_at')
-                ->limit(10)
-                ->get()
-                ->map(function ($click) {
-                    return [
-                        'id' => $click->id,
-                        'ip' => $click->ip,
-                        'country' => $click->country,
-                        'city' => $click->city,
-                        'device' => $click->device,
-                        'referer' => $click->referer,
-                        'user_agent' => $click->user_agent,
-                        'created_at' => $click->created_at,
-                        'utm' => $click->utm ? [
-                            'source' => $click->utm->utm_source,
-                            'medium' => $click->utm->utm_medium,
-                            'campaign' => $click->utm->utm_campaign,
-                        ] : null,
-                    ];
-                });
-
-            return response()->json([
-                'link_info' => [
-                    'id' => $link->id,
-                    'slug' => $link->slug,
-                    'title' => $link->title,
-                    'original_url' => $link->original_url,
-                    'created_at' => $link->created_at,
-                    'clicks' => $link->clicks,
-                ],
-                'stats' => $stats,
-                'recent_clicks' => $recent_clicks,
-            ]);
-        } catch (\Exception $e) {
-            return $this->serverError('Erro ao buscar dados de cliques.', $e);
         }
     }
 

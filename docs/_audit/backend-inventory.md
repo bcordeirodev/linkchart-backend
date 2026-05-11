@@ -35,7 +35,6 @@
 |---|---|---|---|---|
 | login | POST /api/auth/login | throttle:login | — | — |
 | register | POST /api/auth/register | throttle:login | — | — |
-| googleLogin | POST /api/auth/google | throttle:login | — | — |
 | verifyEmail | POST /api/auth/verify-email | throttle:login | — | — |
 | forgotPassword | POST /api/auth/forgot-password | throttle:login | — | — |
 | resetPassword | POST /api/auth/reset-password | throttle:login | — | — |
@@ -47,7 +46,7 @@
 | changePassword | PUT /api/change-password | api.auth:api, verified | — | — |
 
 **Notes:**
-- `googleLogin` is declared as a route (`POST /api/auth/google`) but the corresponding method does **not exist** in the controller file — this is a stub / dead route.
+- `googleLogin` and the `POST /api/auth/google` route were both removed in the consolidation (R-09 resolved). Frontend no longer references the path.
 - `resendVerificationEmail` sits in the `api.auth:api`-only group (lines 69–77 of `routes/api.php`), NOT in the `throttle:login` group — carries no rate limit.
 - All validation is done inline via `Validator::make`; no FormRequest classes are used in this controller.
 
@@ -79,7 +78,7 @@
 - `getClicksData` and `getClicksList` are mounted under the singular prefix `/api/link/{id}/...` (not `/api/links`), as noted in lines 110–113 of `routes/api.php`.
 - A separate `PublicLinkController::showBySlug` (line 65) handles `GET /api/public/link/{slug}`. The `LinkController::showBySlug` method (line 476) appears to be a duplicate/leftover with no route registration — verify in Task 1.10.
 - `auditHistory` is defined in the controller but has no matching route in `routes/api.php` — it is an orphan method (verify in Task 1.10).
-- `GET /api/links/{id}/analytics` is mounted on the `links` prefix group but dispatches to `AnalyticsController::getLinkLegacyAnalytics` (see AnalyticsController notes).
+- `GET /api/links/{id}/analytics` is mounted on the `links` prefix group but dispatches to `AnalyticsController::getLinkSummaryAnalytics` (see AnalyticsController notes).
 
 ---
 
@@ -171,10 +170,10 @@
 | getBusinessInsights | GET /api/analytics/link/{linkId}/insights | api.auth:api, verified | — | — |
 | getTemporalAnalytics | GET /api/analytics/link/{linkId}/temporal | api.auth:api, verified | — | — |
 | getAudienceAnalytics | GET /api/analytics/link/{linkId}/audience | api.auth:api, verified | — | — |
-| getLinkLegacyAnalytics | GET /api/links/{id}/analytics | api.auth:api, verified | — | — |
+| getLinkSummaryAnalytics | GET /api/links/{id}/analytics | api.auth:api, verified | — | — |
 
 **Notes:**
-- `getLinkLegacyAnalytics` is **cross-mounted**: it lives in `AnalyticsController` but is registered inside the `Route::prefix('links')->controller(LinkController::class)` group at `routes/api.php` line 97 as `[AnalyticsController::class, 'getLinkLegacyAnalytics']`. The path resolves to `/api/links/{id}/analytics`.
+- `getLinkSummaryAnalytics` is **cross-mounted**: it lives in `AnalyticsController` but is registered inside the `Route::prefix('links')->controller(LinkController::class)` group at `routes/api.php` line 97 as `[AnalyticsController::class, 'getLinkSummaryAnalytics']`. The path resolves to `/api/links/{id}/analytics`.
 - `getTemporalAnalytics` merges base temporal data from `LinkAnalyticsOrchestrator` with advanced data from `TemporalAnalyticsInterface`, enriching timezone entries with percentage fields before returning.
 - All actions use `findOwnedLink` (inherited from `BaseController`) to enforce ownership before loading analytics.
 
@@ -1069,7 +1068,6 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 |---|---|---|---|---|
 | POST | `/api/auth/login` | — | `AuthController@login` | `throttle:login` |
 | POST | `/api/auth/register` | — | `AuthController@register` | `throttle:login` |
-| POST | `/api/auth/google` | — | `AuthController@googleLogin` | `throttle:login` |
 | POST | `/api/auth/verify-email` | — | `AuthController@verifyEmail` | `throttle:login` |
 | POST | `/api/auth/forgot-password` | — | `AuthController@forgotPassword` | `throttle:login` |
 | POST | `/api/auth/reset-password` | — | `AuthController@resetPassword` | `throttle:login` |
@@ -1084,7 +1082,7 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 | GET | `/api/links/{id}` | — | `LinkController@show` | `api.auth:api`, `verified` |
 | PUT | `/api/links/{id}` | — | `LinkController@update` | `api.auth:api`, `verified` |
 | DELETE | `/api/links/{id}` | — | `LinkController@destroy` | `api.auth:api`, `verified` |
-| GET | `/api/links/{id}/analytics` | — | `AnalyticsController@getLinkLegacyAnalytics` | `api.auth:api`, `verified` |
+| GET | `/api/links/{id}/analytics` | — | `AnalyticsController@getLinkSummaryAnalytics` | `api.auth:api`, `verified` |
 | POST | `/api/links/batch-meta` | — | `LinkMetaController@batchMeta` | `api.auth:api`, `verified` |
 | GET | `/api/links/{id}/sparkline` | — | `LinkMetaController@sparkline` | `api.auth:api`, `verified` |
 | GET | `/api/links/{id}/trend` | — | `LinkMetaController@trend` | `api.auth:api`, `verified` |
@@ -1195,12 +1193,12 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 
 | Backend domain (controller / route family) | Frontend feature(s) | Notes |
 |---|---|---|
-| Auth (`Controllers/Auth/AuthController` — `/api/auth/*`, `/api/me`, `/api/logout`, `/api/profile`, `/api/change-password`, `/api/email-verification-status`, `/api/resend-verification-email`) | `profile` (+ app-wide auth state) | JWT issued by `tymon/jwt-auth` (`dev-chore/laravel-12`). `googleLogin` route exists but the controller method is a stub. |
-| Links CRUD (`Controllers/Links/LinkController` — `/api/links/*`, `/api/link/{id}/clicks*`) | `links` | `LinkResource` shape consumed; `/api/link/{id}/clicks` drives real-time clicks component; `/api/link/{id}/clicks-list` drives the ClicksTable tab. |
+| Auth (`Controllers/Auth/AuthController` — `/api/auth/*`, `/api/me`, `/api/logout`, `/api/profile`, `/api/change-password`, `/api/email-verification-status`, `/api/resend-verification-email`) | `profile` (+ app-wide auth state) | JWT issued by `tymon/jwt-auth` (`dev-chore/laravel-12`). `POST /api/auth/google` and `googleLogin` were removed in the consolidation (R-09 resolved). |
+| Links CRUD (`Controllers/Links/LinkController` — `/api/links/*`, `/api/link/{id}/clicks-list`) | `links` | `LinkResource` shape consumed; `/api/link/{id}/clicks-list` drives the ClicksTable tab. The aggregated `/api/link/{id}/clicks` endpoint was removed in the cross-project cleanup (no frontend consumer). |
 | Link metadata (`Controllers/Links/LinkMetaController` — `/api/links/batch-meta`, `/api/links/{id}/sparkline\|trend\|preview\|health`) | `links` (list page sparkline + trend), `analytics` (preview/health) | Response fields locked: `sparkline`, `trend`, `preview`, `health`. |
 | Public shortener (`Controllers/Links/PublicLinkController` — `/api/public/*`) | `shorter`, `public-analytics` | Rate limited by `throttle:public-shorten` (store) and `throttle:public-analytics` (basicAnalytics). `showBySlug` has no rate limit. |
 | Redirect (`Controllers/Links/RedirectController` — `/r/{slug}`, `/{slug}`) | `redirect` (and direct browser hits, plus bot OG previews) | Web routes only (not API). Rate limited by `throttle:redirect`. `/{slug}` clean-URL alias is intended for production domain `redirect.linkcharts.com.br`. |
-| Analytics (`Controllers/Analytics/AnalyticsController` — `/api/analytics/link/{linkId}/*`, `/api/links/{id}/analytics`) | `analytics`, `public-analytics` | Heatmap endpoint removed (returns 404 per `AnalyticsEndpointsTest`). `/api/links/{id}/analytics` is a legacy endpoint preserved for backwards compatibility. |
+| Analytics (`Controllers/Analytics/AnalyticsController` — `/api/analytics/link/{linkId}/*`, `/api/links/{id}/analytics`) | `analytics`, `public-analytics` | Heatmap endpoint removed (returns 404 per `AnalyticsEndpointsTest`). `/api/links/{id}/analytics` dispatches to `getLinkSummaryAnalytics` (renamed from `getLinkLegacyAnalytics` on 2026-05-11 — it returns aggregate stats, not deprecated). |
 
 > The mapping above is by convention, not enforced by the framework — any frontend component can call any backend endpoint. Changes to response shapes in the backend must be coordinated with the corresponding frontend feature directory.
 
@@ -1357,13 +1355,10 @@ Each domain channel is a `stack` that fans out to its own `_file` channel and th
 
 ### Médio risco
 
-#### R-09 — Fix `AuthController::googleLogin` — implement or remove (product decision required)
+#### R-09 — Fix `AuthController::googleLogin` — RESOLVED (route + method removed)
 
-- **What:** the route `POST /api/auth/google` is declared in `routes/api.php:55` and points to `AuthController@googleLogin`, but the method does not exist in `app/Http/Controllers/Auth/AuthController.php`. Any request to this route will throw a `BadMethodCallException` at runtime.
-- **Decision needed:** either (a) implement `googleLogin` using a Google OAuth flow, or (b) remove the route from `routes/api.php` and remove any frontend reference to `POST /api/auth/google`. **Phase 2 cannot resolve this without a product direction call.**
-- **Rationale:** this is a runtime bug, not a cleanup. If (b), the frontend's Google login button (if any) must also be removed or disabled.
-- **Risk:** médio — affects the auth surface; needs the human to decide direction (implement vs. remove).
-- **Impact:** at minimum 1 file (`routes/api.php`); if implemented, also `app/Http/Controllers/Auth/AuthController.php` plus any OAuth config.
+- **Status:** Resolved during the consolidation. Option (b) was chosen: route `POST /api/auth/google` and the never-implemented `googleLogin` method were removed. Frontend has no remaining reference.
+- **Verification (2026-05-11):** `grep -rn googleLogin app/ routes/` returns 0 hits; `grep -rn /api/auth/google` in `frontend-next/src` returns 0 hits.
 
 ---
 

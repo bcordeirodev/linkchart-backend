@@ -140,7 +140,7 @@ cross-mount do endpoint de analytics legado.
 | DELETE | /api/links/{id} | `LinkController@destroy` | — | required (JWT + verified) |
 | GET | /api/link/{id}/clicks | `LinkController@getClicksData` | — | required (JWT + verified) |
 | GET | /api/link/{id}/clicks-list | `LinkController@getClicksList` | — | required (JWT + verified) |
-| GET | /api/links/{id}/analytics | `AnalyticsController@getLinkLegacyAnalytics` | — | required (JWT + verified) |
+| GET | /api/links/{id}/analytics | `AnalyticsController@getLinkSummaryAnalytics` | — | required (JWT + verified) |
 
 > O endpoint `GET /api/links/{id}/analytics` é declarado dentro do grupo de rotas do
 > `LinkController` (prefixo `links/`, linha 96 de `routes/api.php`), mas é **tratado pelo

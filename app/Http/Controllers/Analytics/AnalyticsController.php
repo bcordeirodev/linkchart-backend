@@ -27,7 +27,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Cross-mount note: GET /api/links/{id}/analytics is physically defined in the
  * links route group (routes/api.php line 96) but is handled by this controller's
- * getLinkLegacyAnalytics action, not by LinkController.
+ * getLinkSummaryAnalytics action, not by LinkController.
  *
  * Heatmap data was folded into getGeographicAnalytics in commit 00e6a3f; there
  * is no longer a dedicated /heatmap endpoint.
@@ -275,7 +275,7 @@ class AnalyticsController extends BaseController
      * Legacy analytics endpoint cross-mounted from the /api/links route group.
      * Although the URL looks like a LinkController route, this action lives in
      * AnalyticsController and is wired in routes/api.php via:
-     *   Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkLegacyAnalytics'])
+     *   Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkSummaryAnalytics'])
      *
      * Returns aggregate statistics using SQL (no full Click model load): total
      * and unique clicks, avg daily clicks, conversion rate, 30-day timeline,
@@ -294,7 +294,7 @@ class AnalyticsController extends BaseController
      *
      * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
      */
-    public function getLinkLegacyAnalytics(string $id): JsonResponse
+    public function getLinkSummaryAnalytics(string $id): JsonResponse
     {
         try {
             $link = $this->findOwnedLink((int) $id);
