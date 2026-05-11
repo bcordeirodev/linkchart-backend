@@ -8,6 +8,34 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
+/**
+ * Authenticated application user.
+ *
+ * Implements JWTSubject so tymon/jwt-auth can embed the user's primary key
+ * in the `sub` claim. Observer: App\Models\Observers\UserObserver, registered
+ * in AppServiceProvider::boot() via User::observe(UserObserver::class).
+ *
+ * Fillable: name, email, password, email_verified, email_verified_at,
+ *           email_verification_sent_at.
+ *
+ * Casts: email_verified_at → datetime, email_verification_sent_at → datetime,
+ *        email_verified → boolean, password → hashed.
+ *
+ * Hidden (serialization): password, remember_token.
+ *
+ * @property int $id
+ * @property string $name Display name.
+ * @property string $email Unique e-mail address (login identifier).
+ * @property string $password Bcrypt hash (auto-cast via 'hashed').
+ * @property string|null $remember_token Laravel session remember token.
+ * @property bool $email_verified Whether the user has confirmed their e-mail address.
+ * @property \Illuminate\Support\Carbon|null $email_verified_at Timestamp of successful verification; null until verified.
+ * @property \Illuminate\Support\Carbon|null $email_verification_sent_at Timestamp of the most recent verification e-mail dispatch; used for resend rate-limiting (2-minute window).
+ * @property \Illuminate\Support\Carbon $created_at
+ * @property \Illuminate\Support\Carbon $updated_at
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Link>                        $links
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\EmailVerificationToken>      $emailVerificationTokens
+ */
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -72,13 +100,20 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
+    /**
+     * All shortened links owned by this user (hasMany Link).
+     */
     public function links()
     {
         return $this->hasMany(Link::class);
     }
 
     /**
-     * Verificar se o email foi verificado
+     * Returns true when both the boolean flag and the timestamp are set.
+     *
+     * The flag alone is insufficient; the timestamp provides an audit trail of
+     * when verification occurred. Middleware EnsureEmailIsVerified delegates to
+     * this method.
      */
     public function hasVerifiedEmail(): bool
     {
@@ -86,7 +121,7 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Marcar email como verificado
+     * Set email_verified = true and record the timestamp; persists immediately.
      */
     public function markEmailAsVerified(): void
     {
@@ -97,7 +132,11 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Verificar se pode reenviar email de verificação (rate limiting)
+     * Returns true if the user may request a new verification e-mail.
+     *
+     * Rate limit: resend is blocked until 2 minutes have elapsed since the last
+     * dispatch recorded in email_verification_sent_at. Always returns true on
+     * first send (null timestamp).
      */
     public function canResendVerificationEmail(): bool
     {
@@ -110,7 +149,7 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Marcar que email de verificação foi enviado
+     * Record the current timestamp in email_verification_sent_at; persists immediately.
      */
     public function markVerificationEmailSent(): void
     {
@@ -120,7 +159,8 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Relacionamento com tokens de verificação
+     * All verification/password-reset tokens associated with this user's e-mail
+     * (hasMany EmailVerificationToken via email ↔ email FK).
      */
     public function emailVerificationTokens()
     {
