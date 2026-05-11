@@ -1,116 +1,181 @@
-# 🔗 Link Chart - Backend API
+# Link Chart — Backend API
 
-Backend da aplicação Link Chart desenvolvido em Laravel 12 com PHP 8.2.
+Backend HTTP API for [linkcharts.com.br](https://linkcharts.com.br), a URL shortener with deep click analytics. Built on **Laravel 12 / PHP 8.2**, backed by **PostgreSQL 15** and **Redis 7**. Serves the Next.js front-end at linkcharts.com.br and the public redirect (`/r/{slug}` plus the clean `/{slug}` alias) with Open Graph previews for bots.
 
-## 🚀 Tecnologias
+## Stack
 
-- **PHP 8.2+**
-- **Laravel 12**
-- **PostgreSQL 15**
-- **Redis 7**
-- **Docker & Docker Compose**
-- **Nginx**
+- PHP 8.2, Laravel 12
+- PostgreSQL 15, Redis 7
+- JWT auth via `tymon/jwt-auth` (`dev-chore/laravel-12` branch — Laravel 12 compatibility)
+- Geo: `torann/geoip` · UA parsing: `jenssegers/agent` · Holidays: `azuyalabs/yasumi`
+- Mail: `sendgrid/sendgrid` (SendGrid HTTP transport)
+- Tooling: `laravel/pint`, `larastan/larastan`, `phpunit/phpunit` (SQLite `:memory:` in CI)
+- Containerization: Docker + Docker Compose
 
-## 📦 Instalação Local
+## Pré-requisitos e setup local
 
 ```bash
-# Clonar repositório
+# 0. Pré-requisitos
+#    - PHP 8.2 (extensions: mbstring, xml, zip, pdo_pgsql, redis, bcmath) — or use Docker exclusively.
+#    - Composer 2.x
+#    - Docker + Docker Compose v2
+
+# 1. Clone and copy the env template
 git clone git@github.com:bcordeirodev/linkchart-backend.git
 cd linkchart-backend
-
-# Copiar configurações
 cp .env.example .env
 
-# Instalar dependências
+# 2. Bring up Postgres + Redis (mapped to alternate host ports 5433/6380 to avoid conflicts)
+docker-compose up -d database redis
+
+# 3. Install PHP deps; generate APP_KEY and JWT_SECRET
 composer install
-
-# Gerar chave da aplicação
 php artisan key:generate
+php artisan jwt:secret
 
-# Executar migrações
+# 4. Run migrations
 php artisan migrate
 
-# Iniciar servidor
+# 5. Bring up the dev stack (server + queue + logs + vite) or just the API
+composer run dev
+# or, just the API:
 php artisan serve
-```
 
-## 🐳 Deploy com Docker
-
-```bash
-# Produção
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# Executar migrações
-docker-compose exec app php artisan migrate --force
-
-# Otimizar para produção
-docker-compose exec app php artisan optimize
-```
-
-## 🌐 Deploy no DigitalOcean
-
-1. Criar droplet Ubuntu 22.04
-2. Instalar Docker e Docker Compose
-3. Clonar este repositório
-4. Configurar `.env.production`
-5. Executar `./deploy.sh`
-
-Ver `README-DOCKER.md` para instruções completas.
-
-## 📊 Funcionalidades
-
-- ✅ Encurtamento de URLs
-- ✅ Analytics avançados
-- ✅ Autenticação JWT
-- ✅ Rate limiting
-- ✅ Cache Redis
-- ✅ Geolocalização
-- ✅ API RESTful
-
-## 🔧 Comandos Úteis
-
-```bash
-# Limpar cache
-php artisan optimize:clear
-
-# Executar workers
+# 6. Start the queue worker (required for click tracking, link preview, demo seed)
 php artisan queue:work
-
-# Executar testes
-php artisan test
-
-# Verificar saúde
-curl http://localhost:8000/api/health
 ```
 
-## 📝 Documentação da API
-
-Acesse `/api/documentation` para ver a documentação completa da API.
-
-## 🪝 Git Hooks (pre-push)
-
-Hook `pre-push` versionado em `scripts/hooks/` que roda os mesmos checks do CI (`php artisan test`) dentro do container Docker antes de cada push, evitando quebrar a pipeline.
-
-**Ativação (uma vez por clone):**
+If you prefer everything in Docker:
 
 ```bash
-./scripts/setup-hooks.sh
+docker-compose up -d                      # brings up app + database + redis + nginx
+docker exec linkchartapi-dev php artisan migrate
 ```
 
-O script aponta `core.hooksPath` para `scripts/hooks` e dá `chmod +x` nos hooks. Requer `docker compose` com o serviço `app` rodando.
+## Estrutura de pastas
 
-- Bypass de emergência: `git push --no-verify`
-- Desativar: `git config --unset core.hooksPath`
+```
+backend/
+├── app/
+│   ├── Console/Commands/         # artisan commands (api:optimize, …)
+│   ├── Contracts/                # interfaces (Repositories/, Services/, Analytics/)
+│   ├── DTOs/                     # input/output DTOs
+│   ├── Exceptions/               # ApiExceptionHandler
+│   ├── Http/
+│   │   ├── Controllers/          # Auth/, Links/, Analytics/ — see per-domain READMEs
+│   │   ├── Middleware/           # ApiAuthenticate, AssignRequestId, NormalizeApiResponse, …
+│   │   ├── Requests/             # FormRequests
+│   │   └── Resources/            # API Resources
+│   ├── Jobs/                     # ProcessLinkClickJob, SeedDemoLinkJob, FetchLinkPreviewJob, LinkHealthCheckJob — see app/Jobs/README.md
+│   ├── Logging/                  # AppLogger facade + processors + taps (see CLAUDE.md "Logging")
+│   ├── Models/                   # Eloquent models + Observers/ — see app/Models/README.md
+│   ├── Providers/                # AppServiceProvider (DI bindings + rate limiters)
+│   ├── Repositories/             # Eloquent persistence — see app/Repositories/README.md
+│   └── Services/                 # business logic — see app/Services/README.md
+├── bootstrap/app.php             # Laravel 12 app bootstrap (middleware, exceptions, schedule)
+├── config/                       # config files (logging, tracking, geoip, …)
+├── database/
+│   ├── factories/
+│   ├── migrations/               # 24 migrations — append-only — see database/migrations/README.md
+│   └── seeders/
+├── docs/                         # specs, plans, audits, ADRs, diagrams
+│   ├── _audit/                   # snapshot inventories
+│   ├── adr/                      # Architecture Decision Records (MADR format)
+│   ├── diagrams/                 # Mermaid diagrams of critical flows
+│   └── superpowers/{plans,specs}/  # design + implementation specs per feature
+├── public/
+├── routes/
+│   ├── api.php                   # /api/* routes
+│   ├── web.php                   # /r/{slug} + clean /{slug} alias (intentionally NOT under /api)
+│   └── console.php               # artisan command shells (schedule lives in bootstrap/app.php)
+├── scripts/deploy.sh             # production deploy script (called by GitHub Actions)
+├── storage/logs/                 # 8 log channels (see CLAUDE.md "Logging")
+└── tests/
+    ├── Feature/                  # HTTP + integration tests
+    └── Unit/                     # pure unit tests
+```
 
-## 🤝 Contribuição
+## Como contribuir
 
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for commit conventions, branching, code style, and the checks you must run before opening a PR.
 
-## 📄 Licença
+## Comandos úteis
 
-Este projeto está sob a licença MIT.
+```bash
+# Concurrent dev (server + queue + logs + vite)
+composer run dev
 
+# Server only
+php artisan serve
+
+# Tests
+php artisan test                                      # full suite
+vendor/bin/phpunit --filter RedirectTest              # single test class
+
+# Lint / static analysis
+vendor/bin/pint                                       # format
+vendor/bin/pint --test                                # CI gate (no rewrites)
+vendor/bin/phpstan analyse --memory-limit=2G          # larastan (baseline floor: ≤20 errors)
+
+# Database
+php artisan migrate
+php artisan migrate:status
+php artisan tinker
+
+# Queue
+php artisan queue:work
+php artisan queue:listen --tries=1                    # dev: auto-reload
+
+# Schedule (LinkHealthCheckJob runs hourly)
+php artisan schedule:work                             # local scheduler
+
+# Cache
+php artisan optimize:clear                            # clear config + route + view cache
+php artisan api:optimize                              # custom: see app/Console/Commands/OptimizeApiCommand.php
+
+# Docker shortcuts (when using docker-compose)
+docker exec linkchartapi-dev php artisan migrate
+docker exec linkchartapi-dev vendor/bin/phpunit
+```
+
+## Documentação avançada
+
+- [`CLAUDE.md`](CLAUDE.md) — internal reference for Claude Code (and humans): architecture, logging, hot path, debt.
+- [`docs/_audit/backend-inventory.md`](docs/_audit/backend-inventory.md) — current inventory snapshot (2026-05-10).
+- [`docs/adr/`](docs/adr/) — Architecture Decision Records (MADR).
+- [`docs/diagrams/`](docs/diagrams/) — Mermaid diagrams of critical flows (redirect, jobs, cache, auth, error handling).
+- [`docs/superpowers/specs/`](docs/superpowers/specs/) — feature design specs.
+- [`docs/superpowers/plans/`](docs/superpowers/plans/) — implementation plans per feature.
+- Per-domain READMEs:
+  - `app/Http/Controllers/Auth/README.md`
+  - `app/Http/Controllers/Links/README.md`
+  - `app/Http/Controllers/Analytics/README.md`
+  - `app/Services/README.md`
+  - `app/Repositories/README.md`
+  - `app/Jobs/README.md`
+  - `app/Models/README.md`
+  - `database/migrations/README.md`
+
+## Deploy
+
+Production runs on a single VPS (DigitalOcean) using Docker Compose.
+
+- **Trigger:** push to `main` triggers `.github/workflows/deploy-production.yml`.
+- **Pipeline:**
+  1. Run `validate` job (same as `ci.yml`: `php artisan test` + `vendor/bin/pint --test`).
+  2. Rsync repo to VPS (`.env.production` is excluded from rsync so server-side secrets persist).
+  3. Run `scripts/deploy.sh` on the VPS:
+     - Inject `SENDGRID_API_KEY` from GitHub Secrets into `.env.production`.
+     - `docker compose -f docker-compose.prod.yml down --timeout 60`.
+     - Build (or `--no-cache` if `FORCE_REBUILD=true`).
+     - Start containers.
+     - Wait for PostgreSQL (`pg_isready` loop, 120 s timeout).
+     - Wait for Redis (`PING` loop, 60 s timeout).
+     - Clear and warm Laravel cache (`php artisan optimize:clear` + `php artisan optimize`).
+     - `php artisan migrate --force`.
+     - Health check loop (`/health`, 5 attempts).
+     - Prune unused Docker images.
+
+- **Production cache strategy:** both `config:cache` and `route:cache` are active in production. `env()` calls outside `config/` return `null` after cache — always read env via `config('namespace.key')`.
+
+- **Frontend:** the Next.js front-end lives in the sibling `frontend-next/` folder in the same monorepo root.
