@@ -3,44 +3,115 @@
 namespace App\Contracts\Analytics;
 
 /**
- * Contract for the analytics orchestrator that fans out to specialized
- * analytics services (dashboard, geographic, temporal, audience, insights).
+ * Contract for the analytics orchestrator that fans out to domain-specific services.
  *
- * Implementation: App\Services\Analytics\LinkAnalyticsOrchestrator.
- * Bound in App\Providers\AppServiceProvider::register().
+ * Acts as a thin façade over five analytics services — dashboard, geographic,
+ * temporal, audience, and insights — injected as constructor dependencies. The
+ * orchestrator routes each endpoint call to the appropriate service without
+ * adding business logic of its own, keeping each service independently testable.
+ *
+ * Concrete implementation: {@see \App\Services\Analytics\LinkAnalyticsOrchestrator}.
+ * Bound in {@see \App\Providers\AppServiceProvider::register()} via
+ * `$this->app->bind(LinkAnalyticsOrchestratorInterface::class, LinkAnalyticsOrchestrator::class)`.
+ *
+ * Injected by `AnalyticsController` to serve all analytics endpoints under
+ * `GET /api/analytics/link/{id}/*`.
  */
 interface LinkAnalyticsOrchestratorInterface
 {
     /**
-     * Returns a comprehensive analytics payload for the given link,
-     * merging geographic, temporal, audience, and insights data.
+     * Return a comprehensive analytics payload merging geographic, temporal,
+     * audience, and insights data for the given link.
+     *
+     * When the link has no clicks, returns a minimal payload with `has_data = false`
+     * and a human-readable `message`. When clicks exist, the payload includes an
+     * `overview` summary and delegates to the geographic, temporal, audience, and
+     * insights services. Dashboard data is NOT included in this response.
+     *
+     * Throws `\Illuminate\Database\Eloquent\ModelNotFoundException` if `$linkId`
+     * does not exist.
+     *
+     * Return shape:
+     * ```
+     * [
+     *   'has_data'   => bool,
+     *   'link_info'  => array{id: int, short_url: string, original_url: string, title: ?string, is_active: bool, created_at: mixed, clicks: int},
+     *   'overview'   => array{total_clicks: int, unique_visitors: int, countries_reached: int, avg_daily_clicks: float},   // only when has_data = true
+     *   'geographic' => array,   // see GeographicAnalyticsInterface
+     *   'temporal'   => array,   // see TemporalAnalyticsInterface
+     *   'audience'   => array,   // see AudienceAnalyticsInterface
+     *   'insights'   => array,   // insight objects from InsightsAnalyticsInterface
+     * ]
+     * ```
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @return array<string, mixed> Comprehensive analytics payload.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
     public function getComprehensiveLinkAnalytics(int $linkId): array;
 
     /**
-     * Returns dashboard analytics for the given link, optionally filtered
-     * to the last N hours.
+     * Return dashboard analytics for the given link, optionally scoped to the last N hours.
+     *
+     * Delegates directly to {@see \App\Contracts\Analytics\DashboardAnalyticsInterface::getLinkDashboardAnalytics()}.
+     * See that interface for the full return shape.
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @param  int  $hours  Time window in hours (0 = all time).
+     * @return array<string, mixed> Dashboard analytics payload.
      */
     public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array;
 
     /**
-     * Returns geographic analytics (countries, regions, cities) for the given link.
+     * Return geographic analytics (heatmap, countries, states, cities) for the given link.
+     *
+     * Delegates directly to {@see \App\Contracts\Analytics\GeographicAnalyticsInterface::getLinkGeographicAnalytics()}.
+     * See that interface for the full return shape.
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @return array<string, mixed> Geographic analytics payload.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
     public function getLinkGeographicAnalytics(int $linkId): array;
 
     /**
-     * Returns temporal analytics (clicks by hour, day of week, etc.) for the given link.
+     * Return temporal analytics (clicks by hour, day of week, seasonality) for the given link.
+     *
+     * Delegates directly to {@see \App\Contracts\Analytics\TemporalAnalyticsInterface::getLinkTemporalAnalytics()}.
+     * See that interface for the full return shape.
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @return array<string, mixed> Temporal analytics payload.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
     public function getLinkTemporalAnalytics(int $linkId): array;
 
     /**
-     * Returns audience analytics (devices, browsers, OS, engagement) for the given link.
+     * Return audience analytics (devices, browsers, OS, engagement) for the given link.
+     *
+     * Delegates directly to {@see \App\Contracts\Analytics\AudienceAnalyticsInterface::getLinkAudienceAnalytics()}.
+     * See that interface for the full return shape.
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @return array<string, mixed> Audience analytics payload.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
     public function getLinkAudienceAnalytics(int $linkId): array;
 
     /**
-     * Returns business insights (automated insights + summary + analytics data)
-     * for the given link.
+     * Return business insights (automated insights + summary + supporting analytics) for the given link.
+     *
+     * Delegates directly to {@see \App\Contracts\Analytics\InsightsAnalyticsInterface::getLinkInsightsAnalytics()}.
+     * See that interface for the full return shape.
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @return array<string, mixed> Insights analytics payload.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
     public function getLinkInsightsAnalytics(int $linkId): array;
 }
