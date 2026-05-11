@@ -5,8 +5,21 @@ namespace App\Services\Analytics\Insights\Generators;
 use App\Models\Click;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 
+/**
+ * Generates an insight about international geographic reach.
+ *
+ * Only fires when the link has clicks from more than 5 distinct countries.
+ * Priority is 'high' for more than 10 countries.
+ */
 class DiversityInsightGenerator implements InsightGeneratorInterface
 {
+    /**
+     * Returns a geographic diversity insight, or null if ≤5 countries reached.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @return array<string, mixed>|null
+     */
     public function generate(int $linkId, int $totalClicks): ?array
     {
         $countries = Click::where('link_id', $linkId)

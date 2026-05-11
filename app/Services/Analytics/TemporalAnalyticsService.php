@@ -6,8 +6,38 @@ use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Computes temporal analytics (hourly/daily patterns, weekends, business hours,
+ * holidays, seasons) for a link.
+ *
+ * @see \App\Contracts\Analytics\TemporalAnalyticsInterface
+ *
+ * getLinkTemporalAnalytics — standard API endpoint payload.
+ * getAdvancedTemporalAnalytics — richer payload used by the heatmap endpoint,
+ *   loads all clicks into memory for pattern computation.
+ *
+ * Dual-path DB expressions: hour/DOW extraction uses COALESCE of the pre-computed
+ * column (hour_of_day / day_of_week, Phase 1) with a fallback to DB-native
+ * EXTRACT / strftime so older clicks are still included.
+ *
+ * Holiday and seasonal data is only present for clicks recorded after the Phase 2
+ * migration. Null values in these columns indicate pre-migration clicks.
+ *
+ * Side effects: read-only. No cache, no queue, no log calls.
+ */
 class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnalyticsInterface
 {
+    /**
+     * Returns temporal analytics for the given link.
+     *
+     * Returns empty arrays when no clicks exist (link must exist or
+     * ModelNotFoundException is thrown by Link::findOrFail).
+     *
+     * @param  int  $linkId  Link primary key.
+     * @return array<string, mixed> Keys: clicks_by_hour, clicks_by_day_of_week, hourly_patterns_local, weekend_vs_weekday, business_hours_analysis, holiday_impact, seasonal_distribution.
+     *
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
+     */
     public function getLinkTemporalAnalytics(int $linkId): array
     {
         Link::findOrFail($linkId);
@@ -32,6 +62,15 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         ];
     }
 
+    /**
+     * Returns an extended temporal analytics payload for heatmap and trend views.
+     *
+     * Loads all clicks for the link into a Laravel Collection in memory — may be
+     * expensive for high-traffic links. Used by the heatmap API endpoint.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @return array<string, mixed> Keys: hourly_patterns, daily_patterns, weekly_trends, monthly_trends, peak_analysis, timezone_analysis, heatmap_data, daily_timeline, device_by_period, holiday_impact, seasonal_distribution.
+     */
     public function getAdvancedTemporalAnalytics(int $linkId): array
     {
         $clicks = Click::where('link_id', $linkId)->get();

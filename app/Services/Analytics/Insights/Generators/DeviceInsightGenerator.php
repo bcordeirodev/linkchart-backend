@@ -5,8 +5,21 @@ namespace App\Services\Analytics\Insights\Generators;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Generates an insight highlighting the dominant device type for a link.
+ *
+ * Fires when a single device type accounts for any non-zero share of clicks.
+ * Priority is 'high' when one device exceeds 70% of total clicks.
+ */
 class DeviceInsightGenerator implements InsightGeneratorInterface
 {
+    /**
+     * Returns a device dominance insight, or null if no device data is present.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $totalClicks  Total click count for the link.
+     * @return array<string, mixed>|null
+     */
     public function generate(int $linkId, int $totalClicks): ?array
     {
         $top = DB::table('clicks')

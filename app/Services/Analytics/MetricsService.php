@@ -8,14 +8,27 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Serviço unificado para cálculo de métricas
- * Elimina duplicação de código entre controladores
- * Centraliza todas as regras de negócio de métricas
+ * Multi-purpose legacy metrics service used by the dashboard and link list endpoints.
+ *
+ * Computes basic metrics (total clicks, unique visitors, response time, top links,
+ * sparklines, trend comparisons) for a user or a single link. Results are cached
+ * with a 5-minute TTL (CACHE_TTL = 300s) using the default cache driver.
+ *
+ * Note: clearUserMetricsCache uses Cache::forget with wildcard patterns
+ * (e.g. "metrics:user:{id}:*"). This is a no-op on drivers that do not support
+ * tag-based or pattern-based clearing (the default file/database drivers do NOT
+ * support it; only Redis does). Callers should not rely on cache invalidation
+ * from this method — treat it as best-effort.
+ *
+ * Side effects:
+ *   - Reads links and clicks tables.
+ *   - Reads/writes Laravel cache (driver-dependent key prefix "metrics:*").
+ *   - getUserChartData logs via AppLogger::analyticsError on exception.
  */
 class MetricsService
 {
     /**
-     * Cache key patterns para métricas
+     * Cache key patterns (5-minute TTL for all computed metrics).
      */
     private const CACHE_TTL = 300; // 5 minutos
 
@@ -27,7 +40,13 @@ class MetricsService
     ];
 
     /**
-     * Calcula métricas básicas para um usuário
+     * Returns basic aggregate metrics for all links owned by a user.
+     *
+     * Cached under "metrics:user:{userId}:basic:{hours}h" for CACHE_TTL seconds.
+     *
+     * @param  int  $userId  User primary key.
+     * @param  int  $hours  Lookback window for recent/unique counts (default 24h).
+     * @return array{total_clicks: int, total_links: int, active_links: int, recent_clicks: int, unique_visitors: int, links_with_traffic: int, avg_clicks_per_link: float, conversion_rate: float, success_rate: float, timeframe_hours: int}
      */
     public function getUserBasicMetrics(int $userId, int $hours = 24): array
     {
@@ -88,7 +107,17 @@ class MetricsService
     }
 
     /**
-     * Calcula métricas de performance para um usuário
+     * Returns performance-focused metrics for all links owned by a user.
+     *
+     * Average response time is derived from hourly cache buckets written by
+     * RedirectMetricsCollector middleware (key prefix "redirect_metrics:hour:*"),
+     * not directly from the clicks table.
+     *
+     * Cached under "metrics:user:{userId}:performance:{hours}h".
+     *
+     * @param  int  $userId  User primary key.
+     * @param  int  $hours  Time window for redirect and visitor counts.
+     * @return array{total_redirects_24h: int, unique_visitors: int, avg_response_time: float, success_rate: float, total_links_with_traffic: int, timeframe_hours: int}
      */
     public function getUserPerformanceMetrics(int $userId, int $hours = 24): array
     {
@@ -132,7 +161,14 @@ class MetricsService
     }
 
     /**
-     * Calcula métricas para um link específico
+     * Returns aggregate metrics for a single link.
+     *
+     * Note: loads all clicks into memory via Click::where()->get() — may be
+     * expensive for links with very large click volumes. Cached under
+     * "metrics:link:{linkId}".
+     *
+     * @param  int  $linkId  Link primary key.
+     * @return array{total_clicks: int, unique_visitors: int, avg_daily_clicks: float, conversion_rate: float, clicks_24h: int, unique_visitors_24h: int, days_since_creation: int, link_info?: array}
      */
     public function getLinkMetrics(int $linkId): array
     {
@@ -184,7 +220,12 @@ class MetricsService
     }
 
     /**
-     * Calcula métricas geográficas para um usuário
+     * Returns country and city reach counts for all links owned by a user.
+     *
+     * Cached under "metrics:user:{userId}:geographic".
+     *
+     * @param  int  $userId  User primary key.
+     * @return array{countries_reached: int, cities_reached: int}
      */
     public function getUserGeographicMetrics(int $userId): array
     {
@@ -218,7 +259,12 @@ class MetricsService
     }
 
     /**
-     * Calcula métricas de audiência para um usuário
+     * Returns device type diversity count across all links owned by a user.
+     *
+     * Cached under "metrics:user:{userId}:audience".
+     *
+     * @param  int  $userId  User primary key.
+     * @return array{device_types: int}
      */
     public function getUserAudienceMetrics(int $userId): array
     {
@@ -245,7 +291,14 @@ class MetricsService
     }
 
     /**
-     * Limpa cache de métricas para um usuário
+     * Attempts to clear all cached metric entries for a user.
+     *
+     * KNOWN ISSUE: uses Cache::forget with wildcard patterns. This is a no-op
+     * on file/database cache drivers, which do not support wildcard deletion.
+     * Only Redis-based cache drivers honor glob patterns in this way.
+     * Do not rely on this method for cache invalidation in non-Redis environments.
+     *
+     * @param  int  $userId  User primary key.
      */
     public function clearUserMetricsCache(int $userId): void
     {
@@ -350,7 +403,13 @@ class MetricsService
     }
 
     /**
-     * Busca os top links do usuário ordenados por cliques
+     * Returns the user's most-clicked active links.
+     *
+     * Cached under "metrics:user:{userId}:top_links:{limit}".
+     *
+     * @param  int  $userId  User primary key.
+     * @param  int  $limit  Maximum number of links to return (default 5).
+     * @return array<int, array{id: int, title: string, short_url: string, original_url: string, clicks: int, is_active: bool, created_at: string}>
      */
     public function getUserTopLinks(int $userId, int $limit = 5): array
     {
@@ -380,8 +439,15 @@ class MetricsService
     }
 
     /**
-     * Buscar dados básicos para gráficos do dashboard
-     * Retorna dados temporais e geográficos simplificados
+     * Returns simplified temporal, geographic, and audience data for dashboard charts.
+     *
+     * Not cached — fetches fresh data each call. Uses PostgreSQL-specific
+     * EXTRACT(HOUR/DOW FROM created_at) expressions (not SQLite-safe).
+     * On exception, logs via AppLogger::analyticsError and returns empty arrays.
+     *
+     * @param  int  $userId  User primary key.
+     * @param  int  $hours  Time window for the hourly distribution query.
+     * @return array{temporal: array, geographic: array, audience: array}
      */
     public function getUserChartData(int $userId, int $hours = 24): array
     {
@@ -566,8 +632,14 @@ class MetricsService
     }
 
     /**
-     * Cliques diários dos últimos N dias para sparkline de um link.
-     * Retorna array com N itens: [{date, clicks}]
+     * Returns daily click counts for the last N days (sparkline data for a link).
+     *
+     * Returns exactly $days entries, filling zeros for days with no clicks.
+     * Cached under "meta:sparkline:{linkId}:{days}d".
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $days  Number of days to include (default 7).
+     * @return array<int, array{date: string, clicks: int}>
      */
     public function getLinkSparkline(int $linkId, int $days = 7): array
     {
@@ -597,8 +669,15 @@ class MetricsService
     }
 
     /**
-     * Tendência comparando janela atual vs janela anterior.
-     * Retorna {current, previous, percent_change, last_click_at}
+     * Returns a week-over-week click trend for a link.
+     *
+     * Compares the current $window-day period against the preceding $window-day
+     * period. percent_change is +100.0 if previous is 0 and current > 0, or 0.0
+     * if both are 0. Cached under "meta:trend:{linkId}:{window}d".
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $window  Comparison window in days (default 7).
+     * @return array{current: int, previous: int, percent_change: float, last_click_at: string|null}
      */
     public function getLinkTrend(int $linkId, int $window = 7): array
     {

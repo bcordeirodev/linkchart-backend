@@ -5,8 +5,21 @@ namespace App\Services\Analytics\Insights\Generators;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Generates an insight about redirect response time performance.
+ *
+ * Only fires when at least one click has a recorded response_time value.
+ * Priority is 'high' and actionable=true when average response time exceeds 500ms.
+ */
 class PerformanceInsightGenerator implements InsightGeneratorInterface
 {
+    /**
+     * Returns a response time performance insight, or null if no response_time data exists.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @return array<string, mixed>|null
+     */
     public function generate(int $linkId, int $totalClicks): ?array
     {
         $avg = (float) DB::table('clicks')
