@@ -9,47 +9,108 @@ use App\Models\Link;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Interface para o serviço de Links
+ * Business-logic contract for link management.
  *
- * Define o contrato para as regras de negócio relacionadas aos links,
- * seguindo o princípio de Inversão de Dependência (DIP) do SOLID.
+ * Encapsulates all rules related to creating, reading, updating, and deleting
+ * shortened links — including URL validation, slug generation and uniqueness
+ * checks, and ownership enforcement. The repository layer handles persistence;
+ * this interface handles the "why" and "when".
+ *
+ * Concrete implementation: {@see \App\Services\Links\LinkService}.
+ * Bound in {@see \App\Providers\AppServiceProvider::register()} via
+ * `$this->app->bind(LinkServiceInterface::class, LinkService::class)`.
+ *
+ * Injected by `LinkController` and `PublicLinkController` via constructor.
  */
 interface LinkServiceInterface
 {
     /**
-     * Retorna todos os links do usuário autenticado.
+     * Return all links owned by the currently authenticated user, newest first.
      *
-     * @return Collection<Link>
+     * Delegates to the repository using the authenticated API-guard user id.
+     *
+     * @return Collection<int, Link> All links belonging to the authenticated user.
      */
     public function getAllUserLinks(): Collection;
 
     /**
-     * Retorna um link específico do usuário.
+     * Return a single link owned by the authenticated user, or null if not found.
+     *
+     * Scopes the lookup by both `$id` and the authenticated user's id to prevent
+     * cross-user access.
+     *
+     * @param  string  $id  Primary key of the link.
+     * @return Link|null The link if found and owned, otherwise null.
      */
     public function getUserLink(string $id): ?Link;
 
     /**
-     * Cria um novo link encurtado.
+     * Validate, assign a slug, and persist a new authenticated link.
+     *
+     * Throws `\InvalidArgumentException` if:
+     *   - `$linkDTO->isValidUrl()` returns false (URL is invalid).
+     *   - A custom slug is provided but already taken.
+     * If no slug is provided, a unique one is generated via `generateUniqueSlug()`.
+     *
+     * @param  CreateLinkDTO  $linkDTO  Validated creation payload.
+     * @return Link The created and hydrated link model.
+     *
+     * @throws \InvalidArgumentException On invalid URL or slug conflict.
      */
     public function createLink(CreateLinkDTO $linkDTO): Link;
 
     /**
-     * Atualiza um link existente.
+     * Validate and apply partial updates to an authenticated user's link.
+     *
+     * Throws `\InvalidArgumentException` if:
+     *   - `$linkDTO->hasDataToUpdate()` returns false (DTO has no updateable fields).
+     *   - `$linkDTO->isValidUrl()` returns false when a URL is included.
+     * Returns null if the link is not found or not owned by the authenticated user.
+     *
+     * @param  string  $id  Primary key of the link.
+     * @param  UpdateLinkDTO  $linkDTO  Validated update payload (partial column map).
+     * @return Link|null The updated link, or null if not found/owned.
+     *
+     * @throws \InvalidArgumentException On empty DTO or invalid URL.
      */
     public function updateLink(string $id, UpdateLinkDTO $linkDTO): ?Link;
 
     /**
-     * Remove um link.
+     * Delete a link owned by the authenticated user.
+     *
+     * Returns false if the link does not exist or is not owned by the current user.
+     *
+     * @param  string  $id  Primary key of the link.
+     * @return bool True if deleted, false if not found or not owned.
      */
     public function deleteLink(string $id): bool;
 
     /**
-     * Cria um novo link público encurtado (sem usuário).
+     * Validate and persist a new public (unauthenticated) shortened link.
+     *
+     * Forces `user_id = null` regardless of what the DTO carries. Throws
+     * `\InvalidArgumentException` if:
+     *   - `$linkDTO->isValidUrl()` returns false.
+     *   - `$linkDTO->hasValidData()` returns false (missing required fields).
+     *   - A custom slug is provided but already taken.
+     * Rate-limited at the route level (`public-shorten`, 10/min per IP).
+     *
+     * @param  CreatePublicLinkDTO  $linkDTO  Validated creation payload for a public link.
+     * @return Link The created and hydrated link model.
+     *
+     * @throws \InvalidArgumentException On invalid URL, slug conflict, or bad data.
      */
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link;
 
     /**
-     * Gera um slug único para o link.
+     * Generate a random unique slug of the given length.
+     *
+     * Loops with `Str::random($length)` until a slug is found that does not
+     * already exist in the `links` table. In practice, collision probability
+     * is negligible for the default 6-character slug space.
+     *
+     * @param  int  $length  Number of characters in the slug (default: 6).
+     * @return string A slug that does not yet exist in `links.slug`.
      */
     public function generateUniqueSlug(int $length = 6): string;
 }
