@@ -12,12 +12,17 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
 /**
- * Implementação do serviço de Links
+ * Business-logic layer for link CRUD operations.
  *
- * Segue os princípios SOLID:
- * - SRP: Responsável apenas pelas regras de negócio de links
- * - OCP: Extensível através de interfaces
- * - DIP: Depende de abstrações (interfaces)
+ * Implements LinkServiceInterface and delegates all persistence to
+ * LinkRepositoryInterface, keeping controllers and the service layer free of
+ * raw Eloquent calls.
+ *
+ * @see \App\Contracts\Services\LinkServiceInterface
+ *
+ * Side effects: reads/writes to the links table via LinkRepository.
+ * No cache, queue, or log calls — those live in the repository and in
+ * LinkTrackingService / LinkAuditService.
  */
 class LinkService implements LinkServiceInterface
 {
@@ -29,7 +34,12 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Retorna todos os links do usuário autenticado.
+     * Returns all links owned by the currently authenticated API user.
+     *
+     * Delegates to LinkRepositoryInterface::getAllByUser() which scopes by
+     * auth()->guard('api')->id().
+     *
+     * @return Collection<int, Link>
      */
     public function getAllUserLinks(): Collection
     {
@@ -37,7 +47,11 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Retorna um link específico do usuário.
+     * Returns a specific link belonging to the authenticated user, or null.
+     *
+     * Delegates to LinkRepositoryInterface::findByIdAndUser().
+     *
+     * @param  string  $id  Link primary key (stringified int).
      */
     public function getUserLink(string $id): ?Link
     {
@@ -45,7 +59,17 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Cria um novo link encurtado.
+     * Creates a new shortened link for the authenticated user.
+     *
+     * Validates the URL via CreateLinkDTO::isValidUrl(). Generates a unique
+     * random slug (6 chars) if none is provided; rejects duplicate custom slugs
+     * with InvalidArgumentException. Delegates persistence to
+     * LinkRepositoryInterface::create().
+     *
+     * @param  CreateLinkDTO  $linkDTO  Validated input DTO.
+     * @return Link The newly created model (ready to pass to LinkResource).
+     *
+     * @throws \InvalidArgumentException If URL is invalid or slug is already taken.
      */
     public function createLink(CreateLinkDTO $linkDTO): Link
     {
@@ -67,7 +91,17 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Atualiza um link existente.
+     * Updates an existing link owned by the authenticated user.
+     *
+     * Validates that the DTO has data to update and that the URL is valid.
+     * Delegates to LinkRepositoryInterface::update() which scopes by user_id.
+     * Returns null if the link does not exist or does not belong to the user.
+     *
+     * @param  string  $id  Link primary key (stringified int).
+     * @param  UpdateLinkDTO  $linkDTO  Validated input DTO.
+     * @return Link|null Updated model, or null if not found.
+     *
+     * @throws \InvalidArgumentException If no data to update or URL is invalid.
      */
     public function updateLink(string $id, UpdateLinkDTO $linkDTO): ?Link
     {
@@ -84,7 +118,12 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Remove um link.
+     * Deletes a link owned by the authenticated user.
+     *
+     * Delegates to LinkRepositoryInterface::delete() which scopes by user_id.
+     *
+     * @param  string  $id  Link primary key (stringified int).
+     * @return bool True on success, false if not found.
      */
     public function deleteLink(string $id): bool
     {
@@ -92,7 +131,18 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Cria um novo link público encurtado (sem usuário).
+     * Creates a new public short link (no authenticated user required).
+     *
+     * Validates the URL and data completeness via the DTO. Generates a unique
+     * random slug if not provided; rejects duplicate custom slugs. Forces
+     * user_id = null. Delegates persistence to LinkRepositoryInterface::create().
+     *
+     * Rate-limited upstream by the public-shorten limiter (10/min per IP).
+     *
+     * @param  CreatePublicLinkDTO  $linkDTO  Validated input DTO.
+     * @return Link The newly created model.
+     *
+     * @throws \InvalidArgumentException If URL is invalid, data is insufficient, or slug is taken.
      */
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link
     {
@@ -121,7 +171,14 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Gera um slug único para o link.
+     * Generates a random alphanumeric slug that does not yet exist in the links table.
+     *
+     * Loops until a unique value is found (collision probability is negligible at
+     * standard table sizes with the default 6-char length). Delegates uniqueness
+     * check to LinkRepositoryInterface::slugExists().
+     *
+     * @param  int  $length  Slug character length (default 6).
+     * @return string The generated unique slug.
      */
     public function generateUniqueSlug(int $length = 6): string
     {

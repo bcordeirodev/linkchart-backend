@@ -5,6 +5,22 @@ namespace App\Services\Links;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 
+/**
+ * Fetches Open Graph metadata and favicon URL for an arbitrary target URL.
+ *
+ * Used by RedirectController when rendering Open Graph HTML previews for bot
+ * user-agents (WhatsApp, Telegram, etc.) so social platforms can display link
+ * previews without following the redirect.
+ *
+ * HTTP client config (Guzzle):
+ *   - timeout: 5s total, connect_timeout: 3s
+ *   - allow_redirects: up to 5 hops
+ *   - TLS verification: ON (default Guzzle behaviour) — sites with broken or
+ *     self-signed TLS certificates will fail gracefully with a null preview.
+ *
+ * Results are cached upstream (RedirectController caches the full preview payload
+ * for 24h per slug).
+ */
 class LinkPreviewService
 {
     private Client $http;
@@ -19,8 +35,15 @@ class LinkPreviewService
     }
 
     /**
-     * Fetches OG meta + favicon for a URL.
-     * Returns ['favicon_url', 'og_title', 'og_image_url'] — all nullable on failure.
+     * Fetches Open Graph metadata and a favicon URL for the given URL.
+     *
+     * Makes a GET request with a bot User-Agent, parses og:title and og:image
+     * from the HTML response, and resolves a favicon via the Google favicon API.
+     * On HTTP failure, returns an empty metadata set with the favicon URL still
+     * populated (favicon is derived from the host name, no HTTP call needed).
+     *
+     * @param  string  $url  The original target URL to fetch previews for.
+     * @return array{favicon_url: string|null, og_title: string|null, og_image_url: string|null}
      */
     public function fetchPreview(string $url): array
     {

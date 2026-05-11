@@ -8,10 +8,37 @@ use Illuminate\Support\Facades\Mail;
 use SendGrid;
 use SendGrid\Mail\Mail as SendGridMail;
 
+/**
+ * Low-level email transport service supporting two delivery paths: the SendGrid HTTP API
+ * (bypasses SMTP port 587, uses HTTPS port 443) and Laravel's native Mail facade (SMTP).
+ *
+ * The SendGrid API path is the preferred production method and is used by
+ * EmailVerificationService for all transactional emails. The Laravel Mail path is kept
+ * as a fallback and for local/dev testing.
+ *
+ * Transport configuration lives in config/mail.php and config/services.php
+ * (key: services.sendgrid.api_key / services.sendgrid.from.*).
+ *
+ * Side effects: logs every send attempt and failure via AppLogger::emailSent /
+ * AppLogger::emailFailed / AppLogger::emailTestFailed (channel: app).
+ */
 class EmailService
 {
     /**
-     * Enviar email usando SendGrid API (solução para porta 587 bloqueada)
+     * Sends an email via the SendGrid v3 HTTP API.
+     *
+     * Uses the sendgrid/sendgrid PHP SDK. Does not fall back to SMTP on failure —
+     * returns an error payload instead so the caller can decide.
+     *
+     * Side effects: logs via AppLogger::emailSent on success, AppLogger::emailFailed
+     * on exception (channel: app).
+     *
+     * @param  string  $toEmail  Recipient email address.
+     * @param  string  $subject  Email subject line.
+     * @param  string  $htmlContent  HTML body.
+     * @param  string|null  $textContent  Optional plain-text fallback body.
+     * @param  string|null  $toName  Optional recipient display name.
+     * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
      */
     public function sendEmailViaSendGridAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
     {
@@ -68,7 +95,14 @@ class EmailService
     }
 
     /**
-     * Enviar email de teste usando SendGrid API
+     * Sends a pre-built HTML test message via the SendGrid API.
+     *
+     * Delegates to sendEmailViaSendGridAPI with a canned template showing
+     * current timestamp, environment, and API status.
+     *
+     * @param  string  $toEmail  Recipient address.
+     * @param  string|null  $toName  Optional recipient display name.
+     * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
      */
     public function sendTestEmailViaSendGridAPI(string $toEmail, ?string $toName = null): array
     {
@@ -88,7 +122,13 @@ class EmailService
     }
 
     /**
-     * Testar SendGrid API
+     * Validates that a SendGrid API key is configured and usable.
+     *
+     * Does NOT send an email — it instantiates the SendGrid client to confirm
+     * the key is non-empty and not the placeholder value. On exception, logs
+     * via AppLogger::emailTestFailed.
+     *
+     * @return array{success: bool, message: string, config: array, error?: string}
      */
     public function testSendGridAPI(): array
     {
@@ -125,7 +165,12 @@ class EmailService
     }
 
     /**
-     * Obter configurações SendGrid API
+     * Returns a sanitized snapshot of the current SendGrid API configuration.
+     *
+     * The API key is masked as '***CONFIGURADO***' if present. Suitable for
+     * returning in diagnostic API responses.
+     *
+     * @return array{api_key: string, from_email: string|null, from_name: string|null, method: string, port: string, smtp_bypass: string}
      */
     public function getSendGridConfiguration(): array
     {
@@ -140,7 +185,15 @@ class EmailService
     }
 
     /**
-     * Enviar email de teste usando Laravel Mail nativo
+     * Sends a test email via Laravel's native Mail facade (SMTP path).
+     *
+     * Uses the mailer configured in config/mail.php. Primarily for local/dev
+     * validation that SMTP credentials and port are correct.
+     * Side effects: logs via AppLogger::emailSent / AppLogger::emailFailed.
+     *
+     * @param  string  $toEmail  Recipient address.
+     * @param  string|null  $toName  Optional display name.
+     * @return array{success: bool, message: string, to?: string, mailer?: string, error?: string}
      */
     public function sendTestEmail(string $toEmail, ?string $toName = null): array
     {
@@ -183,7 +236,12 @@ class EmailService
     }
 
     /**
-     * Testar configuração do Laravel Mail
+     * Validates the Laravel Mail SMTP configuration by attempting a test send.
+     *
+     * Checks that host, username, and password are set before attempting. On
+     * exception, logs via AppLogger::emailTestFailed.
+     *
+     * @return array{success: bool, message: string, config: array, error?: string}
      */
     public function testConnection(): array
     {
@@ -224,7 +282,11 @@ class EmailService
     }
 
     /**
-     * Obter configurações de email atuais
+     * Returns a sanitized snapshot of the current Laravel Mail / SMTP configuration.
+     *
+     * Password is masked as '***CONFIGURADO***' if present. Suitable for diagnostics.
+     *
+     * @return array{default_mailer: string, host: string|null, port: int|null, username: string|null, password: string, encryption: string, from_address: string|null, from_name: string|null, timeout: mixed, verify_peer: mixed}
      */
     public function getMailConfiguration(): array
     {
@@ -243,7 +305,16 @@ class EmailService
     }
 
     /**
-     * Enviar email personalizado
+     * Sends a custom HTML email via Laravel's native Mail facade.
+     *
+     * Unlike sendEmailViaSendGridAPI, this method uses SMTP (not the HTTP API).
+     * Side effects: logs via AppLogger::emailSent / AppLogger::emailFailed.
+     *
+     * @param  string  $toEmail  Recipient address.
+     * @param  string  $subject  Subject line.
+     * @param  string  $htmlContent  HTML body.
+     * @param  string|null  $textContent  Optional plain-text alternative.
+     * @return array{success: bool, message: string, to?: string, error?: string}
      */
     public function sendCustomEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null): array
     {

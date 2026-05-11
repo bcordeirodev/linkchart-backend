@@ -10,27 +10,71 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Jenssegers\Agent\Agent;
 
+/**
+ * Enriches and persists click tracking data for a link redirect event.
+ *
+ * This service is the SINGLE write path for the clicks table and for the
+ * denormalized links.clicks counter. It is invoked exclusively by
+ * ProcessLinkClickJob — never called synchronously from a request lifecycle.
+ *
+ * Enrichment pipeline (3 phases):
+ *   Phase 1 — navigation context: Sec-Fetch-* headers, Accept-Language parsing,
+ *              Client Hints (ch_platform, ch_is_mobile), Save-Data, HTTP protocol.
+ *   Phase 2 — contextual intelligence: viral rank via ClickVelocityService (Redis
+ *              sliding windows), holiday detection (azuyalabs/yasumi), hemisphere-
+ *              aware season, ISP connection type classification, rendering engine.
+ *   Phase 3 — quality scoring: composite bot/fraud score (0–100), tier assignment
+ *              (organic | suspicious | likely_fraud), header-fingerprint count.
+ *
+ * DI graph: ClickVelocityService is constructor-injected (since R-12 — previously
+ * instantiated inline). All other helpers (GeoIP, Agent) are instantiated locally.
+ *
+ * Side effects:
+ *   - Reads: links (to confirm link exists), clicks (return visitor check)
+ *   - Writes: clicks (Click::create), link_utms (LinkUtm::create if UTM present)
+ *   - Increment: DB::table('links')->where('id', $link->id)->increment('clicks')
+ *     (raw query bypasses model observers, keeping the Link cache stable)
+ *   - Logs: tracking channel via AppLogger::trackingClickRegistered on success;
+ *     AppLogger::trackingLinkNotFound, geoip*, userAgent*, behavior* on error paths
+ *
+ * Schema migrations this service writes into:
+ *   - Phase 1: navigation_context, fetch_dest, ch_platform, ch_is_mobile,
+ *              is_data_saver, http_protocol, primary_language, language_region
+ *   - Phase 2: viral_rank, seconds_since_last_click, is_holiday, holiday_name,
+ *              season, connection_type, rendering_engine
+ *   - Phase 3: quality_score, quality_tier, fingerprint_score
+ */
 class LinkTrackingService
 {
     public const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
 
     /**
-     * @param  ClickVelocityService  $clickVelocityService  Tracks click velocity via Redis sliding windows.
+     * @param  ClickVelocityService  $clickVelocityService  Constructor-injected (R-12); tracks click
+     *                                                      velocity via Redis sliding windows and falls
+     *                                                      back gracefully when Redis is unavailable.
      */
     public function __construct(
         private readonly ClickVelocityService $clickVelocityService,
     ) {}
 
     /**
-     * Registra clique a partir de payload serializável (extraído do Request no controller).
-     * Ponto de entrada usado pelo ProcessLinkClickJob.
+     * Registers a click from a serializable payload extracted before the HTTP response was sent.
+     *
+     * This is the sole public entry point and is called only from ProcessLinkClickJob.
+     * The payload is assembled in RedirectController::dispatchTracking() and queued
+     * so that the 302 response is returned to the visitor before tracking begins.
      *
      * Applies enrichments in order:
-     *   - Phase 1: navigation context (Sec-Fetch-*), language parsing
-     *   - Phase 2: viral rank (ClickVelocityService), holiday, season,
-     *              connection type, rendering engine
+     *   1. Basic geo/device/temporal/behavior/performance (always)
+     *   2. Phase 1: navigation context (Sec-Fetch-*), Accept-Language parsing
+     *   3. Phase 2: viral rank, holiday, season, connection type, rendering engine
+     *   4. Phase 3: quality scoring
      *
-     * @param  int  $linkId  ID of the link being clicked
+     * The denormalized click counter is incremented via a direct DB query
+     * (DB::table('links')->where('id', ...)->increment('clicks')) to avoid
+     * firing model observers and invalidating the Link slug cache.
+     *
+     * @param  int  $linkId  Primary key of the link being clicked.
      * @param  array{
      *     ip?: string,
      *     user_agent?: ?string,
@@ -45,7 +89,7 @@ class LinkTrackingService
      *     ch_is_mobile?: ?bool,
      *     save_data?: bool,
      *     server_protocol?: ?string
-     * }  $payload  Serializable request payload extracted in the controller
+     * } $payload  Serializable request snapshot assembled in RedirectController.
      */
     public function registrarCliqueFromPayload(int $linkId, array $payload): void
     {
@@ -133,10 +177,23 @@ class LinkTrackingService
     }
 
     /**
-     * Resolve o IP real do cliente antes de dispatchar o job assíncrono
-     * (o Job não tem acesso ao Request).
+     * Resolves the real client IP before the async job is dispatched.
      *
-     * Prioridade: real_ip query param → X-Real-IP → X-Forwarded-For (primeiro IP) → CF-Connecting-IP → request->ip().
+     * The Job has no access to the Request object, so this must be called
+     * synchronously in RedirectController::dispatchTracking() before queuing.
+     *
+     * Priority chain (first valid public IP wins):
+     *   1. ?real_ip query parameter (dev/proxy override)
+     *   2. X-Real-IP header (nginx proxy)
+     *   3. X-Forwarded-For header, first token (CDN/load balancer)
+     *   4. CF-Connecting-IP header (Cloudflare)
+     *   5. Request::ip() fallback (or '127.0.0.1' when that is also empty)
+     *
+     * In production, private/reserved ranges are excluded via FILTER_FLAG_NO_PRIV_RANGE
+     * | FILTER_FLAG_NO_RES_RANGE — this prevents internal proxy IPs from being stored.
+     *
+     * @param  Request  $request  The current HTTP request.
+     * @return string A valid IP address string.
      */
     public function resolveRealUserIP(Request $request): string
     {
