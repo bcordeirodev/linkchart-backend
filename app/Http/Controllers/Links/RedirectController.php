@@ -15,12 +15,38 @@ use Illuminate\Support\Facades\Http;
 use Jenssegers\Agent\Agent;
 
 /**
- * 🚀 CONTROLLER DE REDIRECIONAMENTO - CORAÇÃO DO SISTEMA
+ * Public redirect controller — the performance-critical heart of the system.
  *
- * Fluxos:
- *   - Humanos (não-bot, não-preview): tracking assíncrono via fila + 302 direto para a URL original.
- *   - Bots / scrapers (WhatsApp, Telegram, etc.): HTML com meta-tags Open Graph para preview.
- *   - ?preview=1: HTML de preview sem registrar clique.
+ * Served by TWO routes in routes/web.php (both use throttle:redirect +
+ * metrics.redirect middlewares):
+ *   GET /r/{slug}  (named public.redirect)              — original path
+ *   GET /{slug}    (named public.redirect.clean)        — clean-URL alias used
+ *                    in production via NEXT_PUBLIC_REDIRECT_URL without /r/ prefix
+ *
+ * Three execution branches in redirect():
+ *   1. Human visitor (not a bot, no ?preview=1):
+ *      - Dispatches ProcessLinkClickJob with full tracking payload (resolved IP,
+ *        UA, UTM, Sec-Fetch headers, client hints, server timing).
+ *      - Returns an immediate 302 to the original URL with no-cache headers.
+ *      - The denormalised links.clicks counter is NOT incremented here; it is
+ *        incremented inside the job by LinkTrackingService.
+ *
+ *   2. Bot / social scraper (WhatsApp, Telegram, Twitterbot, Googlebot, etc.):
+ *      - Fetches and caches OG metadata from the original URL (TTL 24 h).
+ *      - Renders an HTML page with Open Graph + Twitter Card meta-tags so
+ *        social previews display correctly. No click is recorded.
+ *
+ *   3. ?preview=1 query param:
+ *      - Same HTML rendering path as bots, but intended for human preview.
+ *      - No click is recorded.
+ *
+ * Cache invariant: Link::findActiveBySlugCached() uses a 10-minute TTL and is
+ * invalidated by Link's saved/deleted model events. Do not bypass this cache.
+ *
+ * CRITICAL: Any change to this controller, its job, its model, or its routes
+ * must be verified against RedirectTest and ProcessLinkClickJobTest before merge.
+ * The AJAX /api/r/{slug} route was disabled in 04/11/2025 and must not be
+ * reopened without a documented reason.
  */
 class RedirectController extends Controller
 {
@@ -55,9 +81,22 @@ class RedirectController extends Controller
     ) {}
 
     /**
-     * 🌐 REDIRECIONAMENTO PÚBLICO
+     * GET /r/{slug}  (public.redirect)
+     * GET /{slug}    (public.redirect.clean)
      *
-     * Mantém Open Graph para bots e envia humanos direto via 302.
+     * Resolve a slug to an active link and route the request to one of three
+     * branches: human redirect (302), bot/preview OG HTML page, or error page.
+     *
+     * Middleware (both routes): throttle:redirect (600/min per IP), metrics.redirect
+     * Auth: not required
+     * Owner check: no (public endpoint)
+     *
+     * Response shape:
+     *   Human visitor: 302 redirect to original_url with no-cache headers
+     *   Bot / ?preview=1: 200 HTML with OG meta-tags (Content-Type: text/html)
+     *   Not found / expired / click-limit: 404 HTML error page
+     *
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response
      */
     public function redirect(string $slug, Request $request)
     {
@@ -114,9 +153,17 @@ class RedirectController extends Controller
     }
 
     /**
-     * Enqueue tracking work asynchronously and increment the denormalised
-     * click counter directly via DB (no model events) so the cached Link
-     * stays valid during click peaks.
+     * Enqueue ProcessLinkClickJob with the full tracking payload (resolved IP,
+     * UA, referer, UTM, Sec-Fetch metadata, client hints). Returns immediately.
+     *
+     * The denormalised links.clicks counter is incremented later by
+     * LinkTrackingService::registrarCliqueFromPayload running inside the job,
+     * not by this method. Keeping the increment in the job avoids blocking
+     * the HTTP response on a DB write.
+     *
+     * On exception: logs via AppLogger::redirectError and swallows. Tracking
+     * is best-effort by design — losing a click is preferable to delaying
+     * the redirect.
      */
     private function dispatchTracking(Link $link, Request $request, string $slug): void
     {
