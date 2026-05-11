@@ -4,11 +4,14 @@ namespace App\Services\Analytics;
 
 use App\Models\Click;
 use App\Models\Link;
+use App\Services\Analytics\Support\UserAgentParser;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAnalyticsInterface
 {
+    public function __construct(private readonly UserAgentParser $uaParser) {}
+
     public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
     {
         $since = $hours > 0 ? now()->subHours($hours) : null;
@@ -427,7 +430,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
 
         $languageCounts = [];
         foreach ($clicks as $click) {
-            $language = $this->extractPrimaryLanguage($click->accept_language);
+            $language = $this->uaParser->extractPrimaryLanguage($click->accept_language);
             if ($language) {
                 $languageCounts[$language] = ($languageCounts[$language] ?? 0) + 1;
             }
@@ -444,34 +447,6 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             array_keys($languageCounts),
             $languageCounts
         ), 0, 10);
-    }
-
-    private function extractPrimaryLanguage(?string $acceptLanguage): ?string
-    {
-        if (! $acceptLanguage) {
-            return null;
-        }
-
-        $languages = explode(',', $acceptLanguage);
-        $primaryLang = trim(explode(';', $languages[0])[0]);
-
-        $languageMap = [
-            'pt-BR' => 'Português (Brasil)',
-            'pt' => 'Português',
-            'en' => 'English',
-            'en-US' => 'English (US)',
-            'es' => 'Español',
-            'fr' => 'Français',
-            'de' => 'Deutsch',
-            'it' => 'Italiano',
-            'zh' => '中文',
-            'ja' => '日本語',
-            'ko' => '한국어',
-            'ar' => 'العربية',
-            'ru' => 'Русский',
-        ];
-
-        return $languageMap[$primaryLang] ?? $primaryLang;
     }
 
     /**
