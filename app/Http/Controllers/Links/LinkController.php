@@ -15,11 +15,25 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Controller para gerenciamento de Links
+ * RESTful controller for authenticated link management (CRUD).
  *
- * Segue os princípios SOLID:
- * - SRP: Responsável apenas por receber requisições HTTP e retornar respostas
- * - DIP: Depende da abstração LinkServiceInterface
+ * Owns the /api/links/* and /api/link/{id}/* route families. Extends
+ * BaseController to inherit findOwnedLink, linkNotFound, and serverError helpers.
+ *
+ * Routes overview (all under api.auth:api + verified middleware):
+ *   GET    /api/links                   → index
+ *   POST   /api/links                   → store
+ *   GET    /api/links/{id}              → show
+ *   PUT    /api/links/{id}              → update
+ *   DELETE /api/links/{id}              → destroy
+ *   GET    /api/link/{id}/clicks        → getClicksData
+ *   GET    /api/link/{id}/clicks-list   → getClicksList
+ *
+ * Cross-mount note: GET /api/links/{id}/analytics is defined in the same route
+ * group but is handled by AnalyticsController::getLinkLegacyAnalytics, not by
+ * this controller.
+ *
+ * Depends on: LinkServiceInterface (injected), LinkAuditService (injected).
  */
 class LinkController extends BaseController
 {
@@ -36,7 +50,16 @@ class LinkController extends BaseController
     }
 
     /**
-     * Lista todos os links do usuário autenticado.
+     * GET /api/links
+     *
+     * Return all links belonging to the authenticated user, wrapped in a
+     * LinkResource collection.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — LinkService filters by auth user id.
+     *
+     * Response shape: NormalizeApiResponse envelope: { data: LinkResource[] }
      */
     public function index(): JsonResponse
     {
@@ -50,7 +73,17 @@ class LinkController extends BaseController
     }
 
     /**
-     * Exibe um link específico do usuário.
+     * GET /api/links/{id}
+     *
+     * Return a single link that belongs to the authenticated user.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — LinkService::getUserLink enforces user_id match.
+     *
+     * Response shape: NormalizeApiResponse envelope: { data: LinkResource }
+     *
+     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
      */
     public function show(string $id): JsonResponse
     {
@@ -76,7 +109,19 @@ class LinkController extends BaseController
     }
 
     /**
-     * Cria um novo link encurtado.
+     * POST /api/links
+     *
+     * Create a new shortened link for the authenticated user. Validates via
+     * CreateLinkRequest, maps to CreateLinkDTO, and writes an audit record.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — link is always created under the auth user id.
+     *
+     * Response shape: NormalizeApiResponse envelope: { message, data: LinkResource } (201)
+     *
+     *
+     * @throws \Illuminate\Validation\ValidationException (handled by CreateLinkRequest)
      */
     public function store(CreateLinkRequest $request): JsonResponse
     {
@@ -102,7 +147,20 @@ class LinkController extends BaseController
     }
 
     /**
-     * Atualiza um link existente.
+     * PUT /api/links/{id}
+     *
+     * Update an existing link owned by the authenticated user. Requires at least
+     * one field in the payload. Saves an audit record with before/after values.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — verifies ownership before updating.
+     *
+     * Response shape: NormalizeApiResponse envelope: { message, data: LinkResource } (200)
+     *
+     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
+     *
+     * @throws \Illuminate\Validation\ValidationException (handled by UpdateLinkRequest)
      */
     public function update(UpdateLinkRequest $request, string $id): JsonResponse
     {
@@ -155,7 +213,18 @@ class LinkController extends BaseController
     }
 
     /**
-     * Remove um link.
+     * DELETE /api/links/{id}
+     *
+     * Permanently delete a link owned by the authenticated user. Saves a
+     * deletion audit record before the delete executes.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — verifies ownership before deleting.
+     *
+     * Response shape: NormalizeApiResponse envelope: { message } (200)
+     *
+     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
      */
     public function destroy(Request $request, string $id): JsonResponse
     {
@@ -188,7 +257,21 @@ class LinkController extends BaseController
     }
 
     /**
-     * Obtém dados detalhados de cliques de um link específico.
+     * GET /api/link/{id}/clicks
+     *
+     * Return aggregated click statistics for a link: totals, unique IPs, hourly
+     * distribution over the last 24 h, top countries/devices/referrers, UTM
+     * campaigns, and the 10 most recent click records. All aggregations are done
+     * via SQL to avoid loading large datasets into PHP memory.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — uses findOwnedLink.
+     *
+     * Response shape: { link_info, stats, recent_clicks } (200)
+     *                 Raw JSON — not wrapped by NormalizeApiResponse.
+     *
+     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
      */
     public function getClicksData(string $id): JsonResponse
     {
@@ -312,11 +395,24 @@ class LinkController extends BaseController
     }
 
     /**
-     * Lista paginada de cliques de um link específico para exibição em tabela.
+     * GET /api/link/{id}/clicks-list
      *
-     * Suporta paginação (page, per_page), busca textual (search) em campos
-     * relevantes e ordenação (sort_by, sort_dir). Retorna `data` + `meta` no
-     * envelope padronizado pelo NormalizeApiResponse middleware.
+     * Return a paginated, sortable, and searchable list of individual click
+     * records for use in the ClicksTable tab. Supports query parameters:
+     *   - page (int, default 1)
+     *   - per_page (int, 1–100, default 25)
+     *   - search (string, matched against country/city/state/device/browser/os/ip/referer)
+     *   - sort_by (string, one of created_at|country|city|state|device|browser|os|ip|referer)
+     *   - sort_dir (asc|desc, default desc)
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — uses findOwnedLink.
+     *
+     * Response shape: { data: Click[], meta: { total, per_page, current_page, last_page, from, to, sort_by, sort_dir, search } }
+     *                 Raw JSON — not wrapped by NormalizeApiResponse.
+     *
+     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
      */
     public function getClicksList(string $id, Request $request): JsonResponse
     {

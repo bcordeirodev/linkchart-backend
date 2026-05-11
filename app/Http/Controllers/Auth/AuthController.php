@@ -11,6 +11,26 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
+/**
+ * Authentication and user-profile controller.
+ *
+ * Handles registration, login/logout, JWT refresh, profile management, password
+ * changes, and email-verification flows. Does not extend BaseController — uses
+ * Illuminate\Routing\Controller directly because it does not need link-ownership
+ * helpers.
+ *
+ * Route groups in routes/api.php:
+ *   - `throttle:login` group  — register, login, verifyEmail, forgotPassword, resetPassword
+ *   - `api.auth:api` only     — me, logout, checkEmailVerificationStatus, resendVerificationEmail
+ *   - `api.auth:api, verified` — updateProfile, changePassword
+ *
+ * All responses are raw JSON (not wrapped by NormalizeApiResponse, which only
+ * applies to the `api` route group containing links and analytics).
+ *
+ * Known issue: resendVerificationEmail carries NO rate limit despite sending
+ * email — the throttle:login middleware does not cover that route. See audit
+ * §14 for context.
+ */
 class AuthController extends Controller
 {
     private EmailVerificationService $emailVerificationService;
@@ -21,7 +41,21 @@ class AuthController extends Controller
     }
 
     /**
-     * Registrar um novo usuário
+     * POST /api/auth/register
+     *
+     * Create a new user account, send an email verification message, and issue
+     * a JWT so the client can make authenticated requests immediately (before
+     * the email is verified).
+     *
+     * Middleware: throttle:login
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: { success, message, user, token, email_verification: { sent, message, email } } (201)
+     *                 { error, message, errors } on validation failure (422)
+     *                 { error, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function register(Request $request)
     {
@@ -79,7 +113,21 @@ class AuthController extends Controller
     }
 
     /**
-     * Login do usuário
+     * POST /api/auth/login
+     *
+     * Attempt credential-based authentication and return a JWT on success.
+     * Logs failure events (including the attempted email) via AppLogger.
+     *
+     * Middleware: throttle:login (5 attempts/min per email or IP)
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: { success, message, token, user } (200)
+     *                 { error, message } on invalid credentials (401)
+     *                 { error, message, errors } on validation failure (422)
+     *                 { error, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function login(Request $request)
     {
@@ -130,7 +178,18 @@ class AuthController extends Controller
     }
 
     /**
-     * Logout do usuário
+     * POST /api/auth/logout
+     *
+     * Invalidate the current JWT so it cannot be reused.
+     *
+     * Middleware: api.auth:api
+     * Auth: required (JWT)
+     * Owner check: no
+     *
+     * Response shape: { success, message } (200)
+     *                 { error, message } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function logout()
     {
@@ -151,7 +210,18 @@ class AuthController extends Controller
     }
 
     /**
-     * Obter informações do usuário autenticado
+     * GET /api/me
+     *
+     * Return the authenticated user's model data.
+     *
+     * Middleware: api.auth:api
+     * Auth: required (JWT)
+     * Owner check: no
+     *
+     * Response shape: { success, user } (200)
+     *                 { error, message } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function me()
     {
@@ -169,7 +239,17 @@ class AuthController extends Controller
     }
 
     /**
-     * Refresh do token
+     * POST /api/auth/refresh  (not currently listed in routes — available via JWT package)
+     *
+     * Issue a new JWT by refreshing the current (possibly expired) token.
+     *
+     * Auth: JWT (current token, may be expired within TTL grace period)
+     * Owner check: no
+     *
+     * Response shape: { success, token } (200)
+     *                 { error, message } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function refresh()
     {
@@ -189,7 +269,19 @@ class AuthController extends Controller
     }
 
     /**
-     * Atualizar perfil do usuário
+     * PUT /api/profile
+     *
+     * Update the authenticated user's name and email address.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required (JWT + verified email)
+     * Owner check: no (operates on the authenticated user's own record)
+     *
+     * Response shape: { success, message, user } (200)
+     *                 { error, message, errors } on validation failure (422)
+     *                 { error, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function updateProfile(Request $request)
     {
@@ -228,7 +320,20 @@ class AuthController extends Controller
     }
 
     /**
-     * Alterar senha do usuário
+     * PUT /api/change-password
+     *
+     * Verify the current password and replace it with a new one.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required (JWT + verified email)
+     * Owner check: no (operates on the authenticated user's own record)
+     *
+     * Response shape: { success, message } (200)
+     *                 { error, message } on wrong current password (422)
+     *                 { error, message, errors } on validation failure (422)
+     *                 { error, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function changePassword(Request $request)
     {
@@ -278,7 +383,20 @@ class AuthController extends Controller
     }
 
     /**
-     * Verificar email usando token
+     * POST /api/auth/verify-email
+     *
+     * Mark the user's email as verified using a 64-character one-time token
+     * sent by email. Delegates to EmailVerificationService::verifyEmail.
+     *
+     * Middleware: throttle:login
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: service-defined { success, ... } (200 or 400)
+     *                 { success: false, message, errors } on validation failure (422)
+     *                 { success: false, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function verifyEmail(Request $request)
     {
@@ -311,7 +429,24 @@ class AuthController extends Controller
     }
 
     /**
-     * Reenviar email de verificação
+     * POST /api/resend-verification-email
+     *
+     * Re-send the email verification message for the authenticated user, unless
+     * the email is already verified.
+     *
+     * Middleware: api.auth:api (no verified, no throttle)
+     * Auth: required (JWT)
+     * Owner check: no (operates on the authenticated user's own record)
+     *
+     * NOTE: This action carries NO rate limit despite sending email. This is a
+     * known gap surfaced in the audit (§14). A dedicated throttle should be
+     * added in a follow-up.
+     *
+     * Response shape: service-defined { success, ... } (200 or 400)
+     *                 { success: false, message, type: 'already_verified' } (400) if already done
+     *                 { success: false, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function resendVerificationEmail(Request $request)
     {
@@ -349,7 +484,21 @@ class AuthController extends Controller
     }
 
     /**
-     * Solicitar recuperação de senha
+     * POST /api/auth/forgot-password
+     *
+     * Initiate the password-reset flow by sending a reset link to the given
+     * email address. Always returns 200 to avoid leaking whether the email
+     * exists in the system.
+     *
+     * Middleware: throttle:login
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: service-defined { success, message, ... } (200 always)
+     *                 { success: false, message, errors } on validation failure (422)
+     *                 { success: false, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function forgotPassword(Request $request)
     {
@@ -385,7 +534,20 @@ class AuthController extends Controller
     }
 
     /**
-     * Redefinir senha usando token
+     * POST /api/auth/reset-password
+     *
+     * Complete the password-reset flow using a 64-character one-time token and
+     * a new confirmed password.
+     *
+     * Middleware: throttle:login
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: service-defined { success, ... } (200 or 400)
+     *                 { success: false, message, errors } on validation failure (422)
+     *                 { success: false, message, error_id } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function resetPassword(Request $request)
     {
@@ -422,7 +584,19 @@ class AuthController extends Controller
     }
 
     /**
-     * Verificar status de verificação do email
+     * GET /api/email-verification-status
+     *
+     * Return whether the authenticated user's email is verified, the address,
+     * and whether a re-send is allowed.
+     *
+     * Middleware: api.auth:api (no verified)
+     * Auth: required (JWT)
+     * Owner check: no (operates on the authenticated user's own record)
+     *
+     * Response shape: { success, email_verified, email, can_resend, last_sent } (200)
+     *                 { success: false, message } on server error (500)
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function checkEmailVerificationStatus()
     {

@@ -12,17 +12,18 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Controller para encurtamento público de URLs
+ * Public-facing controller for unauthenticated link operations.
  *
- * FUNCIONALIDADE:
- * - Permite encurtamento de URLs sem autenticação
- * - Links criados não têm userId (são públicos)
- * - Validação básica de segurança
- * - Rate limiting aplicado via middleware
+ * Handles URL shortening without authentication (anonymous links have no
+ * user_id), public slug lookup, and basic aggregate analytics for the /shorter
+ * and /public-analytics frontend pages.
  *
- * Segue os princípios SOLID:
- * - SRP: Responsável apenas por receber requisições HTTP públicas
- * - DIP: Depende da abstração LinkServiceInterface
+ * Routes (all under /api/public/* prefix, no auth required):
+ *   POST   /api/public/shorten          → store       (throttle:public-shorten)
+ *   GET    /api/public/link/{slug}      → showBySlug  (no throttle)
+ *   GET    /api/public/analytics/{slug} → basicAnalytics (throttle:public-analytics)
+ *
+ * Depends on: LinkServiceInterface (injected).
  */
 class PublicLinkController extends Controller
 {
@@ -34,7 +35,18 @@ class PublicLinkController extends Controller
     }
 
     /**
-     * Cria um novo link encurtado público.
+     * POST /api/public/shorten
+     *
+     * Create an anonymous shortened link (no user_id). Validates via
+     * CreatePublicLinkRequest and maps to CreatePublicLinkDTO.
+     *
+     * Middleware: throttle:public-shorten (10/min per IP)
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: { message, data: PublicLinkResource } (201)
+     *                 { error, message } on invalid input (422)
+     *                 { error, message } on server error (500)
      */
     public function store(CreatePublicLinkRequest $request): JsonResponse
     {
@@ -60,7 +72,20 @@ class PublicLinkController extends Controller
     }
 
     /**
-     * Exibe informações básicas de um link público pelo slug.
+     * GET /api/public/link/{slug}
+     *
+     * Public-facing slug lookup. Returns basic link metadata (without click
+     * details) for an active, non-expired, already-started link. This is the
+     * live routed action — not the deleted LinkController::showBySlug variant
+     * removed in R-06.
+     *
+     * Middleware: none (no throttle, no auth)
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: { data: PublicLinkResource } (200)
+     *                 { message } (404) if not found, expired, or not yet started.
+     *                 { error, message } on server error (500)
      */
     public function showBySlug(string $slug): JsonResponse
     {
@@ -95,7 +120,23 @@ class PublicLinkController extends Controller
     }
 
     /**
-     * Obtém analytics básicos de um link público (sem dados sensíveis).
+     * GET /api/public/analytics/{slug}
+     *
+     * Return non-sensitive aggregate analytics for an active, non-expired,
+     * already-started public link. Includes total clicks, top countries,
+     * device breakdown, hourly distribution (last 7 days), browser breakdown,
+     * and day-of-week distribution. Results are cached for 5 minutes
+     * (Cache::remember, key: public_analytics_{linkId}).
+     *
+     * Middleware: throttle:public-analytics
+     * Auth: not required
+     * Owner check: no — applies active/expires_at/starts_in filters to avoid
+     *              leaking existence of inactive slugs.
+     *
+     * Response shape: { total_clicks, created_at, is_active, short_url,
+     *                   has_analytics, charts?: { geographic, audience, temporal } }
+     *                 { message } (404) if link not found or filtered out.
+     *                 { error, message } on server error (500)
      */
     public function basicAnalytics(string $slug): JsonResponse
     {
