@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Services\Links;
 
+use App\Services\Links\ClickVelocityService;
 use App\Services\Links\LinkTrackingService;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -23,7 +24,7 @@ class LinkTrackingPhase2Test extends TestCase
         $m = $r->getMethod($method);
         $m->setAccessible(true);
 
-        return $m->invoke(new LinkTrackingService, ...$args);
+        return $m->invoke(new LinkTrackingService($this->createMock(ClickVelocityService::class)), ...$args);
     }
 
     // --- enrichSeason ---
