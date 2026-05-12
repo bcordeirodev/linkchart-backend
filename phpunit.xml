@@ -29,5 +29,6 @@
         <env name="QUEUE_CONNECTION" value="sync" force="true"/>
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="JWT_SECRET" value="test-secret-not-for-production-use-only" force="true"/>
+        <env name="AUTH0_DOMAIN" value="test.auth0.test" force="true"/>
     </php>
 </phpunit>

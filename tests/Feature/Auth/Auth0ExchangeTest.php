@@ -22,6 +22,7 @@ class Auth0ExchangeTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        Http::preventStrayRequests();
         $domain = config('services.auth0.domain');
         $this->userinfoUrl = "https://{$domain}/userinfo";
     }
@@ -101,6 +102,7 @@ class Auth0ExchangeTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertDatabaseCount('users', 1);
+        $response->assertJsonPath('data.user.id', $user->id);
     }
 
     /** Returns 409 when an email is already linked to a different auth0_sub. */
