@@ -26,7 +26,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property int $id
  * @property string $name Display name.
  * @property string $email Unique e-mail address (login identifier).
- * @property string $password Bcrypt hash (auto-cast via 'hashed').
+ * @property string|null $password Bcrypt hash (auto-cast via 'hashed'); null for Auth0-only users who have no password.
  * @property string|null $remember_token Laravel session remember token.
  * @property string|null $auth0_sub Auth0 subject identifier (e.g. "google-oauth2|123"); null for legacy accounts.
  * @property bool $email_verified Whether the user has confirmed their e-mail address.
@@ -119,7 +119,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function hasVerifiedEmail(): bool
     {
-        if ($this->auth0_sub) {
+        if (filled($this->auth0_sub)) {
             return true;
         }
 
