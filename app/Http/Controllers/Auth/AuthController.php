@@ -8,6 +8,7 @@ use App\Services\EmailVerificationService;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -624,5 +625,92 @@ class AuthController extends Controller
                 'message' => 'Erro ao verificar status',
             ], 500);
         }
+    }
+
+    /**
+     * Exchange an Auth0 access token for a backend-issued JWT.
+     *
+     * Validates the token via the Auth0 /userinfo endpoint (one HTTP call,
+     * only at login time). Finds or creates the local user record, then issues
+     * a standard tymon/jwt-auth JWT. Response shape is identical to `login()`.
+     *
+     * @param  \Illuminate\Http\Request  $request  Body: { access_token: string }
+     * @return \Illuminate\Http\JsonResponse
+     *
+     * @route POST /api/auth/auth0-exchange   throttle:auth0-exchange
+     * @unauthenticated
+     */
+    public function auth0Exchange(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validated = $request->validate([
+            'access_token' => 'required|string',
+        ]);
+
+        $domain = config('services.auth0.domain');
+        $userInfoResponse = Http::withToken($validated['access_token'])
+            ->get("https://{$domain}/userinfo");
+
+        if (! $userInfoResponse->successful()) {
+            return response()->json([
+                'error' => [
+                    'code'    => 'auth0_token_invalid',
+                    'message' => 'Invalid or expired Auth0 access token.',
+                ],
+            ], 401);
+        }
+
+        $info = $userInfoResponse->json();
+        $sub  = $info['sub'];
+        $email = $info['email'];
+        $name  = $info['name'] ?? $email;
+        $emailVerified = $info['email_verified'] ?? false;
+
+        // 1. Look up by auth0_sub (returning user).
+        $user = User::where('auth0_sub', $sub)->first();
+
+        if (! $user) {
+            // 2. Look up by email (link existing legacy account).
+            $user = User::where('email', $email)->first();
+
+            if ($user) {
+                // Already linked to a different Auth0 identity → conflict.
+                if ($user->auth0_sub && $user->auth0_sub !== $sub) {
+                    return response()->json([
+                        'error' => [
+                            'code'    => 'auth0_email_conflict',
+                            'message' => 'This email is already linked to a different Auth0 account.',
+                        ],
+                    ], 409);
+                }
+
+                $user->update(['auth0_sub' => $sub]);
+            } else {
+                // 3. First-time user — create the account.
+                $user = User::create([
+                    'name'               => $name,
+                    'email'              => $email,
+                    'auth0_sub'          => $sub,
+                    'email_verified'     => $emailVerified,
+                    'email_verified_at'  => $emailVerified ? now() : null,
+                ]);
+            }
+        }
+
+        $token = JWTAuth::fromUser($user);
+
+        AppLogger::event('auth', 'info', 'auth.auth0_exchange', [
+            'user_id'   => $user->id,
+            'auth0_sub' => $sub,
+        ]);
+
+        return response()->json([
+            'data' => [
+                'token' => $token,
+                'user'  => $user->only([
+                    'id', 'name', 'email',
+                    'email_verified_at', 'created_at', 'updated_at',
+                ]),
+            ],
+        ]);
     }
 }
