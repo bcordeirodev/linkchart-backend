@@ -5,13 +5,15 @@ namespace App\DTOs;
 use App\Http\Requests\CreatePublicLinkRequest;
 
 /**
- * Input DTO for anonymous (unauthenticated) link creation (POST /api/public/shorten).
+ * Input DTO for public link creation (POST /api/public/shorten).
  *
  * Built by {@see \App\Http\Requests\CreatePublicLinkRequest} via the static factory
  * {@see self::fromRequest()}, then consumed by
  * {@see \App\Http\Controllers\Links\PublicLinkController}. Unlike {@see CreateLinkDTO},
- * there is no authenticated user: `user_id` is always null and `is_active` is always
- * true. Rate-limited at 10 requests/minute per IP via the `public-shorten` limiter.
+ * `is_active` is always true. `user_id` is null for guests; if a valid JWT token is
+ * present the controller resolves it and passes it to `fromRequest()` so the link is
+ * owned by that user. Rate-limited at 10 requests/minute per IP via the
+ * `public-shorten` limiter.
  *
  * The object is immutable from construction (PHP 8.2 constructor promotion with
  * `readonly`). Validation is enforced by the form request before instantiation.
@@ -23,34 +25,35 @@ class CreatePublicLinkDTO
      * @param  string|null  $title  Optional human-readable label.
      * @param  string|null  $slug  Desired slug from `custom_slug` field; null triggers auto-generation.
      * @param  bool  $is_active  Always true for public links; kept for interface symmetry.
-     * @param  int|null  $user_id  Always null; public links are not owned by any user.
+     * @param  int|null  $user_id  Authenticated user's ID if present; null for guests.
      */
     public function __construct(
         public readonly string $original_url,
         public readonly ?string $title = null,
         public readonly ?string $slug = null,
         public readonly bool $is_active = true,
-        public readonly ?int $user_id = null // Sempre null para links públicos
+        public readonly ?int $user_id = null
     ) {}
 
     /**
      * Build a CreatePublicLinkDTO from a validated {@see CreatePublicLinkRequest}.
      *
      * Reads `original_url` and `title` from the validated payload; maps `custom_slug`
-     * to the `slug` property. `is_active` is hard-coded to true and `user_id` to null
-     * for all public links — these values are not read from the request.
+     * to the `slug` property. `is_active` is hard-coded to true. `user_id` is null for
+     * guests; pass the authenticated user's ID to associate the link with that account.
      *
      * @param  CreatePublicLinkRequest  $request  Validated HTTP request.
+     * @param  int|null  $userId  Authenticated user's ID, or null for anonymous creation.
      * @return self Immutable DTO ready for controller use.
      */
-    public static function fromRequest(CreatePublicLinkRequest $request): self
+    public static function fromRequest(CreatePublicLinkRequest $request, ?int $userId = null): self
     {
         return new self(
             original_url: $request->validated('original_url'),
             title: $request->validated('title'),
             slug: $request->validated('custom_slug'),
-            is_active: true, // Links públicos sempre ativos inicialmente
-            user_id: null // Links públicos não têm usuário
+            is_active: true,
+            user_id: $userId,
         );
     }
 
@@ -70,7 +73,7 @@ class CreatePublicLinkDTO
             'title' => $this->title,
             'slug' => $this->slug,
             'is_active' => $this->is_active,
-            'user_id' => $this->user_id, // null
+            'user_id' => $this->user_id,
             'clicks' => 0,
             'created_at' => now(),
             'updated_at' => now(),

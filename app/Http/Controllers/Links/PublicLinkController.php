@@ -12,13 +12,14 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Public-facing controller for unauthenticated link operations.
+ * Public-facing controller for link operations that do not require authentication.
  *
- * Handles URL shortening without authentication (anonymous links have no
- * user_id), public slug lookup, and basic aggregate analytics for the /shorter
- * and /public-analytics frontend pages.
+ * Handles URL shortening, public slug lookup, and basic aggregate analytics for
+ * the /shorter and /public-analytics frontend pages. The `store` action performs
+ * optional JWT resolution: if a valid Bearer token is present the link is owned
+ * by that user; otherwise it is created anonymously (user_id = null).
  *
- * Routes (all under /api/public/* prefix, no auth required):
+ * Routes (all under /api/public/* prefix, no auth middleware):
  *   POST   /api/public/shorten          → store       (throttle:public-shorten)
  *   GET    /api/public/link/{slug}      → showBySlug  (no throttle)
  *   GET    /api/public/analytics/{slug} → basicAnalytics (throttle:public-analytics)
@@ -37,11 +38,13 @@ class PublicLinkController extends Controller
     /**
      * POST /api/public/shorten
      *
-     * Create an anonymous shortened link (no user_id). Validates via
-     * CreatePublicLinkRequest and maps to CreatePublicLinkDTO.
+     * Create a shortened link, optionally owned by an authenticated user. If a
+     * valid Bearer token is present the link is associated with that user; missing
+     * or invalid tokens are silently treated as guest (user_id = null). Validates
+     * via CreatePublicLinkRequest and maps to CreatePublicLinkDTO.
      *
      * Middleware: throttle:public-shorten (10/min per IP)
-     * Auth: not required
+     * Auth: optional — valid JWT associates the link with the user
      * Owner check: no
      *
      * Response shape: { message, data: PublicLinkResource } (201)
@@ -51,7 +54,16 @@ class PublicLinkController extends Controller
     public function store(CreatePublicLinkRequest $request): JsonResponse
     {
         try {
-            $linkDTO = CreatePublicLinkDTO::fromRequest($request);
+            // Resolve authenticated user without rejecting guests — invalid/missing
+            // tokens are caught and treated as anonymous.
+            $userId = null;
+            try {
+                $userId = auth()->guard('api')->id();
+            } catch (\Exception) {
+                // No valid token — proceed as guest
+            }
+
+            $linkDTO = CreatePublicLinkDTO::fromRequest($request, $userId);
             $link = $this->linkService->createPublicLink($linkDTO);
 
             return response()->json([

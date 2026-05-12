@@ -131,11 +131,13 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
-     * Creates a new public short link (no authenticated user required).
+     * Creates a new public short link, optionally associated with a user.
      *
      * Validates the URL and data completeness via the DTO. Generates a unique
-     * random slug if not provided; rejects duplicate custom slugs. Forces
-     * user_id = null. Delegates persistence to LinkRepositoryInterface::create().
+     * random slug if not provided; rejects duplicate custom slugs. The `user_id`
+     * from the DTO is preserved — null for guests, or the authenticated user's ID
+     * when the /shorter page is used by a logged-in user. Delegates persistence to
+     * LinkRepositoryInterface::create().
      *
      * Rate-limited upstream by the public-shorten limiter (10/min per IP).
      *
@@ -163,9 +165,6 @@ class LinkService implements LinkServiceInterface
         } elseif ($this->linkRepository->slugExists($data['slug'])) {
             throw new \InvalidArgumentException('Slug personalizado já está em uso.');
         }
-
-        // Garante que user_id seja null para links públicos
-        $data['user_id'] = null;
 
         return $this->linkRepository->create($data);
     }
