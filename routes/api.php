@@ -59,6 +59,10 @@ Route::prefix('auth')->middleware('throttle:login')->controller(AuthController::
     Route::post('/reset-password', 'resetPassword');
 });
 
+// Auth0 token exchange — separate from login throttle; has its own limiter.
+Route::post('/auth/auth0-exchange', [AuthController::class, 'auth0Exchange'])
+    ->middleware('throttle:auth0-exchange');
+
 /**
  * ==============================
  * ROTAS PROTEGIDAS POR JWT
