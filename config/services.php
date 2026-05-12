@@ -47,4 +47,8 @@ return [
         'key' => env('GOOGLE_SAFE_BROWSING_KEY'),
     ],
 
+    'auth0' => [
+        'domain' => env('AUTH0_DOMAIN'),
+    ],
+
 ];
