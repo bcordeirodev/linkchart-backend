@@ -636,9 +636,9 @@ class AuthController extends Controller
      * — matches the NormalizeApiResponse envelope pattern.
      *
      * @param  \Illuminate\Http\Request  $request  Body: { access_token: string }
-     * @return \Illuminate\Http\JsonResponse
      *
      * @route POST /api/auth/auth0-exchange   throttle:auth0-exchange
+     *
      * @unauthenticated
      */
     public function auth0Exchange(Request $request): \Illuminate\Http\JsonResponse
@@ -655,22 +655,22 @@ class AuthController extends Controller
             if (! $userInfoResponse->successful()) {
                 return response()->json([
                     'error' => [
-                        'code'    => 'auth0_token_invalid',
+                        'code' => 'auth0_token_invalid',
                         'message' => 'Invalid or expired Auth0 access token.',
                     ],
                 ], 401);
             }
 
-            $info  = $userInfoResponse->json();
-            $sub   = $info['sub'] ?? null;
+            $info = $userInfoResponse->json();
+            $sub = $info['sub'] ?? null;
             $email = $info['email'] ?? null;
-            $name  = $info['name'] ?? $email;
+            $name = $info['name'] ?? $email;
             $emailVerified = $info['email_verified'] ?? false;
 
             if (! $sub || ! $email) {
                 return response()->json([
                     'error' => [
-                        'code'    => 'auth0_userinfo_incomplete',
+                        'code' => 'auth0_userinfo_incomplete',
                         'message' => 'Auth0 token does not include a valid email address.',
                     ],
                 ], 422);
@@ -688,7 +688,7 @@ class AuthController extends Controller
                     if (filled($user->auth0_sub) && $user->auth0_sub !== $sub) {
                         return response()->json([
                             'error' => [
-                                'code'    => 'auth0_email_conflict',
+                                'code' => 'auth0_email_conflict',
                                 'message' => 'This email is already linked to a different Auth0 account.',
                             ],
                         ], 409);
@@ -700,11 +700,11 @@ class AuthController extends Controller
                     // Use firstOrCreate + catch to handle concurrent signup race conditions.
                     try {
                         $user = User::create([
-                            'name'               => $name,
-                            'email'              => $email,
-                            'auth0_sub'          => $sub,
-                            'email_verified'     => $emailVerified,
-                            'email_verified_at'  => $emailVerified ? now() : null,
+                            'name' => $name,
+                            'email' => $email,
+                            'auth0_sub' => $sub,
+                            'email_verified' => $emailVerified,
+                            'email_verified_at' => $emailVerified ? now() : null,
                         ]);
                     } catch (\Illuminate\Database\QueryException $e) {
                         // Lost the race — another request created the user first.
@@ -716,7 +716,7 @@ class AuthController extends Controller
             $token = JWTAuth::fromUser($user);
 
             AppLogger::event('auth', 'info', 'auth.auth0_exchange', [
-                'user_id'   => $user->id,
+                'user_id' => $user->id,
                 'auth0_sub' => $sub,
             ]);
 
@@ -725,7 +725,7 @@ class AuthController extends Controller
             return response()->json([
                 'data' => [
                     'token' => $token,
-                    'user'  => $user->only([
+                    'user' => $user->only([
                         'id', 'name', 'email',
                         'email_verified_at', 'created_at', 'updated_at',
                     ]),
@@ -738,7 +738,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'error' => [
-                    'code'    => 'server_error',
+                    'code' => 'server_error',
                     'message' => 'Erro interno ao processar o login Auth0.',
                 ],
             ], 500);

@@ -32,9 +32,9 @@ class Auth0ExchangeTest extends TestCase
     {
         Http::fake([
             $this->userinfoUrl => Http::response([
-                'sub'            => 'google-oauth2|111',
-                'email'          => 'newuser@example.com',
-                'name'           => 'New User',
+                'sub' => 'google-oauth2|111',
+                'email' => 'newuser@example.com',
+                'name' => 'New User',
                 'email_verified' => true,
             ], 200),
         ]);
@@ -47,7 +47,7 @@ class Auth0ExchangeTest extends TestCase
             ->assertJsonStructure(['data' => ['token', 'user']]);
 
         $this->assertDatabaseHas('users', [
-            'email'     => 'newuser@example.com',
+            'email' => 'newuser@example.com',
             'auth0_sub' => 'google-oauth2|111',
         ]);
     }
@@ -56,15 +56,15 @@ class Auth0ExchangeTest extends TestCase
     public function test_links_existing_user_by_email(): void
     {
         $user = User::factory()->create([
-            'email'     => 'existing@example.com',
+            'email' => 'existing@example.com',
             'auth0_sub' => null,
         ]);
 
         Http::fake([
             $this->userinfoUrl => Http::response([
-                'sub'            => 'google-oauth2|222',
-                'email'          => 'existing@example.com',
-                'name'           => 'Existing User',
+                'sub' => 'google-oauth2|222',
+                'email' => 'existing@example.com',
+                'name' => 'Existing User',
                 'email_verified' => true,
             ], 200),
         ]);
@@ -76,7 +76,7 @@ class Auth0ExchangeTest extends TestCase
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('users', [
-            'id'        => $user->id,
+            'id' => $user->id,
             'auth0_sub' => 'google-oauth2|222',
         ]);
         $this->assertDatabaseCount('users', 1);
@@ -89,9 +89,9 @@ class Auth0ExchangeTest extends TestCase
 
         Http::fake([
             $this->userinfoUrl => Http::response([
-                'sub'            => 'google-oauth2|333',
-                'email'          => $user->email,
-                'name'           => $user->name,
+                'sub' => 'google-oauth2|333',
+                'email' => $user->email,
+                'name' => $user->name,
                 'email_verified' => true,
             ], 200),
         ]);
@@ -109,15 +109,15 @@ class Auth0ExchangeTest extends TestCase
     public function test_returns_409_on_email_conflict(): void
     {
         User::factory()->create([
-            'email'     => 'taken@example.com',
+            'email' => 'taken@example.com',
             'auth0_sub' => 'google-oauth2|other-sub',
         ]);
 
         Http::fake([
             $this->userinfoUrl => Http::response([
-                'sub'            => 'google-oauth2|new-sub',
-                'email'          => 'taken@example.com',
-                'name'           => 'Conflict',
+                'sub' => 'google-oauth2|new-sub',
+                'email' => 'taken@example.com',
+                'name' => 'Conflict',
                 'email_verified' => true,
             ], 200),
         ]);
