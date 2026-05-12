@@ -61,5 +61,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('redirect', function (Request $request) {
             return Limit::perMinute(600)->by($request->ip());
         });
+
+        // 10 trocas/min por IP no endpoint de exchange Auth0 — previne abuso de token.
+        RateLimiter::for('auth0-exchange', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
     }
 }
