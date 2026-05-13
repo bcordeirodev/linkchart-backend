@@ -643,7 +643,7 @@ class AuthController extends Controller
      * from the Auth0 session's ID-token claims on the frontend (trustworthy).
      *
      * @param  \Illuminate\Http\Request  $request
-     *         Body: { access_token: string, email_hint?: string, name_hint?: string }
+     *                                             Body: { access_token: string, email_hint?: string, name_hint?: string }
      *
      * @route POST /api/auth/auth0-exchange   throttle:auth0-exchange
      *
@@ -653,8 +653,8 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'access_token' => 'required|string',
-            'email_hint'   => 'nullable|email|max:255',
-            'name_hint'    => 'nullable|string|max:255',
+            'email_hint' => 'nullable|email|max:255',
+            'name_hint' => 'nullable|string|max:255',
         ]);
 
         try {
