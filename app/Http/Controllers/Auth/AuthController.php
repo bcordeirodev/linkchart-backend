@@ -635,7 +635,15 @@ class AuthController extends Controller
      * a standard tymon/jwt-auth JWT. Response shape: `{ data: { token, user } }`
      * — matches the NormalizeApiResponse envelope pattern.
      *
-     * @param  \Illuminate\Http\Request  $request  Body: { access_token: string }
+     * `email_hint` and `name_hint` are optional client-supplied fallbacks.
+     * Auth0's /userinfo endpoint only returns claims matching the access-token
+     * scopes; for Facebook/social logins the `email` scope may be absent from
+     * the access token even though Auth0 received the email from the provider.
+     * When /userinfo omits `email`, we fall back to the hint, which originates
+     * from the Auth0 session's ID-token claims on the frontend (trustworthy).
+     *
+     * @param  \Illuminate\Http\Request  $request
+     *         Body: { access_token: string, email_hint?: string, name_hint?: string }
      *
      * @route POST /api/auth/auth0-exchange   throttle:auth0-exchange
      *
@@ -645,6 +653,8 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'access_token' => 'required|string',
+            'email_hint'   => 'nullable|email|max:255',
+            'name_hint'    => 'nullable|string|max:255',
         ]);
 
         try {
@@ -663,8 +673,11 @@ class AuthController extends Controller
 
             $info = $userInfoResponse->json();
             $sub = $info['sub'] ?? null;
-            $email = $info['email'] ?? null;
-            $name = $info['name'] ?? $email;
+            // Fall back to the client hint when /userinfo omits email — this
+            // happens for Facebook logins when the access token lacks the
+            // `email` scope (Auth0 tenant default may not include it).
+            $email = $info['email'] ?? $validated['email_hint'] ?? null;
+            $name = $info['name'] ?? $validated['name_hint'] ?? $email;
             $emailVerified = $info['email_verified'] ?? false;
 
             if (! $sub || ! $email) {
