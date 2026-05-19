@@ -64,6 +64,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $is_return_visitor 1 if the same IP has clicked this link before; default 0.
  * @property int $session_clicks Number of clicks in the current session window; default 1.
  * @property string|null $click_source Categorised traffic source (up to 50 chars).
+ * @property string|null $social_platform Specific social platform slug (instagram/tiktok/etc.) or null.
  * @property string|null $navigation_context Phase 1: Sec-Fetch-Site / Sec-Fetch-Mode derived context (up to 30 chars).
  * @property string|null $fetch_dest Phase 1: Sec-Fetch-Dest header value (up to 30 chars).
  * @property string|null $ch_platform Phase 1: Sec-CH-UA-Platform Client Hint (up to 30 chars).
@@ -133,6 +134,7 @@ class Click extends Model
         'is_return_visitor',
         'session_clicks',
         'click_source',
+        'social_platform',
         // Phase 1 — navigation context
         'navigation_context',
         'fetch_dest',
