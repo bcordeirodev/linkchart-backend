@@ -14,7 +14,8 @@ return new class extends Migration
     {
         Schema::create('user_subdomains', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->unique('user_id');
             $table->string('subdomain', 63);
             $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamps();
