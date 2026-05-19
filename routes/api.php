@@ -123,4 +123,12 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{linkId}/temporal', 'getTemporalAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useTemporalData
         Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useAudienceData
     });
+
+    // === GERENCIAMENTO DE SUBDOMÍNIO ===
+    // check must be registered before the bare GET /subdomain to avoid route collision
+    Route::get('/subdomain/check', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'check']);
+    Route::get('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'show']);
+    Route::post('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'claim'])
+        ->middleware('throttle:subdomain-claim');
+    Route::delete('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'release']);
 });
