@@ -111,6 +111,19 @@ class RedirectController extends Controller
 
             AppLogger::redirectStarted($slug, $link->id);
 
+            // Subdomain context: null = root domain, false = unregistered subdomain, UserSubdomain = registered
+            $subdomainCtx = $request->attributes->get('subdomain_context', null);
+
+            if ($subdomainCtx === false) {
+                AppLogger::redirectBlocked($slug, 'subdomain_not_found');
+                return $this->renderErrorPage('Link não encontrado ou inativo');
+            }
+
+            if ($subdomainCtx !== null && $link->user_id !== $subdomainCtx->user_id) {
+                AppLogger::redirectBlocked($slug, 'subdomain_ownership_mismatch');
+                return $this->renderErrorPage('Link não encontrado ou inativo');
+            }
+
             if ($link->expires_at && now()->isAfter($link->expires_at)) {
                 AppLogger::redirectBlocked($slug, 'expired');
 
