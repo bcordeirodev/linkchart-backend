@@ -87,6 +87,7 @@ return [
         'ip_api' => [
             'class' => \Torann\GeoIP\Services\IPApi::class,
             'secure' => true,
+            'continent_path' => storage_path('app/continents.json'),
         ],
     ],
 
