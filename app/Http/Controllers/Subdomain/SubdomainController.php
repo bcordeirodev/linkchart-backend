@@ -47,10 +47,16 @@ class SubdomainController extends Controller
      */
     public function check(Request $request): JsonResponse
     {
-        $name = $request->query('name', '');
+        $name = (string) $request->query('name', '');
+
+        if (strlen($name) < 3 || strlen($name) > 63) {
+            return response()->json(['available' => false]);
+        }
+
         $taken = UserSubdomain::where('subdomain', $name)
             ->where('status', 'active')
             ->exists();
+
         return response()->json(['available' => ! $taken]);
     }
 
@@ -138,7 +144,7 @@ class SubdomainController extends Controller
      */
     private function formatSubdomain(UserSubdomain $sub): array
     {
-        $scheme = parse_url(config('app.redirect_url', 'http://localhost:8000'), PHP_URL_SCHEME);
+        $scheme = parse_url(config('app.url', 'http://localhost'), PHP_URL_SCHEME);
         return [
             'subdomain' => $sub->subdomain,
             'full_url' => "{$scheme}://{$sub->subdomain}." . config('app.domain'),
