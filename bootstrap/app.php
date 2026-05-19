@@ -45,9 +45,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
-            'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
-            'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
-            'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
+            'api.auth'          => \App\Http\Middleware\ApiAuthenticate::class,
+            'verified'          => \App\Http\Middleware\EnsureEmailIsVerified::class,
+            'metrics.redirect'  => \App\Http\Middleware\RedirectMetricsCollector::class,
+            'resolve.subdomain' => \App\Http\Middleware\ResolveSubdomainContext::class,
         ]);
 
         // NOTA: Rota /r/* configurada em web.php com middlewares específicos
