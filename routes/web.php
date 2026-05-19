@@ -65,14 +65,15 @@ Route::get('/health', function () {
  * - Mantém TODAS as métricas e tracking do sistema
  * - Cache inteligente de metadados
  */
-Route::get('/r/{slug}', [RedirectController::class, 'redirect'])
-    ->middleware(['throttle:redirect', 'metrics.redirect'])
-    ->name('public.redirect');
-
 // Clean URL alias: redirect.linkcharts.com.br/{slug} (no /r/ prefix)
 // NEXT_PUBLIC_REDIRECT_URL is set without /r/ in production, so frontend-generated
 // short URLs use this path. Must be last to avoid shadowing other routes.
-Route::get('/{slug}', [RedirectController::class, 'redirect'])
-    ->middleware(['throttle:redirect', 'metrics.redirect'])
-    ->name('public.redirect.clean')
-    ->where('slug', '[^/]+');
+Route::middleware(['resolve.subdomain', 'throttle:redirect', 'metrics.redirect'])
+    ->group(function () {
+        Route::get('/r/{slug}', [RedirectController::class, 'redirect'])
+            ->name('public.redirect');
+
+        Route::get('/{slug}', [RedirectController::class, 'redirect'])
+            ->name('public.redirect.clean')
+            ->where('slug', '[^/]+');
+    });
