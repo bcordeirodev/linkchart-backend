@@ -16,6 +16,7 @@ class SubdomainRedirectTest extends TestCase
     {
         parent::setUp();
         config(['app.domain' => 'linkcharts.com.br']);
+        \Illuminate\Support\Facades\Cache::flush();
     }
 
     public function test_redirect_works_via_subdomain_when_slug_belongs_to_owner(): void
