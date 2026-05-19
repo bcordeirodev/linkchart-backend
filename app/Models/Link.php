@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Cache;
  * Fillable: id, slug, original_url, title, description, user_id, expires_at,
  *           starts_in, is_active, is_demo, clicks, click_limit, utm_source,
  *           utm_medium, utm_campaign, utm_term, utm_content, created_at,
- *           updated_at, health_status, health_checked_at.
+ *           updated_at, health_status, health_checked_at, short_domain.
  *
  * Casts: expires_at → datetime, starts_in → datetime, is_active → boolean,
  *        is_demo → boolean, health_checked_at → datetime.
