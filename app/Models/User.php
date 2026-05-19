@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
@@ -36,6 +37,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Link>                        $links
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\EmailVerificationToken>      $emailVerificationTokens
+ * @property-read \App\Models\UserSubdomain|null $subdomain
  */
 class User extends Authenticatable implements JWTSubject
 {
@@ -108,6 +110,14 @@ class User extends Authenticatable implements JWTSubject
     public function links()
     {
         return $this->hasMany(Link::class);
+    }
+
+    /**
+     * The subdomain claimed by this user, if any (hasOne UserSubdomain).
+     */
+    public function subdomain(): HasOne
+    {
+        return $this->hasOne(\App\Models\UserSubdomain::class);
     }
 
     /**

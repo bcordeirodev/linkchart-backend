@@ -66,5 +66,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth0-exchange', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
+
+        // 5 reivindicações/hora por usuário — previne squatting de subdomínios.
+        RateLimiter::for('subdomain-claim', function (Request $request) {
+            return Limit::perHour(5)->by($request->user()?->id);
+        });
     }
 }
