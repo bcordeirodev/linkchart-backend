@@ -58,6 +58,14 @@ return [
 
     'redirect_url' => env('REDIRECT_URL', 'http://localhost:8000'),
 
+    'domain' => env('APP_DOMAIN', 'localhost'),
+
+    'reserved_subdomains' => [
+        'www', 'app', 'api', 'admin', 'r', 'health', 'status', 'support',
+        'docs', 'mail', 'dev', 'staging', 'prod', 'test', 'beta',
+        'dashboard', 'login', 'auth', 'cdn', 'static', 'short', 'go', 'link',
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
