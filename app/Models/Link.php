@@ -49,6 +49,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string|null $utm_content UTM content tag.
  * @property string $health_status Enum-like: 'unknown' | 'healthy' | 'broken'. Default 'unknown'. Populated by FetchLinkPreviewJob.
  * @property \Illuminate\Support\Carbon|null $health_checked_at Timestamp of the most recent health check; null until first check.
+ * @property string|null $short_domain Full hostname, e.g. "acme.linkcharts.com.br"; null uses the default redirect URL.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\User|null        $user    Owning user; null for anonymous links.
@@ -86,6 +87,7 @@ class Link extends Model
         'updated_at',
         'health_status',
         'health_checked_at',
+        'short_domain',
     ];
 
     protected $casts = [
@@ -159,14 +161,18 @@ class Link extends Model
     /**
      * Returns the full public short URL for this link.
      *
-     * Reads the base from config('app.redirect_url') (defaults to
-     * http://localhost:8000 when not set). Format: {redirect_url}/{slug}.
+     * When short_domain is set (link was created after user activated a subdomain),
+     * uses that hostname with the scheme derived from config('app.redirect_url').
+     * Falls back to the global redirect_url for links with no custom domain.
      */
     public function getShortedUrl(): string
     {
-        $backendUrl = config('app.redirect_url', 'http://localhost:8000');
+        if ($this->short_domain) {
+            $scheme = parse_url(config('app.redirect_url', 'http://localhost:8000'), PHP_URL_SCHEME);
+            return "{$scheme}://{$this->short_domain}/{$this->slug}";
+        }
 
-        return "{$backendUrl}/{$this->slug}";
+        return config('app.redirect_url', 'http://localhost:8000') . '/' . $this->slug;
     }
 
     /**

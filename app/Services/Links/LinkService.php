@@ -80,6 +80,14 @@ class LinkService implements LinkServiceInterface
 
         $data = $linkDTO->toArray();
 
+        // Resolve the user's active subdomain and record it on the link.
+        // Stored at creation time so the short URL is immutable even if the user
+        // later releases their subdomain.
+        $sub = \App\Models\UserSubdomain::findByUserCached($linkDTO->user_id);
+        if ($sub) {
+            $data['short_domain'] = $sub->subdomain . '.' . config('app.domain');
+        }
+
         // Gera slug único se não fornecido
         if (empty($data['slug'])) {
             $data['slug'] = $this->generateUniqueSlug();

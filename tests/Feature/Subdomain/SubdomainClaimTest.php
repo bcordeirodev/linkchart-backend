@@ -128,4 +128,42 @@ class SubdomainClaimTest extends TestCase
             'user_id' => $user->id, 'subdomain' => 'newdomain', 'status' => 'active',
         ]);
     }
+
+    public function test_link_created_with_subdomain_gets_short_domain_set(): void
+    {
+        config(['app.domain' => 'linkcharts.com.br']);
+        $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
+        UserSubdomain::factory()->create(['user_id' => $user->id, 'subdomain' => 'acme']);
+
+        $response = $this->actingAs($user, 'api')
+            ->postJson('/api/links', [
+                'original_url' => 'https://example.com',
+                'title' => 'Test',
+            ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('links', [
+            'user_id' => $user->id,
+            'short_domain' => 'acme.linkcharts.com.br',
+        ]);
+    }
+
+    public function test_link_created_without_subdomain_has_null_short_domain(): void
+    {
+        $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
+
+        $response = $this->actingAs($user, 'api')
+            ->postJson('/api/links', [
+                'original_url' => 'https://example.com',
+                'title' => 'Test',
+            ]);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('links', [
+            'user_id' => $user->id,
+            'short_domain' => null,
+        ]);
+    }
 }
