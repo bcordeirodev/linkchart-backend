@@ -56,6 +56,19 @@ class UserSubdomainCacheTest extends TestCase
         $this->assertEquals('acme', $result->subdomain);
     }
 
+    public function test_find_by_user_cached_returns_null_when_user_has_no_active_subdomain(): void
+    {
+        $user = User::factory()->create();
+        UserSubdomain::factory()->inactive()->create([
+            'user_id' => $user->id,
+            'subdomain' => 'acme',
+        ]);
+
+        $result = UserSubdomain::findByUserCached($user->id);
+
+        $this->assertNull($result);
+    }
+
     public function test_cache_is_invalidated_on_save(): void
     {
         $user = User::factory()->create();

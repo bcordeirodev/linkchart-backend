@@ -32,6 +32,13 @@ class UserSubdomain extends Model
 
     protected $fillable = ['user_id', 'subdomain', 'status'];
 
+    protected function casts(): array
+    {
+        return [
+            'status' => 'string',
+        ];
+    }
+
     /**
      * Owning user (belongsTo User).
      */
@@ -44,6 +51,8 @@ class UserSubdomain extends Model
      * Find an active subdomain by label, served from cache.
      *
      * Returns null if no active record exists for the given label.
+     * Null results are cached for the full TTL (600 s). On first claim,
+     * the saved hook invalidates the key so the next read re-queries.
      * Cache key: subdomain:{label}, TTL: 600 s.
      */
     public static function findActiveCached(string $subdomain): ?self
@@ -59,6 +68,8 @@ class UserSubdomain extends Model
      * Find the active subdomain for a given user, served from cache.
      *
      * Returns null if the user has no active subdomain.
+     * Null results are cached for the full TTL (600 s). The saved hook
+     * invalidates the key when the user claims or releases a subdomain.
      * Cache key: subdomain:user:{id}, TTL: 600 s.
      */
     public static function findByUserCached(int $userId): ?self
@@ -95,6 +106,13 @@ class UserSubdomain extends Model
         Cache::forget(self::userCacheKey($this->user_id));
     }
 
+    /**
+     * Invalidate both cache dimensions on any write.
+     *
+     * Runs on `saved` (insert + update) and `deleted` so that the redirect
+     * hot path never serves a stale active/inactive state beyond the
+     * current request cycle.
+     */
     protected static function booted(): void
     {
         static::saved(function (self $sub): void {
