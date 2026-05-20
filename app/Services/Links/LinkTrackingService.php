@@ -423,6 +423,7 @@ class LinkTrackingService
                 'is_return_visitor' => $recentClicks > 0,
                 'session_clicks' => $sessionClicks,
                 'click_source' => $this->categorizeClickSource($referer),
+                'social_platform' => $this->detectSocialPlatform($referer),
             ];
         } catch (\Exception $e) {
             AppLogger::trackingBehaviorAnalysisFailed($e, ['ip' => $ip, 'link_id' => $linkId]);
@@ -431,6 +432,7 @@ class LinkTrackingService
                 'is_return_visitor' => false,
                 'session_clicks' => 1,
                 'click_source' => 'unknown',
+                'social_platform' => null,
             ];
         }
     }
@@ -462,6 +464,37 @@ class LinkTrackingService
         }
 
         return 'referral';
+    }
+
+    /**
+     * Identifies the specific social platform from a referer URL.
+     *
+     * Returns null when click_source is not 'social' or the domain is not a
+     * known social proxy. Called alongside categorizeClickSource() so both
+     * fields are derived from the same referer string.
+     *
+     * @param  string|null  $referer  HTTP Referer header value.
+     * @return string|null  Platform slug (instagram|tiktok|facebook|youtube|twitter|whatsapp|telegram|linkedin) or null.
+     */
+    private function detectSocialPlatform(?string $referer): ?string
+    {
+        if (! $referer || $referer === '-') {
+            return null;
+        }
+
+        $domain = strtolower(parse_url($referer, PHP_URL_HOST) ?? '');
+
+        return match (true) {
+            str_contains($domain, 'instagram.com') => 'instagram',
+            str_contains($domain, 'tiktok.com') => 'tiktok',
+            str_contains($domain, 'facebook.com') || str_contains($domain, 'fb.com') => 'facebook',
+            str_contains($domain, 'youtube.com') || str_contains($domain, 'youtu.be') => 'youtube',
+            str_contains($domain, 'twitter.com') || str_contains($domain, 't.co') || str_contains($domain, 'x.com') => 'twitter',
+            str_contains($domain, 'whatsapp.com') || str_contains($domain, 'wa.me') => 'whatsapp',
+            str_contains($domain, 'telegram.org') || str_contains($domain, 't.me') => 'telegram',
+            str_contains($domain, 'linkedin.com') => 'linkedin',
+            default => null,
+        };
     }
 
     private function collectPerformanceData(?string $acceptLanguage, ?float $httpResponseMs): array
