@@ -416,22 +416,22 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
                     WHEN 'trending' THEN 3
                     WHEN 'warming'  THEN 2
                     WHEN 'cold'     THEN 1
-                    ELSE 0
                 END)
                     WHEN 4 THEN 'viral'
                     WHEN 3 THEN 'trending'
                     WHEN 2 THEN 'warming'
-                    ELSE 'cold'
+                    WHEN 1 THEN 'cold'
                 END as peak_rank
             ")
             ->where('link_id', $linkId)
+            ->where('created_at', '>=', now()->subDays(90))
             ->whereNotNull('viral_rank')
             ->groupByRaw('DATE(created_at)')
             ->orderByRaw('DATE(created_at) ASC')
             ->get()
             ->map(fn ($r) => [
-                'date' => $r->date,
-                'peak_rank' => $r->peak_rank,
+                'date'        => $r->date,
+                'peak_rank'   => $r->peak_rank ?? 'cold',
                 'click_count' => (int) $r->click_count,
             ])
             ->toArray();
