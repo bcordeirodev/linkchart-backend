@@ -2,8 +2,6 @@
 
 namespace App\Contracts\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
-
 /**
  * Contract for per-link geographic analytics (countries, regions, cities, heatmap).
  *
@@ -46,17 +44,9 @@ interface GeographicAnalyticsInterface
      * ```
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
-     * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array<string, mixed> Geographic analytics payload as described above.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkGeographicAnalytics(
-        int $linkId,
-        ?AnalyticsFilters $filters = null,
-        ?string $continent = null,
-        int $minClicks = 0
-    ): array;
+    public function getLinkGeographicAnalytics(int $linkId): array;
 }

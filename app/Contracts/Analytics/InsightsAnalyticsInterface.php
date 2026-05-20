@@ -2,8 +2,6 @@
 
 namespace App\Contracts\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
-
 /**
  * Contract for per-link business insights analytics.
  *
@@ -51,10 +49,9 @@ interface InsightsAnalyticsInterface
      * ```
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed> Insights payload as described above.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array;
+    public function getLinkInsightsAnalytics(int $linkId): array;
 }

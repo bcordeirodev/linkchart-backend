@@ -2,7 +2,6 @@
 
 namespace App\Services\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
@@ -35,18 +34,15 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * ModelNotFoundException is thrown by Link::findOrFail).
      *
      * @param  int  $linkId  Link primary key.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'. Filters clicks by is_weekend/is_business_hours before aggregating.
      * @return array<string, mixed> Keys: clicks_by_hour, clicks_by_day_of_week, hourly_patterns_local, weekend_vs_weekday, business_hours_analysis, holiday_impact, seasonal_distribution.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
-    public function getLinkTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
+    public function getLinkTemporalAnalytics(int $linkId): array
     {
         Link::findOrFail($linkId);
-        $filters ??= new AnalyticsFilters();
 
-        if (! $this->baseQuery($linkId, $filters, $segment)->exists()) {
+        if (! Click::where('link_id', $linkId)->exists()) {
             return [
                 'clicks_by_hour' => [],
                 'clicks_by_day_of_week' => [],
@@ -57,8 +53,8 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         }
 
         return [
-            'clicks_by_hour' => $this->getClicksByHour($linkId, $filters, $segment),
-            'clicks_by_day_of_week' => $this->getClicksByDayOfWeek($linkId, $filters, $segment),
+            'clicks_by_hour' => $this->getClicksByHour($linkId),
+            'clicks_by_day_of_week' => $this->getClicksByDayOfWeek($linkId),
             'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId),
             'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId),
             'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId),
@@ -66,29 +62,6 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             'seasonal_distribution' => $this->getSeasonalDistribution($linkId),
             'viral_rank_by_day' => $this->getViralRankByDay($linkId),
         ];
-    }
-
-    /**
-     * Build a filtered base query for clicks of a given link.
-     *
-     * Applies AnalyticsFilters (date range, bot exclusion) and an optional
-     * segment constraint (weekday/weekend/business) to an Eloquent builder.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Date/bot filter state.
-     * @param  string  $segment  One of 'all'|'weekday'|'weekend'|'business'.
-     * @return \Illuminate\Database\Eloquent\Builder Constrained builder.
-     */
-    private function baseQuery(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): \Illuminate\Database\Eloquent\Builder
-    {
-        $query = $filters->applyToQuery(Click::where('link_id', $linkId));
-
-        return match ($segment) {
-            'weekday'  => $query->where('is_weekend', false),
-            'weekend'  => $query->where('is_weekend', true),
-            'business' => $query->where('is_business_hours', true),
-            default    => $query,
-        };
     }
 
     /**
@@ -124,26 +97,14 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return DB::connection()->getDriverName() === 'sqlite';
     }
 
-    /**
-     * Aggregate click counts grouped by hour of day (0–23).
-     *
-     * Uses COALESCE of the pre-computed hour_of_day column with a DB-native
-     * extraction fallback so older clicks without the column are included.
-     * Respects AnalyticsFilters (date range, bot exclusion) and segment filtering.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
-     * @param  string  $segment  Segment constraint passed to baseQuery.
-     * @return array<int, array{hour: int, label: string, clicks: int}> 24-element array indexed 0–23.
-     */
-    private function getClicksByHour(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
+    private function getClicksByHour(int $linkId): array
     {
-        $filters ??= new AnalyticsFilters();
         $expr = $this->isSqlite()
             ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
             : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
 
-        $rows = $this->baseQuery($linkId, $filters, $segment)
+        $rows = DB::table('clicks')
+            ->where('link_id', $linkId)
             ->selectRaw("{$expr} as hour, count(*) as clicks")
             ->groupByRaw($expr)->orderByRaw('1')
             ->get()->keyBy('hour');
@@ -156,25 +117,13 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return $result;
     }
 
-    /**
-     * Aggregate click counts grouped by ISO day of week (1=Monday … 7=Sunday).
-     *
-     * Uses COALESCE of the pre-computed day_of_week column with a DB-native
-     * extraction fallback. Respects AnalyticsFilters and segment filtering.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
-     * @param  string  $segment  Segment constraint passed to baseQuery.
-     * @return array<int, array{day: int, day_name: string, clicks: int}> 7-element array indexed 1–7.
-     */
-    private function getClicksByDayOfWeek(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
+    private function getClicksByDayOfWeek(int $linkId): array
     {
-        $filters ??= new AnalyticsFilters();
         $expr = $this->isSqlite()
             ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
             : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
 
-        $rows = $this->baseQuery($linkId, $filters, $segment)
+        $rows = DB::table('clicks')->where('link_id', $linkId)
             ->selectRaw("{$expr} as dow, count(*) as clicks")
             ->groupByRaw($expr)->get()->keyBy('dow');
 
