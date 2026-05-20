@@ -61,7 +61,7 @@ return [
     'domain' => env('APP_DOMAIN', 'localhost'),
 
     'reserved_subdomains' => [
-        'www', 'app', 'api', 'admin', 'r', 'health', 'status', 'support',
+        'www', 'app', 'api', 'admin', 'r', 'redirect', 'health', 'status', 'support',
         'docs', 'mail', 'dev', 'staging', 'prod', 'test', 'beta',
         'dashboard', 'login', 'auth', 'cdn', 'static', 'short', 'go', 'link',
     ],

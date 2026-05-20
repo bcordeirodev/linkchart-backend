@@ -35,6 +35,13 @@ class ResolveSubdomainContext
         }
 
         $label = substr($host, 0, strlen($host) - strlen('.' . $appDomain));
+
+        // Reserved labels (e.g. 'redirect', 'api', 'www') are system subdomains,
+        // not user subdomains — treat them the same as the root domain.
+        if (in_array($label, config('app.reserved_subdomains', []), true)) {
+            return $next($request);
+        }
+
         $sub = UserSubdomain::findActiveCached($label);
 
         // false signals: subdomain pattern detected but not registered
