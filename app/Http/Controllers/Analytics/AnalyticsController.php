@@ -182,7 +182,7 @@ class AnalyticsController extends BaseController
             $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId, $filters, $segment);
 
             // 2. Buscar dados avançados (weekly_trends, monthly_trends, peak_analysis, timezone_analysis)
-            $advancedData = $this->temporalService->getAdvancedTemporalAnalytics($linkId);
+            $advancedData = $this->temporalService->getAdvancedTemporalAnalytics($linkId, $filters, $segment);
 
             // 3. Enriquecer timezone analysis com percentuais
             $enrichedTimezones = $this->enrichTimezoneAnalysis($advancedData['timezone_analysis'] ?? []);

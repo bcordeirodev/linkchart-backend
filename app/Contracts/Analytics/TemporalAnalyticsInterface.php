@@ -63,10 +63,9 @@ interface TemporalAnalyticsInterface
     /**
      * Return advanced temporal analytics with extended pattern analysis for the given link.
      *
-     * Loads the full `clicks` collection into memory for in-PHP aggregation,
-     * making this suitable for background/export use but not for per-request
-     * latency-sensitive endpoints. Operates over all recorded clicks with no
-     * time-window parameter.
+     * Loads the filtered `clicks` collection into memory for in-PHP aggregation.
+     * Applies the same AnalyticsFilters and segment constraint as getLinkTemporalAnalytics
+     * so peak_analysis, heatmap, and timeline reflect the active filters.
      *
      * Return shape:
      * ```
@@ -86,7 +85,13 @@ interface TemporalAnalyticsInterface
      * ```
      *
      * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'.
      * @return array<string, mixed> Advanced temporal analytics payload as described above.
      */
-    public function getAdvancedTemporalAnalytics(int $linkId): array;
+    public function getAdvancedTemporalAnalytics(
+        int $linkId,
+        ?AnalyticsFilters $filters = null,
+        string $segment = 'all'
+    ): array;
 }

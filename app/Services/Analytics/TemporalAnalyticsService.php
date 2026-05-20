@@ -59,12 +59,12 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return [
             'clicks_by_hour' => $this->getClicksByHour($linkId, $filters, $segment),
             'clicks_by_day_of_week' => $this->getClicksByDayOfWeek($linkId, $filters, $segment),
-            'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId),
-            'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId),
-            'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId),
-            'holiday_impact' => $this->getHolidayImpact($linkId),
-            'seasonal_distribution' => $this->getSeasonalDistribution($linkId),
-            'viral_rank_by_day' => $this->getViralRankByDay($linkId),
+            'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId, $filters, $segment),
+            'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId, $filters, $segment),
+            'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId, $filters, $segment),
+            'holiday_impact' => $this->getHolidayImpact($linkId, $filters, $segment),
+            'seasonal_distribution' => $this->getSeasonalDistribution($linkId, $filters, $segment),
+            'viral_rank_by_day' => $this->getViralRankByDay($linkId, $filters, $segment),
         ];
     }
 
@@ -100,9 +100,10 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * @param  int  $linkId  Link primary key.
      * @return array<string, mixed> Keys: hourly_patterns, daily_patterns, weekly_trends, monthly_trends, peak_analysis, timezone_analysis, heatmap_data, daily_timeline, device_by_period, holiday_impact, seasonal_distribution.
      */
-    public function getAdvancedTemporalAnalytics(int $linkId): array
+    public function getAdvancedTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
-        $clicks = Click::where('link_id', $linkId)->get();
+        $filters ??= new AnalyticsFilters();
+        $clicks = $this->baseQuery($linkId, $filters, $segment)->get();
 
         return [
             'hourly_patterns' => $this->getHourlyPatterns($clicks),
@@ -112,10 +113,10 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             'peak_analysis' => $this->getPeakAnalysis($clicks),
             'timezone_analysis' => $this->getTimezoneAnalysis($clicks),
             'heatmap_data' => $this->getHourDayHeatmap($clicks),
-            'daily_timeline' => $this->getDailyTimeline($linkId),
+            'daily_timeline' => $this->getDailyTimeline($linkId, $filters, $segment),
             'device_by_period' => $this->getDeviceByPeriod($clicks),
-            'holiday_impact' => $this->getHolidayImpact($linkId),
-            'seasonal_distribution' => $this->getSeasonalDistribution($linkId),
+            'holiday_impact' => $this->getHolidayImpact($linkId, $filters, $segment),
+            'seasonal_distribution' => $this->getSeasonalDistribution($linkId, $filters, $segment),
         ];
     }
 
@@ -187,23 +188,28 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return $result;
     }
 
-    private function getHourlyPatternsLocal(int $linkId): array
+    private function getHourlyPatternsLocal(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        return DB::table('clicks')
+        return $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw('hour_of_day, COUNT(*) as clicks, AVG(response_time) as avg_response_time, COUNT(DISTINCT ip) as unique_visitors')
-            ->where('link_id', $linkId)->whereNotNull('hour_of_day')
-            ->groupBy('hour_of_day')->orderBy('hour_of_day')->get()
+            ->whereNotNull('hour_of_day')
+            ->groupBy('hour_of_day')
+            ->orderBy('hour_of_day')
+            ->get()
             ->map(fn ($r) => ['hour' => (int) $r->hour_of_day, 'clicks' => (int) $r->clicks, 'avg_response_time' => round((float) $r->avg_response_time, 2), 'unique_visitors' => (int) $r->unique_visitors])
             ->toArray();
     }
 
-    private function getWeekendVsWeekday(int $linkId): array
+    private function getWeekendVsWeekday(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
         $expr = $this->isSqlite()
             ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
             : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
 
-        $rows = DB::table('clicks')->where('link_id', $linkId)->selectRaw("({$expr}) as dow, count(*) as clicks, count(distinct ip) as unique_visitors")->groupByRaw($expr)->get();
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("({$expr}) as dow, count(*) as clicks, count(distinct ip) as unique_visitors")
+            ->groupByRaw($expr)
+            ->get();
         $weekday = $rows->whereIn('dow', [1, 2, 3, 4, 5])->sum('clicks');
         $weekend = $rows->whereIn('dow', [6, 7])->sum('clicks');
         $uniqueWeekday = $rows->whereIn('dow', [1, 2, 3, 4, 5])->sum('unique_visitors');
@@ -216,13 +222,16 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         ];
     }
 
-    private function getBusinessHoursAnalysis(int $linkId): array
+    private function getBusinessHoursAnalysis(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
         $expr = $this->isSqlite()
             ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
             : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
 
-        $rows = DB::table('clicks')->where('link_id', $linkId)->selectRaw("{$expr} as h, count(*) as clicks")->groupByRaw($expr)->get();
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$expr} as h, count(*) as clicks")
+            ->groupByRaw($expr)
+            ->get();
         $business = $rows->whereBetween('h', [9, 17])->sum('clicks');
         $after = $rows->sum('clicks') - $business;
         $total = $business + $after;
@@ -366,21 +375,26 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return $result;
     }
 
-    private function getDailyTimeline(int $linkId): array
+    private function getDailyTimeline(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $rows = DB::table('clicks')
-            ->where('link_id', $linkId)
-            ->where('created_at', '>=', now()->subDays(90))
+        $query = $this->baseQuery($linkId, $filters, $segment);
+
+        // Cap to 90 days when no explicit date range is set.
+        if ($filters->dateFrom === null) {
+            $query->where('created_at', '>=', now()->subDays(90));
+        }
+
+        return $query
             ->selectRaw('DATE(created_at) as date, COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors')
             ->groupByRaw('DATE(created_at)')
             ->orderByRaw('date')
-            ->get();
-
-        return $rows->map(fn ($r) => [
-            'date' => $r->date,
-            'clicks' => (int) $r->clicks,
-            'unique_visitors' => (int) $r->unique_visitors,
-        ])->toArray();
+            ->get()
+            ->map(fn ($r) => [
+                'date' => $r->date,
+                'clicks' => (int) $r->clicks,
+                'unique_visitors' => (int) $r->unique_visitors,
+            ])
+            ->toArray();
     }
 
     /**
@@ -391,12 +405,11 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      *
      * @return array{holiday_clicks: int, non_holiday_clicks: int, holiday_percentage: float, top_holidays: array}
      */
-    private function getHolidayImpact(int $linkId): array
+    private function getHolidayImpact(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $total = Click::where('link_id', $linkId)->count();
-        $holiday = DB::table('clicks')
+        $total = $this->baseQuery($linkId, $filters, $segment)->count();
+        $holiday = $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw('holiday_name, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->where('is_holiday', true)
             ->whereNotNull('holiday_name')
             ->groupBy('holiday_name')
@@ -428,13 +441,12 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      *
      * @return array<int, array{season: string, clicks: int, percentage: float}>
      */
-    private function getSeasonalDistribution(int $linkId): array
+    private function getSeasonalDistribution(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters, $segment)->count();
 
-        return DB::table('clicks')
+        return $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw('season, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('season')
             ->groupBy('season')
             ->orderBy('clicks', 'desc')
@@ -456,9 +468,16 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      *
      * @return array<int, array{date: string, peak_rank: string, click_count: int}>
      */
-    private function getViralRankByDay(int $linkId): array
+    private function getViralRankByDay(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        return DB::table('clicks')
+        $query = $this->baseQuery($linkId, $filters, $segment);
+
+        // Cap to 90 days when no explicit date range is set to avoid loading excessive data.
+        if ($filters->dateFrom === null) {
+            $query->where('created_at', '>=', now()->subDays(90));
+        }
+
+        return $query
             ->selectRaw("
                 DATE(created_at) as date,
                 COUNT(*) as click_count,
@@ -474,8 +493,6 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
                     WHEN 1 THEN 'cold'
                 END as peak_rank
             ")
-            ->where('link_id', $linkId)
-            ->where('created_at', '>=', now()->subDays(90))
             ->whereNotNull('viral_rank')
             ->groupByRaw('DATE(created_at)')
             ->orderByRaw('DATE(created_at) ASC')
