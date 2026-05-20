@@ -84,8 +84,10 @@ class AnalyticsController extends BaseController
      * Owner check: yes — uses findOwnedLink.
      *
      * Response shape: { success: true, data: GeographicData, meta: GeographicMeta }
+     *
+     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, continent, min_clicks.
      */
-    public function getGeographicAnalytics(int $linkId): JsonResponse
+    public function getGeographicAnalytics(Request $request, int $linkId): JsonResponse
     {
         try {
             $link = $this->findOwnedLink($linkId);
@@ -93,12 +95,16 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
-            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId);
+            $filters   = AnalyticsFilters::fromRequest($request);
+            $continent = $request->query('continent') ?: null;
+            $minClicks = max(0, (int) $request->query('min_clicks', 0));
+
+            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks);
 
             return response()->json([
                 'success' => true,
-                'data' => $payload['data'],
-                'meta' => $payload['meta'],
+                'data'    => $payload['data'],
+                'meta'    => $payload['meta'],
             ]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar analytics geográficos.', $e);
