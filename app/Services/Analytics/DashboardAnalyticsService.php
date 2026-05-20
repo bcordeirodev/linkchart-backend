@@ -522,38 +522,43 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Joins clicks ↔ link_utms and groups by utm_source. Only rows with a non-null
      * utm_source are included. Returns empty array when no UTM-tagged clicks exist.
      *
+     * The `percentage` field is relative to ALL UTM-tagged clicks for the link in the
+     * time window, not just the top-5 subset. A separate COUNT(*) query (clone of the
+     * base query, before SELECT/GROUP BY/LIMIT are applied) is used as the denominator
+     * so that percentages remain accurate when there are more than 5 UTM sources.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  Carbon|null  $since  Optional time window start (null = all time).
      * @return array<int, array{source: string, clicks: int, percentage: float}>
      */
     private function getUtmTopSources(int $linkId, ?Carbon $since): array
     {
-        $query = DB::table('clicks')
+        $baseUtmQuery = DB::table('clicks')
             ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
             ->where('clicks.link_id', $linkId)
             ->whereNotNull('link_utms.utm_source');
 
         if ($since) {
-            $query->where('clicks.created_at', '>=', $since);
+            $baseUtmQuery->where('clicks.created_at', '>=', $since);
         }
 
-        $results = $query
+        $totalUtmClicks = (clone $baseUtmQuery)->count();
+
+        if ($totalUtmClicks === 0) {
+            return [];
+        }
+
+        $results = $baseUtmQuery
             ->selectRaw('link_utms.utm_source as source, COUNT(*) as clicks')
             ->groupBy('link_utms.utm_source')
             ->orderByDesc('clicks')
             ->limit(5)
             ->get();
 
-        if ($results->isEmpty()) {
-            return [];
-        }
-
-        $total = $results->sum('clicks');
-
         return $results->map(fn ($r) => [
             'source' => $r->source,
             'clicks' => (int) $r->clicks,
-            'percentage' => $total > 0 ? round($r->clicks / $total * 100, 1) : 0.0,
+            'percentage' => round($r->clicks / $totalUtmClicks * 100, 1),
         ])->toArray();
     }
 
