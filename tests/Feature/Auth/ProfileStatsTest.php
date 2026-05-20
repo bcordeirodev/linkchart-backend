@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Click;
 use App\Models\Link;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,7 +41,9 @@ class ProfileStatsTest extends TestCase
             ->getJson('/api/profile/stats')
             ->assertOk()
             ->assertJsonPath('data.total_links', 0)
-            ->assertJsonPath('data.total_clicks', 0);
+            ->assertJsonPath('data.total_clicks', 0)
+            ->assertJsonPath('data.links_this_month', 0)
+            ->assertJsonPath('data.clicks_this_month', 0);
     }
 
     /** @test */
@@ -84,6 +87,33 @@ class ProfileStatsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.total_links', 1)
             ->assertJsonPath('data.total_clicks', 7);
+    }
+
+    /** @test */
+    public function test_links_this_month_counts_only_current_month(): void
+    {
+        $user = $this->makeVerifiedUser();
+        Link::factory()->create(['user_id' => $user->id, 'created_at' => now()]);
+        Link::factory()->create(['user_id' => $user->id, 'created_at' => now()->subMonths(2)]);
+
+        $this->actingAs($user, 'api')
+            ->getJson('/api/profile/stats')
+            ->assertOk()
+            ->assertJsonPath('data.links_this_month', 1);
+    }
+
+    /** @test */
+    public function test_clicks_this_month_counts_only_current_month(): void
+    {
+        $user = $this->makeVerifiedUser();
+        $link = Link::factory()->create(['user_id' => $user->id]);
+        Click::factory()->create(['link_id' => $link->id, 'created_at' => now()]);
+        Click::factory()->create(['link_id' => $link->id, 'created_at' => now()->subMonths(2)]);
+
+        $this->actingAs($user, 'api')
+            ->getJson('/api/profile/stats')
+            ->assertOk()
+            ->assertJsonPath('data.clicks_this_month', 1);
     }
 
     /** @test */

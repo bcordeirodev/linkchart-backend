@@ -244,17 +244,18 @@ class AuthController extends Controller
     /**
      * GET /api/profile/stats
      *
-     * Returns total link count and cumulative click count for the authenticated user.
+     * Returns totals, this-month counts for the authenticated user.
      *
      * Auth: JWT + email verified
-     * Response shape: { data: { total_links: int, total_clicks: int } } (200)
+     * Response shape: { data: { total_links, total_clicks, links_this_month, clicks_this_month } } (200)
      *
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function stats(Request $request): JsonResponse
     {
-        $userId = $request->user()->id;
+        $userId         = $request->user()->id;
+        $startOfMonth   = now()->startOfMonth();
 
         $row = DB::table('links')
             ->where('user_id', $userId)
@@ -262,10 +263,25 @@ class AuthController extends Controller
             ->selectRaw('COUNT(*) as total_links, COALESCE(SUM(clicks), 0) as total_clicks')
             ->first();
 
+        $linksThisMonth = DB::table('links')
+            ->where('user_id', $userId)
+            ->where('is_demo', false)
+            ->where('created_at', '>=', $startOfMonth)
+            ->count();
+
+        $clicksThisMonth = DB::table('clicks')
+            ->join('links', 'clicks.link_id', '=', 'links.id')
+            ->where('links.user_id', $userId)
+            ->where('links.is_demo', false)
+            ->where('clicks.created_at', '>=', $startOfMonth)
+            ->count();
+
         return response()->json([
             'data' => [
-                'total_links'  => (int) $row->total_links,
-                'total_clicks' => (int) $row->total_clicks,
+                'total_links'        => (int) $row->total_links,
+                'total_clicks'       => (int) $row->total_clicks,
+                'links_this_month'   => (int) $linksThisMonth,
+                'clicks_this_month'  => (int) $clicksThisMonth,
             ],
         ]);
     }
