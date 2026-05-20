@@ -22,15 +22,15 @@ readonly class AnalyticsFilters
         ?string $dateFrom = null,
         ?string $dateTo = null,
     ) {
-        $this->dateFrom = $dateFrom ? Carbon::parse($dateFrom)->startOfDay() : null;
-        $this->dateTo = $dateTo ? Carbon::parse($dateTo)->endOfDay() : null;
+        $this->dateFrom = $dateFrom ? Carbon::parse($dateFrom) : null;
+        $this->dateTo = $dateTo ? Carbon::parse($dateTo) : null;
     }
 
     /**
      * Build an AnalyticsFilters from HTTP query params.
      *
-     * Recognised params: `date_from` (ISO date string), `date_to` (ISO date string),
-     * `exclude_bots` (bool-castable string).
+     * Recognised params: `date_from` (datetime string, e.g. "yyyy-MM-dd HH:mm:ss"),
+     * `date_to` (datetime string), `exclude_bots` (bool-castable string).
      *
      * @param  Request  $request  Incoming HTTP request.
      * @return static New instance with parsed filter values.
@@ -48,7 +48,7 @@ readonly class AnalyticsFilters
      * Apply date-range and bot-exclusion constraints to a Click query builder.
      *
      * Works with both Eloquent\Builder and Query\Builder since both
-     * implement `when()`, `whereDate()`, and `where()`.
+     * implement `when()` and `where()`.
      *
      * @param  mixed  $query  An active query builder for the clicks table.
      * @return mixed The same builder with constraints appended (fluent).
@@ -56,8 +56,8 @@ readonly class AnalyticsFilters
     public function applyToQuery(mixed $query): mixed
     {
         return $query
-            ->when($this->dateFrom, fn ($q) => $q->whereDate('created_at', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn ($q) => $q->whereDate('created_at', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($q) => $q->where('created_at', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($q) => $q->where('created_at', '<=', $this->dateTo))
             ->when($this->excludeBots, fn ($q) => $q->where('is_bot', false));
     }
 }
