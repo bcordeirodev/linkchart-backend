@@ -60,6 +60,8 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
                 'viral_rank' => $this->getViralRankSummary($linkId, $since),
                 'quality' => $this->getQualitySummary($linkId, $since),
+                'utm_top_sources' => $this->getUtmTopSources($linkId, $since),
+                'social_iab' => $this->getSocialIabStats($linkId, $since),
             ],
             'link_info' => [
                 'id' => $link->id,
@@ -109,6 +111,8 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'links_with_traffic' => 0,
                 'viral_rank' => ['current_rank' => 'cold', 'distribution' => []],
                 'quality' => ['organic' => 0, 'suspicious' => 0, 'likely_fraud' => 0, 'unscored' => 0, 'organic_percentage' => 0],
+                'utm_top_sources' => [],
+                'social_iab' => ['total' => 0, 'percentage' => 0.0, 'ios_pct' => 0.0, 'android_pct' => 0.0],
             ],
             'link_info' => null,
             'temporal_data' => [
@@ -509,6 +513,87 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             'likely_fraud' => $fraud,
             'unscored' => $total - $organic - $suspicious - $fraud,
             'organic_percentage' => $total > 0 ? round($organic / $total * 100, 1) : 0,
+        ];
+    }
+
+    /**
+     * Returns top 5 utm_source values for the given link and time window.
+     *
+     * Joins clicks ↔ link_utms and groups by utm_source. Only rows with a non-null
+     * utm_source are included. Returns empty array when no UTM-tagged clicks exist.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  Carbon|null  $since  Optional time window start (null = all time).
+     * @return array<int, array{source: string, clicks: int, percentage: float}>
+     */
+    private function getUtmTopSources(int $linkId, ?Carbon $since): array
+    {
+        $query = DB::table('clicks')
+            ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
+            ->where('clicks.link_id', $linkId)
+            ->whereNotNull('link_utms.utm_source');
+
+        if ($since) {
+            $query->where('clicks.created_at', '>=', $since);
+        }
+
+        $results = $query
+            ->selectRaw('link_utms.utm_source as source, COUNT(*) as clicks')
+            ->groupBy('link_utms.utm_source')
+            ->orderByDesc('clicks')
+            ->limit(5)
+            ->get();
+
+        if ($results->isEmpty()) {
+            return [];
+        }
+
+        $total = $results->sum('clicks');
+
+        return $results->map(fn ($r) => [
+            'source' => $r->source,
+            'clicks' => (int) $r->clicks,
+            'percentage' => $total > 0 ? round($r->clicks / $total * 100, 1) : 0.0,
+        ])->toArray();
+    }
+
+    /**
+     * Returns stats for clicks originating from mobile in-app browsers (IAB).
+     *
+     * Filters clicks where navigation_context = 'in_app_webview' AND is_mobile = 1.
+     * The percentage is relative to all clicks for the link in the time window.
+     * ios_pct and android_pct are relative to the IAB segment, not total clicks.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  Carbon|null  $since  Optional time window start (null = all time).
+     * @return array{total: int, percentage: float, ios_pct: float, android_pct: float}
+     */
+    private function getSocialIabStats(int $linkId, ?Carbon $since): array
+    {
+        $baseQuery = fn () => DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since));
+
+        $allTotal = $baseQuery()->count();
+
+        $iabQuery = fn () => $baseQuery()
+            ->where('navigation_context', 'in_app_webview')
+            ->where('is_mobile', 1);
+
+        $total = $iabQuery()->count();
+
+        if ($total === 0) {
+            return ['total' => 0, 'percentage' => 0.0, 'ios_pct' => 0.0, 'android_pct' => 0.0];
+        }
+
+        $iosCount = $iabQuery()->where('os', 'iOS')->count();
+        $androidCount = $iabQuery()->where('os', 'Android')->count();
+
+        return [
+            'total' => $total,
+            'percentage' => $allTotal > 0 ? round($total / $allTotal * 100, 1) : 0.0,
+            'ios_pct' => round($iosCount / $total * 100, 1),
+            'android_pct' => round($androidCount / $total * 100, 1),
         ];
     }
 
