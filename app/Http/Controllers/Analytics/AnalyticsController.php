@@ -153,8 +153,10 @@ class AnalyticsController extends BaseController
      * Owner check: yes — uses findOwnedLink.
      *
      * Response shape: { success: true, data: { ...baseData, advanced: AdvancedTemporal } }
+     *
+     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, segment (weekday|weekend|business).
      */
-    public function getTemporalAnalytics(int $linkId): JsonResponse
+    public function getTemporalAnalytics(Request $request, int $linkId): JsonResponse
     {
         try {
             $link = $this->findOwnedLink($linkId);
@@ -162,8 +164,13 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
+            $filters = AnalyticsFilters::fromRequest($request);
+            $segment = in_array($request->query('segment'), ['weekday', 'weekend', 'business'], true)
+                ? $request->query('segment')
+                : 'all';
+
             // 1. Buscar dados base (clicks_by_hour, clicks_by_day_of_week, etc.)
-            $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId);
+            $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId, $filters, $segment);
 
             // 2. Buscar dados avançados (weekly_trends, monthly_trends, peak_analysis, timezone_analysis)
             $advancedData = $this->temporalService->getAdvancedTemporalAnalytics($linkId);
