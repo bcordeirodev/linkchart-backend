@@ -48,6 +48,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
                 'clicks_by_day_of_week' => [],
                 'holiday_impact' => ['holiday_clicks' => 0, 'non_holiday_clicks' => 0, 'holiday_percentage' => 0, 'top_holidays' => []],
                 'seasonal_distribution' => [],
+                'viral_rank_by_day' => [],
             ];
         }
 
@@ -59,6 +60,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId),
             'holiday_impact' => $this->getHolidayImpact($linkId),
             'seasonal_distribution' => $this->getSeasonalDistribution($linkId),
+            'viral_rank_by_day' => $this->getViralRankByDay($linkId),
         ];
     }
 
@@ -390,6 +392,47 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
                 'season' => $r->season,
                 'clicks' => (int) $r->clicks,
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+            ])
+            ->toArray();
+    }
+
+    /**
+     * Returns clicks grouped by day with the peak viral rank for each day.
+     *
+     * Peak rank order: viral (4) > trending (3) > warming (2) > cold (1).
+     * Clicks with null viral_rank (pre-Phase 2) are excluded.
+     * Results ordered by date ascending.
+     *
+     * @return array<int, array{date: string, peak_rank: string, click_count: int}>
+     */
+    private function getViralRankByDay(int $linkId): array
+    {
+        return DB::table('clicks')
+            ->selectRaw("
+                DATE(created_at) as date,
+                COUNT(*) as click_count,
+                CASE MAX(CASE viral_rank
+                    WHEN 'viral'    THEN 4
+                    WHEN 'trending' THEN 3
+                    WHEN 'warming'  THEN 2
+                    WHEN 'cold'     THEN 1
+                    ELSE 0
+                END)
+                    WHEN 4 THEN 'viral'
+                    WHEN 3 THEN 'trending'
+                    WHEN 2 THEN 'warming'
+                    ELSE 'cold'
+                END as peak_rank
+            ")
+            ->where('link_id', $linkId)
+            ->whereNotNull('viral_rank')
+            ->groupByRaw('DATE(created_at)')
+            ->orderByRaw('DATE(created_at) ASC')
+            ->get()
+            ->map(fn ($r) => [
+                'date' => $r->date,
+                'peak_rank' => $r->peak_rank,
+                'click_count' => (int) $r->click_count,
             ])
             ->toArray();
     }

@@ -101,4 +101,53 @@ class SocialAnalyticsServiceTest extends TestCase
         $this->assertSame(0, $iab['total']);
         $this->assertSame(0.0, $iab['percentage']);
     }
+
+    public function test_viral_rank_by_day_returns_peak_rank_per_day(): void
+    {
+        $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
+        $link = Link::factory()->create(['user_id' => $user->id]);
+
+        // Day 1: all cold
+        Click::factory()->count(5)->create([
+            'link_id' => $link->id,
+            'viral_rank' => 'cold',
+            'created_at' => '2026-05-17 10:00:00',
+        ]);
+        // Day 2: mix of warming and trending → peak = trending
+        Click::factory()->count(3)->create([
+            'link_id' => $link->id,
+            'viral_rank' => 'warming',
+            'created_at' => '2026-05-18 10:00:00',
+        ]);
+        Click::factory()->count(2)->create([
+            'link_id' => $link->id,
+            'viral_rank' => 'trending',
+            'created_at' => '2026-05-18 14:00:00',
+        ]);
+        // Day 3: viral
+        Click::factory()->count(8)->create([
+            'link_id' => $link->id,
+            'viral_rank' => 'viral',
+            'created_at' => '2026-05-19 09:00:00',
+        ]);
+        // Click with null viral_rank — should be excluded
+        Click::factory()->create(['link_id' => $link->id, 'viral_rank' => null]);
+
+        $service = app(TemporalAnalyticsService::class);
+        $result = $service->getLinkTemporalAnalytics($link->id);
+        $byDay = $result['viral_rank_by_day'];
+
+        $this->assertCount(3, $byDay);
+
+        $day1 = collect($byDay)->firstWhere('date', '2026-05-17');
+        $this->assertSame('cold', $day1['peak_rank']);
+        $this->assertSame(5, $day1['click_count']);
+
+        $day2 = collect($byDay)->firstWhere('date', '2026-05-18');
+        $this->assertSame('trending', $day2['peak_rank']); // trending > warming
+
+        $day3 = collect($byDay)->firstWhere('date', '2026-05-19');
+        $this->assertSame('viral', $day3['peak_rank']);
+        $this->assertSame(8, $day3['click_count']);
+    }
 }
