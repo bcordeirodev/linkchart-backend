@@ -240,6 +240,34 @@ class AuthController extends Controller
     }
 
     /**
+     * GET /api/profile/stats
+     *
+     * Returns total link count and cumulative click count for the authenticated user.
+     *
+     * Auth: JWT + email verified
+     * Response shape: { data: { total_links: int, total_clicks: int } } (200)
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function stats(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $row = \Illuminate\Support\Facades\DB::table('links')
+            ->where('user_id', $userId)
+            ->selectRaw('COUNT(*) as total_links, COALESCE(SUM(clicks), 0) as total_clicks')
+            ->first();
+
+        return response()->json([
+            'data' => [
+                'total_links'  => (int) $row->total_links,
+                'total_clicks' => (int) $row->total_clicks,
+            ],
+        ]);
+    }
+
+    /**
      * POST /api/auth/refresh  (not currently listed in routes — available via JWT package)
      *
      * Issue a new JWT by refreshing the current (possibly expired) token.

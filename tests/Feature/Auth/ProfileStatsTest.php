@@ -1,0 +1,80 @@
+<?php
+
+namespace Tests\Feature\Auth;
+
+use App\Models\Link;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Tests\TestCase;
+
+/**
+ * Tests for GET /api/profile/stats.
+ */
+class ProfileStatsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Prevent UserObserver from dispatching SeedDemoLinkJob,
+        // which would create a demo link for every factory user.
+        Queue::fake();
+    }
+
+    private function makeVerifiedUser(): User
+    {
+        return User::factory()->create([
+            'email_verified'    => true,
+            'email_verified_at' => now(),
+        ]);
+    }
+
+    /** @test */
+    public function test_returns_zero_stats_for_user_with_no_links(): void
+    {
+        $user = $this->makeVerifiedUser();
+
+        $this->actingAs($user, 'api')
+            ->getJson('/api/profile/stats')
+            ->assertOk()
+            ->assertJsonPath('data.total_links', 0)
+            ->assertJsonPath('data.total_clicks', 0);
+    }
+
+    /** @test */
+    public function test_returns_correct_totals_for_user_with_links(): void
+    {
+        $user = $this->makeVerifiedUser();
+        Link::factory()->create(['user_id' => $user->id, 'clicks' => 10]);
+        Link::factory()->create(['user_id' => $user->id, 'clicks' => 25]);
+
+        $this->actingAs($user, 'api')
+            ->getJson('/api/profile/stats')
+            ->assertOk()
+            ->assertJsonPath('data.total_links', 2)
+            ->assertJsonPath('data.total_clicks', 35);
+    }
+
+    /** @test */
+    public function test_only_counts_links_belonging_to_authenticated_user(): void
+    {
+        $user  = $this->makeVerifiedUser();
+        $other = $this->makeVerifiedUser();
+        Link::factory()->create(['user_id' => $user->id,  'clicks' => 5]);
+        Link::factory()->create(['user_id' => $other->id, 'clicks' => 100]);
+
+        $this->actingAs($user, 'api')
+            ->getJson('/api/profile/stats')
+            ->assertOk()
+            ->assertJsonPath('data.total_links', 1)
+            ->assertJsonPath('data.total_clicks', 5);
+    }
+
+    /** @test */
+    public function test_requires_authentication(): void
+    {
+        $this->getJson('/api/profile/stats')->assertUnauthorized();
+    }
+}

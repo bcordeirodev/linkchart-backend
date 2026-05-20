@@ -89,6 +89,7 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     // === PERFIL (REQUER EMAIL VERIFICADO) ===
     Route::put('/profile', [AuthController::class, 'updateProfile']);    // ✅ USADO: AuthService.updateProfile()
     Route::put('/change-password', [AuthController::class, 'changePassword']); // ✅ NOVO: Alterar senha
+    Route::get('/profile/stats', [AuthController::class, 'stats']);      // ✅ NOVO: Stats do perfil
 
     // === GERENCIAMENTO DE LINKS (RESTful API) ===
     Route::prefix('links')->controller(LinkController::class)->group(function () {
