@@ -70,7 +70,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
     {
         $filters ??= new AnalyticsFilters;
         Link::findOrFail($linkId);
-        $totalClicks = $filters->applyToQuery(Click::where('link_id', $linkId))->count();
+        $totalClicks = $this->baseQuery($linkId, $filters)->count();
 
         $analyticsData = [
             'retention' => $this->getReturnVisitorRate($linkId, $filters),
@@ -82,7 +82,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         ];
 
         if ($totalClicks === 0) {
-            $analyticsData['quality'] = ['avg_quality_score' => null, 'tier_breakdown' => [], 'organic_percentage' => 0];
+            $analyticsData['quality'] = ['total_clicks' => 0, 'avg_quality_score' => null, 'tier_breakdown' => [], 'organic_percentage' => 0];
 
             return [
                 'insights' => [],
@@ -123,7 +123,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      */
     private function getReturnVisitorRate(int $linkId, AnalyticsFilters $filters): array
     {
-        $totalVisitors = $filters->applyToQuery(Click::where('link_id', $linkId))->distinct('ip')->count('ip');
+        $totalVisitors = $this->baseQuery($linkId, $filters)->distinct('ip')->count('ip');
 
         if ($totalVisitors === 0) {
             return [
@@ -137,7 +137,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ];
         }
 
-        $returnVisitors = $filters->applyToQuery(Click::where('link_id', $linkId))
+        $returnVisitors = $this->baseQuery($linkId, $filters)
             ->where('is_return_visitor', true)
             ->distinct('ip')
             ->count('ip');
@@ -398,7 +398,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      */
     private function getNavigationContextBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $filters->applyToQuery(Click::where('link_id', $linkId))->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
         return $filters->applyToQuery(
             DB::table('clicks')
@@ -428,7 +428,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      */
     private function getHttpProtocolBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $filters->applyToQuery(Click::where('link_id', $linkId))->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
         return $filters->applyToQuery(
             DB::table('clicks')
@@ -454,11 +454,11 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      * migration (null values are coalesced to 'unknown').
      *
      * @param  AnalyticsFilters  $filters  Active filter state.
-     * @return array{avg_quality_score: float|null, tier_breakdown: array, organic_percentage: float}
+     * @return array{total_clicks: int, avg_quality_score: float|null, tier_breakdown: array, organic_percentage: float}
      */
     private function getQualityBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $filters->applyToQuery(Click::where('link_id', $linkId))->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
         $tiers = $filters->applyToQuery(
             DB::table('clicks')
@@ -484,9 +484,23 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ->avg('quality_score');
 
         return [
+            'total_clicks' => $total,
             'avg_quality_score' => $avgScore ? round((float) $avgScore, 1) : null,
             'tier_breakdown' => $tiers,
             'organic_percentage' => collect($tiers)->firstWhere('tier', 'organic')['percentage'] ?? 0,
         ];
+    }
+
+    /**
+     * Build a base Eloquent query for clicks belonging to the given link,
+     * with date-range and bot-exclusion filters applied.
+     *
+     * @param  int              $linkId
+     * @param  AnalyticsFilters $filters
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    private function baseQuery(int $linkId, AnalyticsFilters $filters): \Illuminate\Database\Eloquent\Builder
+    {
+        return $filters->applyToQuery(Click::where('link_id', $linkId));
     }
 }
