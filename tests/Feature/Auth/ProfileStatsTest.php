@@ -73,8 +73,24 @@ class ProfileStatsTest extends TestCase
     }
 
     /** @test */
+    public function test_excludes_demo_links_from_stats(): void
+    {
+        $user = $this->makeVerifiedUser();
+        Link::factory()->create(['user_id' => $user->id, 'is_demo' => true,  'clicks' => 99]);
+        Link::factory()->create(['user_id' => $user->id, 'is_demo' => false, 'clicks' => 7]);
+
+        $this->actingAs($user, 'api')
+            ->getJson('/api/profile/stats')
+            ->assertOk()
+            ->assertJsonPath('data.total_links', 1)
+            ->assertJsonPath('data.total_clicks', 7);
+    }
+
+    /** @test */
     public function test_requires_authentication(): void
     {
-        $this->getJson('/api/profile/stats')->assertUnauthorized();
+        $this->getJson('/api/profile/stats')
+            ->assertUnauthorized()
+            ->assertJsonPath('error.code', 'UNAUTHENTICATED');
     }
 }

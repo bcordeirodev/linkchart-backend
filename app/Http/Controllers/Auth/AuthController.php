@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Auth;
 use App\Logging\AppLogger;
 use App\Models\User;
 use App\Services\EmailVerificationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
@@ -23,7 +25,7 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  * Route groups in routes/api.php:
  *   - `throttle:login` group  — register, login, verifyEmail, forgotPassword, resetPassword
  *   - `api.auth:api` only     — me, logout, checkEmailVerificationStatus, resendVerificationEmail
- *   - `api.auth:api, verified` — updateProfile, changePassword
+ *   - `api.auth:api, verified` — updateProfile, changePassword, stats
  *
  * All responses are raw JSON (not wrapped by NormalizeApiResponse, which only
  * applies to the `api` route group containing links and analytics).
@@ -250,12 +252,13 @@ class AuthController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function stats(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    public function stats(Request $request): JsonResponse
     {
         $userId = $request->user()->id;
 
-        $row = \Illuminate\Support\Facades\DB::table('links')
+        $row = DB::table('links')
             ->where('user_id', $userId)
+            ->where('is_demo', false)
             ->selectRaw('COUNT(*) as total_links, COALESCE(SUM(clicks), 0) as total_clicks')
             ->first();
 
@@ -677,7 +680,7 @@ class AuthController extends Controller
      *
      * @unauthenticated
      */
-    public function auth0Exchange(Request $request): \Illuminate\Http\JsonResponse
+    public function auth0Exchange(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'access_token' => 'required|string',
