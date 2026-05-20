@@ -8,6 +8,7 @@ use App\Contracts\Analytics\GeographicAnalyticsInterface;
 use App\Contracts\Analytics\InsightsAnalyticsInterface;
 use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 
@@ -90,34 +91,46 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      * Delegates to DashboardAnalyticsService::getLinkDashboardAnalytics.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  int  $hours  Time window in hours (0 = all time).
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed>
      */
-    public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
+    public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->dashboard->getLinkDashboardAnalytics($linkId, $hours);
+        return $this->dashboard->getLinkDashboardAnalytics($linkId, $filters);
     }
 
     /**
      * Delegates to GeographicAnalyticsService::getLinkGeographicAnalytics.
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
+     * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array<string, mixed>
      */
-    public function getLinkGeographicAnalytics(int $linkId): array
-    {
-        return $this->geographic->getLinkGeographicAnalytics($linkId);
+    public function getLinkGeographicAnalytics(
+        int $linkId,
+        ?AnalyticsFilters $filters = null,
+        ?string $continent = null,
+        int $minClicks = 0
+    ): array {
+        return $this->geographic->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks);
     }
 
     /**
      * Delegates to TemporalAnalyticsService::getLinkTemporalAnalytics.
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'. Filters clicks by is_weekend/is_business_hours before aggregating.
      * @return array<string, mixed>
      */
-    public function getLinkTemporalAnalytics(int $linkId): array
-    {
-        return $this->temporal->getLinkTemporalAnalytics($linkId);
+    public function getLinkTemporalAnalytics(
+        int $linkId,
+        ?AnalyticsFilters $filters = null,
+        string $segment = 'all'
+    ): array {
+        return $this->temporal->getLinkTemporalAnalytics($linkId, $filters, $segment);
     }
 
     /**
@@ -135,11 +148,12 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      * Delegates to InsightsAnalyticsService::getLinkInsightsAnalytics.
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed>
      */
-    public function getLinkInsightsAnalytics(int $linkId): array
+    public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->insights->getLinkInsightsAnalytics($linkId);
+        return $this->insights->getLinkInsightsAnalytics($linkId, $filters);
     }
 
     private function linkInfo(Link $link): array
