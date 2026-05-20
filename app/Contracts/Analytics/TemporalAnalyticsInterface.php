@@ -2,8 +2,6 @@
 
 namespace App\Contracts\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
-
 /**
  * Contract for per-link temporal analytics (time-of-day, day-of-week, seasonality).
  *
@@ -48,17 +46,11 @@ interface TemporalAnalyticsInterface
      * ```
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'. Filters clicks by is_weekend/is_business_hours before aggregating.
      * @return array<string, mixed> Temporal analytics payload as described above.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkTemporalAnalytics(
-        int $linkId,
-        ?AnalyticsFilters $filters = null,
-        string $segment = 'all'
-    ): array;
+    public function getLinkTemporalAnalytics(int $linkId): array;
 
     /**
      * Return advanced temporal analytics with extended pattern analysis for the given link.

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
-use App\DTOs\Analytics\AnalyticsFilters;
 use App\Http\Controllers\BaseController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -84,10 +83,8 @@ class AnalyticsController extends BaseController
      * Owner check: yes — uses findOwnedLink.
      *
      * Response shape: { success: true, data: GeographicData, meta: GeographicMeta }
-     *
-     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, continent, min_clicks.
      */
-    public function getGeographicAnalytics(Request $request, int $linkId): JsonResponse
+    public function getGeographicAnalytics(int $linkId): JsonResponse
     {
         try {
             $link = $this->findOwnedLink($linkId);
@@ -95,11 +92,7 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
-            $filters = AnalyticsFilters::fromRequest($request);
-            $continent = $request->query('continent') ?: null;
-            $minClicks = max(0, (int) $request->query('min_clicks', 0));
-
-            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks);
+            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
@@ -124,10 +117,8 @@ class AnalyticsController extends BaseController
      * Owner check: yes — uses findOwnedLink.
      *
      * Response shape: { success: true, data: InsightsPayload }
-     *
-     * @param  Request  $request  Query params: date_from, date_to, exclude_bots.
      */
-    public function getBusinessInsights(Request $request, int $linkId): JsonResponse
+    public function getBusinessInsights(int $linkId): JsonResponse
     {
         try {
             $link = $this->findOwnedLink($linkId);
@@ -135,8 +126,7 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
-            $filters = AnalyticsFilters::fromRequest($request);
-            $insights = $this->analyticsService->getLinkInsightsAnalytics($linkId, $filters);
+            $insights = $this->analyticsService->getLinkInsightsAnalytics($linkId);
 
             return response()->json([
                 'success' => true,
@@ -162,10 +152,8 @@ class AnalyticsController extends BaseController
      * Owner check: yes — uses findOwnedLink.
      *
      * Response shape: { success: true, data: { ...baseData, advanced: AdvancedTemporal } }
-     *
-     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, segment (weekday|weekend|business).
      */
-    public function getTemporalAnalytics(Request $request, int $linkId): JsonResponse
+    public function getTemporalAnalytics(int $linkId): JsonResponse
     {
         try {
             $link = $this->findOwnedLink($linkId);
@@ -173,13 +161,8 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
-            $filters = AnalyticsFilters::fromRequest($request);
-            $segment = in_array($request->query('segment'), ['weekday', 'weekend', 'business'], true)
-                ? $request->query('segment')
-                : 'all';
-
             // 1. Buscar dados base (clicks_by_hour, clicks_by_day_of_week, etc.)
-            $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId, $filters, $segment);
+            $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId);
 
             // 2. Buscar dados avançados (weekly_trends, monthly_trends, peak_analysis, timezone_analysis)
             $advancedData = $this->temporalService->getAdvancedTemporalAnalytics($linkId);
@@ -254,7 +237,7 @@ class AnalyticsController extends BaseController
      *
      * Response shape: { success: true, data: DashboardAnalytics }
      *
-     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, hours (legacy).
+     * @param  Request  $request  Query param: hours (int, one of 1|24|168|720|0).
      */
     public function getLinkDashboardData(Request $request, int $linkId): JsonResponse
     {
@@ -270,20 +253,12 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
-            // Legacy hours param: if date_from is absent and hours is valid, convert to date_from.
-            if (! $request->query('date_from')) {
-                $validHours = [1, 24, 168, 720];
-                $hours = in_array((int) $request->query('hours'), $validHours, true)
-                    ? (int) $request->query('hours')
-                    : 0;
-                if ($hours > 0) {
-                    $request->merge(['date_from' => now()->subHours($hours)->toDateTimeString()]);
-                }
-            }
+            $validHours = [1, 24, 168, 720];
+            $hours = in_array((int) $request->query('hours'), $validHours, true)
+                ? (int) $request->query('hours')
+                : 0;
 
-            $filters = AnalyticsFilters::fromRequest($request);
-
-            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId, $filters);
+            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId, $hours);
 
             return response()->json([
                 'success' => true,

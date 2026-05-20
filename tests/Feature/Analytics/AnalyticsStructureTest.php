@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Services\Analytics\DashboardAnalyticsService;
 use App\Services\Analytics\GeographicAnalyticsService;
@@ -40,11 +39,8 @@ class AnalyticsStructureTest extends TestCase
         Click::factory()->count(2)->create(['link_id' => $link->id, 'created_at' => now()->subHours(2)]);
         Click::factory()->count(5)->create(['link_id' => $link->id, 'created_at' => now()->subDays(7)]);
 
-        $allTime = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id);
-        $last24h = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics(
-            $link->id,
-            new AnalyticsFilters(dateFrom: now()->subHours(24)->toDateTimeString())
-        );
+        $allTime = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id, 0);
+        $last24h = app(DashboardAnalyticsService::class)->getLinkDashboardAnalytics($link->id, 24);
 
         $this->assertSame(7, $allTime['summary']['total_clicks']);
         $this->assertSame(2, $last24h['summary']['total_clicks']);

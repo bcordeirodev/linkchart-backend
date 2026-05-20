@@ -2,8 +2,6 @@
 
 namespace App\Contracts\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
-
 /**
  * Contract for the analytics orchestrator that fans out to domain-specific services.
  *
@@ -54,16 +52,16 @@ interface LinkAnalyticsOrchestratorInterface
     public function getComprehensiveLinkAnalytics(int $linkId): array;
 
     /**
-     * Return dashboard analytics for the given link, optionally scoped by filters.
+     * Return dashboard analytics for the given link, optionally scoped to the last N hours.
      *
      * Delegates directly to {@see \App\Contracts\Analytics\DashboardAnalyticsInterface::getLinkDashboardAnalytics()}.
      * See that interface for the full return shape.
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  int  $hours  Time window in hours (0 = all time).
      * @return array<string, mixed> Dashboard analytics payload.
      */
-    public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array;
+    public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array;
 
     /**
      * Return geographic analytics (heatmap, countries, states, cities) for the given link.
@@ -72,19 +70,11 @@ interface LinkAnalyticsOrchestratorInterface
      * See that interface for the full return shape.
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
-     * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array<string, mixed> Geographic analytics payload.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkGeographicAnalytics(
-        int $linkId,
-        ?AnalyticsFilters $filters = null,
-        ?string $continent = null,
-        int $minClicks = 0
-    ): array;
+    public function getLinkGeographicAnalytics(int $linkId): array;
 
     /**
      * Return temporal analytics (clicks by hour, day of week, seasonality) for the given link.
@@ -93,17 +83,11 @@ interface LinkAnalyticsOrchestratorInterface
      * See that interface for the full return shape.
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'. Filters clicks by is_weekend/is_business_hours before aggregating.
      * @return array<string, mixed> Temporal analytics payload.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkTemporalAnalytics(
-        int $linkId,
-        ?AnalyticsFilters $filters = null,
-        string $segment = 'all'
-    ): array;
+    public function getLinkTemporalAnalytics(int $linkId): array;
 
     /**
      * Return audience analytics (devices, browsers, OS, engagement) for the given link.
@@ -125,10 +109,9 @@ interface LinkAnalyticsOrchestratorInterface
      * See that interface for the full return shape.
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed> Insights analytics payload.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array;
+    public function getLinkInsightsAnalytics(int $linkId): array;
 }

@@ -2,11 +2,10 @@
 
 namespace App\Services\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use App\Services\Analytics\Support\UserAgentParser;
-use Illuminate\Database\Eloquent\Builder;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -16,9 +15,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Produces a combined payload of summary stats, temporal patterns, geographic
  * breakdown, and audience data. Designed to be fetched in a single API call from
- * the frontend dashboard page. All sub-queries are scoped through an
- * {@see AnalyticsFilters} value object that carries date-range and bot-exclusion
- * constraints, replacing the legacy `?Carbon $since` pattern.
+ * the frontend dashboard page. When $hours > 0 all sub-queries are time-bounded.
  *
  * Aggregates from the clicks table. Contains SQLite/PostgreSQL dual-path expressions
  * for several hour/DOW extractions (used in tests with SQLite :memory:).
@@ -35,21 +32,21 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Returns an empty dashboard structure if the link does not exist (no exception).
      *
      * @param  int  $linkId  Link primary key.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  int  $hours  Time window in hours (0 = all time).
      * @return array<string, mixed> Keyed: summary, link_info, temporal_data, geographic_data, audience_data.
      */
-    public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
+    public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
     {
-        $filters ??= new AnalyticsFilters();
+        $since = $hours > 0 ? now()->subHours($hours) : null;
         $link = Link::find($linkId);
 
         if (! $link) {
             return $this->emptyDashboard();
         }
 
-        $totalClicks = $this->countClicks($linkId, $filters);
-        $unique = $this->countUnique($linkId, $filters);
-        $countries = $this->countCountries($linkId, $filters);
+        $totalClicks = $this->countClicks($linkId, $since);
+        $unique = $this->countUnique($linkId, $since);
+        $countries = $this->countCountries($linkId, $since);
 
         return [
             'summary' => [
@@ -57,14 +54,14 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'total_links' => 1,
                 'active_links' => $link->is_active ? 1 : 0,
                 'unique_visitors' => $unique,
-                'success_rate' => $this->estimateSuccessRate($linkId, $filters),
-                'avg_response_time' => $this->estimateResponseTime($linkId, $filters),
+                'success_rate' => $this->estimateSuccessRate($linkId, $since),
+                'avg_response_time' => $this->estimateResponseTime($linkId, $since),
                 'countries_reached' => $countries,
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
-                'viral_rank' => $this->getViralRankSummary($linkId, $filters),
-                'quality' => $this->getQualitySummary($linkId, $filters),
-                'utm_top_sources' => $this->getUtmTopSources($linkId, $filters),
-                'social_iab' => $this->getSocialIabStats($linkId, $filters),
+                'viral_rank' => $this->getViralRankSummary($linkId, $since),
+                'quality' => $this->getQualitySummary($linkId, $since),
+                'utm_top_sources' => $this->getUtmTopSources($linkId, $since),
+                'social_iab' => $this->getSocialIabStats($linkId, $since),
             ],
             'link_info' => [
                 'id' => $link->id,
@@ -76,44 +73,28 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'created_at' => $link->created_at,
             ],
             'temporal_data' => [
-                'clicks_by_hour' => $this->getClicksByHour($linkId, $filters),
-                'clicks_by_day_of_week' => $this->getClicksByDayOfWeek($linkId, $filters),
-                'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId, $filters),
-                'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId, $filters),
-                'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId, $filters),
+                'clicks_by_hour' => $this->getClicksByHour($linkId, $since),
+                'clicks_by_day_of_week' => $this->getClicksByDayOfWeek($linkId, $since),
+                'hourly_patterns_local' => $this->getHourlyPatternsLocal($linkId, $since),
+                'weekend_vs_weekday' => $this->getWeekendVsWeekday($linkId, $since),
+                'business_hours_analysis' => $this->getBusinessHoursAnalysis($linkId, $since),
             ],
             'geographic_data' => [
-                'heatmap_data' => $this->getHeatmapData($linkId, $filters),
-                'top_countries' => $this->getTopCountries($linkId, $filters),
-                'top_states' => $this->getTopStates($linkId, $filters),
-                'top_cities' => $this->getTopCities($linkId, $filters),
+                'heatmap_data' => $this->getHeatmapData($linkId, $since),
+                'top_countries' => $this->getTopCountries($linkId, $since),
+                'top_states' => $this->getTopStates($linkId, $since),
+                'top_cities' => $this->getTopCities($linkId, $since),
             ],
             'audience_data' => [
-                'device_breakdown' => $this->getDeviceBreakdown($linkId, $filters),
-                'browser_breakdown' => $this->getBrowserBreakdown($linkId, $filters),
-                'os_breakdown' => $this->getOsBreakdown($linkId, $filters),
-                'browsers' => $this->getBrowserDistribution($linkId, $filters),
-                'operating_systems' => $this->getOsDistribution($linkId, $filters),
-                'device_performance' => $this->getDevicePerformance($linkId, $filters),
-                'languages' => $this->getLanguageDistribution($linkId, $filters),
+                'device_breakdown' => $this->getDeviceBreakdown($linkId, $since),
+                'browser_breakdown' => $this->getBrowserBreakdown($linkId, $since),
+                'os_breakdown' => $this->getOsBreakdown($linkId, $since),
+                'browsers' => $this->getBrowserDistribution($linkId, $since),
+                'operating_systems' => $this->getOsDistribution($linkId, $since),
+                'device_performance' => $this->getDevicePerformance($linkId, $since),
+                'languages' => $this->getLanguageDistribution($linkId, $since),
             ],
         ];
-    }
-
-    /**
-     * Returns a base Eloquent query for the clicks table scoped to the given link and filters.
-     *
-     * Every private method should start with this builder and add its own SELECT/WHERE/GROUP BY
-     * clauses. Centralising the filter application here ensures date-range and bot-exclusion
-     * are consistently applied across all aggregations.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Filter constraints to apply.
-     * @return Builder Eloquent builder for Click with link_id and filter scopes already applied.
-     */
-    private function baseQuery(int $linkId, AnalyticsFilters $filters): Builder
-    {
-        return $filters->applyToQuery(Click::where('link_id', $linkId));
     }
 
     private function emptyDashboard(): array
@@ -163,21 +144,25 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Returns the current viral rank and historical distribution for a link.
      *
      * Current rank is the most recent non-null viral_rank value. Distribution
-     * shows the count per rank bucket for the requested filter window.
+     * shows the count per rank bucket for the requested time window.
      *
      * @param  int  $linkId  Link ID
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @param  Carbon|null  $since  Optional time window start (null = all time)
      * @return array{current_rank: string, distribution: array}
      */
-    private function getViralRankSummary(int $linkId, AnalyticsFilters $filters): array
+    private function getViralRankSummary(int $linkId, ?Carbon $since): array
     {
-        $latest = $this->baseQuery($linkId, $filters)
+        $latest = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('viral_rank')
             ->latest()
             ->value('viral_rank');
 
-        $distribution = $this->baseQuery($linkId, $filters)
+        $distribution = DB::table('clicks')
             ->selectRaw("COALESCE(viral_rank, 'cold') as rank, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->groupBy('viral_rank')
             ->orderBy('clicks', 'desc')
             ->get()
@@ -190,101 +175,63 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         ];
     }
 
-    /**
-     * Counts all clicks for the given link within the filter constraints.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return int Total click count.
-     */
-    private function countClicks(int $linkId, AnalyticsFilters $filters): int
+    private function countClicks(int $linkId, ?Carbon $since): int
     {
-        return $this->baseQuery($linkId, $filters)->count();
+        return Click::where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->count();
     }
 
-    /**
-     * Counts distinct IPs (unique visitors) for the given link and filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return int Unique visitor count.
-     */
-    private function countUnique(int $linkId, AnalyticsFilters $filters): int
+    private function countUnique(int $linkId, ?Carbon $since): int
     {
-        return $this->baseQuery($linkId, $filters)->distinct('ip')->count();
+        return Click::where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->distinct('ip')->count();
     }
 
-    /**
-     * Counts distinct non-localhost countries reached for the given link.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return int Country count.
-     */
-    private function countCountries(int $linkId, AnalyticsFilters $filters): int
+    private function countCountries(int $linkId, ?Carbon $since): int
     {
-        return $this->baseQuery($linkId, $filters)
+        return Click::where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('country')->where('country', '!=', 'localhost')
             ->distinct('country')->count();
     }
 
-    /**
-     * Estimates success rate as the percentage of clicks with response_time < 5 000 ms.
-     *
-     * Returns 100.0 when there are no clicks in the window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return float Percentage (0–100).
-     */
-    private function estimateSuccessRate(int $linkId, AnalyticsFilters $filters): float
+    private function estimateSuccessRate(int $linkId, ?Carbon $since): float
     {
-        $total = $this->countClicks($linkId, $filters);
+        $total = $this->countClicks($linkId, $since);
         if ($total === 0) {
             return 100.0;
         }
 
-        $ok = $this->baseQuery($linkId, $filters)
+        $ok = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('response_time')->where('response_time', '<', 5000)
             ->count();
 
         return round(($ok / $total) * 100, 2);
     }
 
-    /**
-     * Returns the average response time across all clicks in the filter window.
-     *
-     * Returns 0.0 when no clicks have a recorded response_time.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return float Average response time in milliseconds.
-     */
-    private function estimateResponseTime(int $linkId, AnalyticsFilters $filters): float
+    private function estimateResponseTime(int $linkId, ?Carbon $since): float
     {
-        return (float) ($this->baseQuery($linkId, $filters)
+        return (float) (DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('response_time')
             ->avg('response_time') ?? 0);
     }
 
-    /**
-     * Returns click counts per hour-of-day (0–23) for the filter window.
-     *
-     * Provides a dual SQLite/PostgreSQL expression so that the test suite running
-     * against SQLite :memory: produces identical output to production.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{hour: int, clicks: int, label: string}>
-     */
-    private function getClicksByHour(int $linkId, AnalyticsFilters $filters): array
+    private function getClicksByHour(int $linkId, ?Carbon $since): array
     {
         $sqlite = DB::connection()->getDriverName() === 'sqlite';
         $hourExpr = $sqlite
             ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
             : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
 
-        $rows = $this->baseQuery($linkId, $filters)
+        $rows = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->selectRaw("{$hourExpr} as hour, count(*) as clicks")
             ->groupByRaw($hourExpr)
             ->orderByRaw('1')
@@ -302,23 +249,16 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         return $result;
     }
 
-    /**
-     * Returns click counts per ISO day-of-week (1=Monday … 7=Sunday).
-     *
-     * Provides a dual SQLite/PostgreSQL expression for the DOW extraction.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{day: int, day_name: string, clicks: int}>
-     */
-    private function getClicksByDayOfWeek(int $linkId, AnalyticsFilters $filters): array
+    private function getClicksByDayOfWeek(int $linkId, ?Carbon $since): array
     {
         $sqlite = DB::connection()->getDriverName() === 'sqlite';
         $dowExpr = $sqlite
             ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
             : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
 
-        $rows = $this->baseQuery($linkId, $filters)
+        $rows = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->selectRaw("{$dowExpr} as day, count(*) as clicks")
             ->groupByRaw($dowExpr)->get()->keyBy('day');
 
@@ -335,20 +275,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         return $result;
     }
 
-    /**
-     * Returns heatmap data: geo-clustered click counts with location metadata.
-     *
-     * Rows are grouped by lat/lng/city/country and ordered by click count desc.
-     * Excludes rows without coordinates or with placeholder country values.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{lat: float, lng: float, city: string, country: string, clicks: int, ...}>
-     */
-    private function getHeatmapData(int $linkId, AnalyticsFilters $filters): array
+    private function getHeatmapData(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('latitude, longitude, city, country, iso_code, currency, state_name, continent, timezone, COUNT(*) as clicks, MAX(created_at) as last_click')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('latitude')->whereNotNull('longitude')
             ->whereNotNull('country')->where('country', '!=', 'localhost')->where('country', '!=', '')
             ->groupBy('latitude', 'longitude', 'city', 'country', 'iso_code', 'currency', 'state_name', 'continent', 'timezone')
@@ -370,17 +302,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns the top-10 countries by click count for the filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{country: string, iso_code: string, clicks: int, currency: string}>
-     */
-    private function getTopCountries(int $linkId, AnalyticsFilters $filters): array
+    private function getTopCountries(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('country, iso_code, currency, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('country')->where('country', '!=', 'localhost')
             ->groupBy('country', 'iso_code', 'currency')
             ->orderBy('clicks', 'desc')->limit(10)->get()
@@ -388,17 +315,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns the top-10 states by click count for the filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{country: string, state: string, state_name: string, clicks: int}>
-     */
-    private function getTopStates(int $linkId, AnalyticsFilters $filters): array
+    private function getTopStates(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('country, state, state_name, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('state')
             ->groupBy('country', 'state', 'state_name')
             ->orderBy('clicks', 'desc')->limit(10)->get()
@@ -406,88 +328,61 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns the top-10 cities by click count for the filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{city: string, state: string, country: string, clicks: int}>
-     */
-    private function getTopCities(int $linkId, AnalyticsFilters $filters): array
+    private function getTopCities(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('city, state, country, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('city')
             ->groupBy('city', 'state', 'country')->orderBy('clicks', 'desc')->limit(10)->get()
             ->map(fn ($r) => ['city' => $r->city, 'state' => $r->state, 'country' => $r->country, 'clicks' => (int) $r->clicks])
             ->toArray();
     }
 
-    /**
-     * Returns click counts per device type for the filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{device: string, clicks: int}>
-     */
-    private function getDeviceBreakdown(int $linkId, AnalyticsFilters $filters): array
+    private function getDeviceBreakdown(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('device, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('device')
             ->groupBy('device')->orderBy('clicks', 'desc')->limit(10)->get()
             ->map(fn ($r) => ['device' => $r->device, 'clicks' => (int) $r->clicks])
             ->toArray();
     }
 
-    /**
-     * Returns click counts per browser for the filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{browser: string, clicks: int}>
-     */
-    private function getBrowserBreakdown(int $linkId, AnalyticsFilters $filters): array
+    private function getBrowserBreakdown(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw("COALESCE(browser, 'Unknown') as browser, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->groupBy('browser')->orderBy('clicks', 'desc')->limit(10)->get()
             ->map(fn ($r) => ['browser' => $r->browser, 'clicks' => (int) $r->clicks])
             ->toArray();
     }
 
-    /**
-     * Returns click counts per operating system for the filter window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{os: string, clicks: int}>
-     */
-    private function getOsBreakdown(int $linkId, AnalyticsFilters $filters): array
+    private function getOsBreakdown(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw("COALESCE(os, 'Unknown') as os, COUNT(*) as clicks")
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->groupBy('os')->orderBy('clicks', 'desc')->limit(10)->get()
             ->map(fn ($r) => ['os' => $r->os, 'clicks' => (int) $r->clicks])
             ->toArray();
     }
 
-    /**
-     * Returns detailed browser distribution with version breakdown and percentages.
-     *
-     * Uses a window function for percentages on PostgreSQL; falls back to 0.0 on SQLite.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{browser: string, version: string|null, clicks: int, percentage: float}>
-     */
-    private function getBrowserDistribution(int $linkId, AnalyticsFilters $filters): array
+    private function getBrowserDistribution(int $linkId, ?Carbon $since): array
     {
         $sqlite = DB::connection()->getDriverName() === 'sqlite';
 
         if ($sqlite) {
-            return $this->baseQuery($linkId, $filters)
+            return DB::table('clicks')
                 ->selectRaw('browser, browser_version, COUNT(*) as clicks')
+                ->where('link_id', $linkId)
+                ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
                 ->whereNotNull('browser')
                 ->groupBy('browser', 'browser_version')
                 ->orderBy('clicks', 'desc')->limit(15)->get()
@@ -495,8 +390,10 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 ->toArray();
         }
 
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('browser, browser_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('browser')
             ->groupBy('browser', 'browser_version')
             ->orderBy('clicks', 'desc')->limit(15)->get()
@@ -504,22 +401,15 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns detailed OS distribution with version breakdown and percentages.
-     *
-     * Uses a window function for percentages on PostgreSQL; falls back to 0.0 on SQLite.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{os: string, version: string|null, clicks: int, percentage: float}>
-     */
-    private function getOsDistribution(int $linkId, AnalyticsFilters $filters): array
+    private function getOsDistribution(int $linkId, ?Carbon $since): array
     {
         $sqlite = DB::connection()->getDriverName() === 'sqlite';
 
         if ($sqlite) {
-            return $this->baseQuery($linkId, $filters)
+            return DB::table('clicks')
                 ->selectRaw('os, os_version, COUNT(*) as clicks')
+                ->where('link_id', $linkId)
+                ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
                 ->whereNotNull('os')
                 ->groupBy('os', 'os_version')
                 ->orderBy('clicks', 'desc')->limit(15)->get()
@@ -527,8 +417,10 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 ->toArray();
         }
 
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('os, os_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('os')
             ->groupBy('os', 'os_version')
             ->orderBy('clicks', 'desc')->limit(15)->get()
@@ -536,19 +428,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns per-device performance stats (avg/min/max response_time) for the filter window.
-     *
-     * Only rows with both device and response_time non-null are included.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{device: string, avg_response_time: float, min_response_time: float, max_response_time: float, total_clicks: int}>
-     */
-    private function getDevicePerformance(int $linkId, AnalyticsFilters $filters): array
+    private function getDevicePerformance(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('device, AVG(response_time) as avg_response_time, MIN(response_time) as min_response_time, MAX(response_time) as max_response_time, COUNT(*) as total_clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('device')->whereNotNull('response_time')
             ->groupBy('device')->orderBy('avg_response_time', 'asc')->get()
             ->map(fn ($r) => [
@@ -561,20 +446,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns top-10 language distribution derived from the Accept-Language header.
-     *
-     * Languages are extracted by {@see UserAgentParser::extractPrimaryLanguage}.
-     * Rows without an accept_language value are skipped.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{language: string, clicks: int, percentage: float}>
-     */
-    private function getLanguageDistribution(int $linkId, AnalyticsFilters $filters): array
+    private function getLanguageDistribution(int $linkId, ?Carbon $since): array
     {
-        $clicks = $this->baseQuery($linkId, $filters)
+        $clicks = DB::table('clicks')
             ->select('accept_language')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('accept_language')
             ->get();
 
@@ -600,22 +477,35 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
     }
 
     /**
-     * Returns a summary of click quality tiers for the given link and filter window.
+     * Returns a summary of click quality tiers for the given link and time window.
      *
      * Provides counts per tier (organic, suspicious, likely_fraud) plus organic
      * percentage — used by the dashboard "Qualidade" card.
      *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @param  Carbon|null  $since  Time window start, or null for all time
      * @return array{organic: int, suspicious: int, likely_fraud: int, unscored: int, organic_percentage: float}
      */
-    private function getQualitySummary(int $linkId, AnalyticsFilters $filters): array
+    private function getQualitySummary(int $linkId, ?Carbon $since): array
     {
-        $total = $this->countClicks($linkId, $filters);
+        $total = $this->countClicks($linkId, $since);
 
-        $organic = $this->baseQuery($linkId, $filters)->where('quality_tier', 'organic')->count();
-        $suspicious = $this->baseQuery($linkId, $filters)->where('quality_tier', 'suspicious')->count();
-        $fraud = $this->baseQuery($linkId, $filters)->where('quality_tier', 'likely_fraud')->count();
+        $organic = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->where('quality_tier', 'organic')
+            ->count();
+
+        $suspicious = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->where('quality_tier', 'suspicious')
+            ->count();
+
+        $fraud = DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
+            ->where('quality_tier', 'likely_fraud')
+            ->count();
 
         return [
             'organic' => $organic,
@@ -627,39 +517,29 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
     }
 
     /**
-     * Returns top 5 utm_source values for the given link and filter window.
+     * Returns top 5 utm_source values for the given link and time window.
      *
      * Joins clicks ↔ link_utms and groups by utm_source. Only rows with a non-null
      * utm_source are included. Returns empty array when no UTM-tagged clicks exist.
      *
      * The `percentage` field is relative to ALL UTM-tagged clicks for the link in the
-     * filter window, not just the top-5 subset. A separate COUNT(*) query (clone of the
+     * time window, not just the top-5 subset. A separate COUNT(*) query (clone of the
      * base query, before SELECT/GROUP BY/LIMIT are applied) is used as the denominator
      * so that percentages remain accurate when there are more than 5 UTM sources.
      *
-     * Note: this method uses the Query Builder (not Eloquent) because the JOIN cannot
-     * be expressed cleanly through `baseQuery()`. Filter constraints are re-applied
-     * manually here to mirror what `AnalyticsFilters::applyToQuery()` does.
-     *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @param  Carbon|null  $since  Optional time window start (null = all time).
      * @return array<int, array{source: string, clicks: int, percentage: float}>
      */
-    private function getUtmTopSources(int $linkId, AnalyticsFilters $filters): array
+    private function getUtmTopSources(int $linkId, ?Carbon $since): array
     {
         $baseUtmQuery = DB::table('clicks')
             ->join('link_utms', 'clicks.id', '=', 'link_utms.click_id')
             ->where('clicks.link_id', $linkId)
             ->whereNotNull('link_utms.utm_source');
 
-        if ($filters->dateFrom) {
-            $baseUtmQuery->whereDate('clicks.created_at', '>=', $filters->dateFrom);
-        }
-        if ($filters->dateTo) {
-            $baseUtmQuery->whereDate('clicks.created_at', '<=', $filters->dateTo);
-        }
-        if ($filters->excludeBots) {
-            $baseUtmQuery->where('clicks.is_bot', false);
+        if ($since) {
+            $baseUtmQuery->where('clicks.created_at', '>=', $since);
         }
 
         $totalUtmClicks = (clone $baseUtmQuery)->count();
@@ -686,29 +566,33 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Returns stats for clicks originating from mobile in-app browsers (IAB).
      *
      * Filters clicks where navigation_context = 'in_app_webview' AND is_mobile = 1.
-     * The percentage is relative to all clicks for the link in the filter window.
+     * The percentage is relative to all clicks for the link in the time window.
      * ios_pct and android_pct are relative to the IAB segment, not total clicks.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @param  Carbon|null  $since  Optional time window start (null = all time).
      * @return array{total: int, percentage: float, ios_pct: float, android_pct: float}
      */
-    private function getSocialIabStats(int $linkId, AnalyticsFilters $filters): array
+    private function getSocialIabStats(int $linkId, ?Carbon $since): array
     {
-        $allTotal = $this->countClicks($linkId, $filters);
+        $baseQuery = fn () => DB::table('clicks')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since));
 
-        $iabBase = fn () => $this->baseQuery($linkId, $filters)
+        $allTotal = $baseQuery()->count();
+
+        $iabQuery = fn () => $baseQuery()
             ->where('navigation_context', 'in_app_webview')
             ->where('is_mobile', 1);
 
-        $total = $iabBase()->count();
+        $total = $iabQuery()->count();
 
         if ($total === 0) {
             return ['total' => 0, 'percentage' => 0.0, 'ios_pct' => 0.0, 'android_pct' => 0.0];
         }
 
-        $iosCount = $iabBase()->where('os', 'iOS')->count();
-        $androidCount = $iabBase()->where('os', 'Android')->count();
+        $iosCount = $iabQuery()->where('os', 'iOS')->count();
+        $androidCount = $iabQuery()->where('os', 'Android')->count();
 
         return [
             'total' => $total,
@@ -718,20 +602,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         ];
     }
 
-    /**
-     * Returns hourly click patterns from the stored hour_of_day field (local timezone).
-     *
-     * Only rows with a pre-computed hour_of_day are included. This reflects the
-     * server-side local-hour enrichment from Phase 2 of the tracking pipeline.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array<int, array{hour: int, clicks: int, avg_response_time: float, unique_visitors: int}>
-     */
-    private function getHourlyPatternsLocal(int $linkId, AnalyticsFilters $filters): array
+    private function getHourlyPatternsLocal(int $linkId, ?Carbon $since): array
     {
-        return $this->baseQuery($linkId, $filters)
+        return DB::table('clicks')
             ->selectRaw('hour_of_day, COUNT(*) as clicks, AVG(response_time) as avg_response_time, COUNT(DISTINCT ip) as unique_visitors')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->whereNotNull('hour_of_day')
             ->groupBy('hour_of_day')->orderBy('hour_of_day')->get()
             ->map(fn ($r) => [
@@ -743,23 +619,18 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->toArray();
     }
 
-    /**
-     * Returns aggregated weekend vs. weekday click comparison for the filter window.
-     *
-     * Uses the pre-computed is_weekend boolean column from the tracking pipeline.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array{weekend: array, weekday: array}
-     */
-    private function getWeekendVsWeekday(int $linkId, AnalyticsFilters $filters): array
+    private function getWeekendVsWeekday(int $linkId, ?Carbon $since): array
     {
-        $weekend = $this->baseQuery($linkId, $filters)
+        $weekend = DB::table('clicks')
             ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->where('is_weekend', true)->first();
 
-        $weekday = $this->baseQuery($linkId, $filters)
+        $weekday = DB::table('clicks')
             ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->where('is_weekend', false)->first();
 
         return [
@@ -778,24 +649,18 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         ];
     }
 
-    /**
-     * Returns aggregated business-hours vs. non-business-hours comparison for the filter window.
-     *
-     * Uses the pre-computed is_business_hours boolean from the tracking pipeline.
-     * Business hours are defined as 09:00–17:00 local time.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array{business_hours: array, non_business_hours: array}
-     */
-    private function getBusinessHoursAnalysis(int $linkId, AnalyticsFilters $filters): array
+    private function getBusinessHoursAnalysis(int $linkId, ?Carbon $since): array
     {
-        $biz = $this->baseQuery($linkId, $filters)
+        $biz = DB::table('clicks')
             ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time, AVG(session_clicks) as avg_session_depth')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->where('is_business_hours', true)->first();
 
-        $nonBiz = $this->baseQuery($linkId, $filters)
+        $nonBiz = DB::table('clicks')
             ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time, AVG(session_clicks) as avg_session_depth')
+            ->where('link_id', $linkId)
+            ->when($since, fn ($q) => $q->where('created_at', '>=', $since))
             ->where('is_business_hours', false)->first();
 
         return [

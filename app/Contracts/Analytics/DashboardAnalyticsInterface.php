@@ -2,14 +2,12 @@
 
 namespace App\Contracts\Analytics;
 
-use App\DTOs\Analytics\AnalyticsFilters;
-
 /**
  * Contract for the main dashboard analytics view of a single link.
  *
  * Aggregates summary statistics, geographic, temporal, and audience data into
- * a single response used by the frontend dashboard page. Optionally scoped by
- * an `AnalyticsFilters` DTO (date range, bot exclusion).
+ * a single response used by the frontend dashboard page. Optionally scopes the
+ * result to the last N hours via the `$hours` parameter.
  *
  * Concrete implementation: {@see \App\Services\Analytics\DashboardAnalyticsService}.
  * Bound in {@see \App\Providers\AppServiceProvider::register()} via
@@ -23,8 +21,8 @@ interface DashboardAnalyticsInterface
     /**
      * Return a combined dashboard analytics payload for the given link.
      *
-     * When `$filters` is provided, all sub-queries are scoped to the date range
-     * and other criteria defined by the DTO. When `$filters` is null, all recorded
+     * When `$hours > 0`, all sub-queries are filtered to the window
+     * `[now() - $hours, now()]`. When `$hours = 0` (default), all recorded
      * clicks are included. Returns an array with all keys set to empty / zero
      * values if `$linkId` does not exist or has no clicks.
      *
@@ -57,8 +55,8 @@ interface DashboardAnalyticsInterface
      * ```
      *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  int  $hours  Time window in hours (0 = all time).
      * @return array<string, mixed> Dashboard analytics payload as described above.
      */
-    public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array;
+    public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array;
 }
