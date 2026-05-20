@@ -21,6 +21,12 @@ class ClickVelocityService
      * and swap the last-click timestamp, then classifies the link's viral rank
      * according to thresholds defined in config/tracking.php.
      *
+     * NOTE — Fixed-window counting: uses INCR+EXPIRE rather than a true sliding
+     * window (ZADD/ZREMRANGEBYSCORE). A click at T=59 s and another at T=61 s
+     * may fall into separate windows and not trigger rank promotion even though
+     * both are within 2 minutes of each other. Acceptable for current traffic
+     * patterns; replace with ZADD/ZREMRANGEBYSCORE for true sliding behaviour.
+     *
      * Degrades gracefully when Redis is unavailable, returning a 'cold' rank
      * so the tracking job is not interrupted by Redis downtime.
      *
@@ -38,7 +44,7 @@ class ClickVelocityService
                 $pipe->expire($key5, 300);
                 $pipe->incr($key60);
                 $pipe->expire($key60, 3600);
-                $pipe->getset($keyLast, now()->timestamp);
+                $pipe->rawCommand('SET', $keyLast, now()->timestamp, 'GET');
             });
         } catch (\Throwable $e) {
             AppLogger::event('tracking', 'warning', 'click_velocity.redis_unavailable', [

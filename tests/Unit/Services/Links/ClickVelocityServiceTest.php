@@ -16,7 +16,7 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe = \Mockery::mock();
                 $pipe->shouldReceive('incr')->twice()->andReturn(null);
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
-                $pipe->shouldReceive('getset')->once()->andReturn(null);
+                $pipe->shouldReceive('rawCommand')->once()->andReturn(null);
                 $cb($pipe);
 
                 return [3, true, 10, true, null];
@@ -39,7 +39,7 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe = \Mockery::mock();
                 $pipe->shouldReceive('incr')->twice()->andReturn(null);
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
-                $pipe->shouldReceive('getset')->once()->andReturn(null);
+                $pipe->shouldReceive('rawCommand')->once()->andReturn(null);
                 $cb($pipe);
 
                 return [60, true, 200, true, (string) $prevTs];
@@ -60,7 +60,7 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe = \Mockery::mock();
                 $pipe->shouldReceive('incr')->twice()->andReturn(null);
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
-                $pipe->shouldReceive('getset')->once()->andReturn(null);
+                $pipe->shouldReceive('rawCommand')->once()->andReturn(null);
                 $cb($pipe);
 
                 return [25, true, 50, true, null];
@@ -80,7 +80,7 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe = \Mockery::mock();
                 $pipe->shouldReceive('incr')->twice()->andReturn(null);
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
-                $pipe->shouldReceive('getset')->once()->andReturn(null);
+                $pipe->shouldReceive('rawCommand')->once()->andReturn(null);
                 $cb($pipe);
 
                 return [5, true, 120, true, null];
@@ -102,7 +102,7 @@ class ClickVelocityServiceTest extends TestCase
                 $pipe = \Mockery::mock();
                 $pipe->shouldReceive('incr')->twice()->andReturn(null);
                 $pipe->shouldReceive('expire')->twice()->andReturn(null);
-                $pipe->shouldReceive('getset')->once()->andReturn(null);
+                $pipe->shouldReceive('rawCommand')->once()->andReturn(null);
                 $cb($pipe);
 
                 return [1, true, 1, true, (string) $prevTs];

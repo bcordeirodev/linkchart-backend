@@ -48,6 +48,18 @@ trait ClickEnrichmentTrait
         $isWeekend = $dow >= 6;
         $isBusinessHours = ! $isWeekend && $hour >= 9 && $hour < 18;
 
+        // Season — Southern hemisphere (Brazil): Dec-Feb = summer, Mar-May = autumn,
+        // Jun-Aug = winter, Sep-Nov = spring.
+        $month = $date->month;
+        $season = match (true) {
+            in_array($month, [12, 1, 2]) => 'summer',
+            in_array($month, [3, 4, 5]) => 'autumn',
+            in_array($month, [6, 7, 8]) => 'winter',
+            default => 'spring',
+        };
+
+        $holidayName = $this->getBrazilianHoliday($date);
+
         return [
             'browser' => $browser,
             'browser_version' => $browserVersion,
@@ -74,6 +86,9 @@ trait ClickEnrichmentTrait
             'year' => (int) $date->format('Y'),
             'is_weekend' => $isWeekend,
             'is_business_hours' => $isBusinessHours,
+            'season' => $season,
+            'is_holiday' => $holidayName !== null,
+            'holiday_name' => $holidayName,
         ];
     }
 
@@ -237,9 +252,49 @@ trait ClickEnrichmentTrait
     private function deriveConnectionType(string $device): string
     {
         if ($device === 'mobile') {
-            return mt_rand(1, 10) <= 6 ? 'cellular' : 'wifi';
+            // 60% cellular (mobile carrier), 30% residential wi-fi, 10% datacenter/VPN
+            $roll = mt_rand(1, 10);
+
+            return match (true) {
+                $roll <= 6 => 'mobile',
+                $roll <= 9 => 'residential',
+                default => 'datacenter',
+            };
         }
 
-        return mt_rand(1, 10) <= 8 ? 'broadband' : 'wifi';
+        // Desktop/tablet: 70% residential broadband, 20% datacenter/VPN, 10% mobile tether
+        $roll = mt_rand(1, 10);
+
+        return match (true) {
+            $roll <= 7 => 'residential',
+            $roll <= 9 => 'datacenter',
+            default => 'mobile',
+        };
+    }
+
+    /**
+     * Returns the Brazilian national holiday name for the given date, or null.
+     *
+     * Uses a static list of fixed-date national holidays. Variable-date holidays
+     * (Carnaval, Páscoa, Corpus Christi) are intentionally omitted to avoid
+     * year-specific computation in the seeder.
+     *
+     * @param  Carbon  $date  Click date to check
+     * @return string|null Holiday name or null if not a holiday
+     */
+    private function getBrazilianHoliday(Carbon $date): ?string
+    {
+        $holidays = [
+            '01-01' => 'Confraternização Universal',
+            '04-21' => 'Tiradentes',
+            '05-01' => 'Dia do Trabalho',
+            '09-07' => 'Independência do Brasil',
+            '10-12' => 'Nossa Senhora Aparecida',
+            '11-02' => 'Finados',
+            '11-15' => 'Proclamação da República',
+            '12-25' => 'Natal',
+        ];
+
+        return $holidays[$date->format('m-d')] ?? null;
     }
 }
