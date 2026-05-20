@@ -473,8 +473,14 @@ class LinkTrackingService
      * known social proxy. Called alongside categorizeClickSource() so both
      * fields are derived from the same referer string.
      *
+     * Short-domain checks (t.co, wa.me, t.me) use exact-match or suffix-match
+     * to prevent substring false-positives (e.g. 'not.me.evil.com' must not
+     * match 't.me'). t.co is Twitter's redirect domain and never has subdomains,
+     * so === is sufficient. wa.me and t.me may have subdomains, so str_ends_with
+     * with the leading dot is used in addition to the exact-match check.
+     *
      * @param  string|null  $referer  HTTP Referer header value.
-     * @return string|null  Platform slug (instagram|tiktok|facebook|youtube|twitter|whatsapp|telegram|linkedin) or null.
+     * @return string|null Platform slug (instagram|tiktok|facebook|youtube|twitter|whatsapp|telegram|linkedin) or null.
      */
     private function detectSocialPlatform(?string $referer): ?string
     {
@@ -489,9 +495,9 @@ class LinkTrackingService
             str_contains($domain, 'tiktok.com') => 'tiktok',
             str_contains($domain, 'facebook.com') || str_contains($domain, 'fb.com') => 'facebook',
             str_contains($domain, 'youtube.com') || str_contains($domain, 'youtu.be') => 'youtube',
-            str_contains($domain, 'twitter.com') || str_contains($domain, 't.co') || str_contains($domain, 'x.com') => 'twitter',
-            str_contains($domain, 'whatsapp.com') || str_contains($domain, 'wa.me') => 'whatsapp',
-            str_contains($domain, 'telegram.org') || str_contains($domain, 't.me') => 'telegram',
+            str_contains($domain, 'twitter.com') || $domain === 't.co' || str_contains($domain, 'x.com') => 'twitter',
+            str_contains($domain, 'whatsapp.com') || $domain === 'wa.me' || str_ends_with($domain, '.wa.me') => 'whatsapp',
+            str_contains($domain, 'telegram.org') || $domain === 't.me' || str_ends_with($domain, '.t.me') => 'telegram',
             str_contains($domain, 'linkedin.com') => 'linkedin',
             default => null,
         };

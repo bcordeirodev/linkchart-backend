@@ -395,11 +395,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->whereNotNull('social_platform')
             ->groupBy('social_platform')
             ->orderByDesc('clicks')
+            ->limit(10)
             ->get()
             ->map(fn ($r) => [
                 'platform' => $r->platform,
                 'clicks' => (int) $r->clicks,
-                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 1) : 0.0,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
             ])
             ->toArray();
     }
