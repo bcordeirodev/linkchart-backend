@@ -107,31 +107,39 @@ class SocialAnalyticsServiceTest extends TestCase
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         $link = Link::factory()->create(['user_id' => $user->id]);
 
+        $day1Date = now()->subDays(5)->format('Y-m-d');
+        $day2Date = now()->subDays(4)->format('Y-m-d');
+        $day3Date = now()->subDays(3)->format('Y-m-d');
+
         // Day 1: all cold
         Click::factory()->count(5)->create([
-            'link_id' => $link->id,
+            'link_id'    => $link->id,
             'viral_rank' => 'cold',
-            'created_at' => '2026-05-17 10:00:00',
+            'created_at' => now()->subDays(5)->format('Y-m-d') . ' 10:00:00',
         ]);
         // Day 2: mix of warming and trending → peak = trending
         Click::factory()->count(3)->create([
-            'link_id' => $link->id,
+            'link_id'    => $link->id,
             'viral_rank' => 'warming',
-            'created_at' => '2026-05-18 10:00:00',
+            'created_at' => now()->subDays(4)->format('Y-m-d') . ' 10:00:00',
         ]);
         Click::factory()->count(2)->create([
-            'link_id' => $link->id,
+            'link_id'    => $link->id,
             'viral_rank' => 'trending',
-            'created_at' => '2026-05-18 14:00:00',
+            'created_at' => now()->subDays(4)->format('Y-m-d') . ' 14:00:00',
         ]);
         // Day 3: viral
         Click::factory()->count(8)->create([
-            'link_id' => $link->id,
+            'link_id'    => $link->id,
             'viral_rank' => 'viral',
-            'created_at' => '2026-05-19 09:00:00',
+            'created_at' => now()->subDays(3)->format('Y-m-d') . ' 09:00:00',
         ]);
-        // Click with null viral_rank — should be excluded
-        Click::factory()->create(['link_id' => $link->id, 'viral_rank' => null]);
+        // Click with null viral_rank — excluded by whereNotNull; date is outside 90-day window
+        Click::factory()->create([
+            'link_id'    => $link->id,
+            'viral_rank' => null,
+            'created_at' => now()->subDays(200)->startOfDay()->toDateTimeString(),
+        ]);
 
         $service = app(TemporalAnalyticsService::class);
         $result = $service->getLinkTemporalAnalytics($link->id);
@@ -139,14 +147,15 @@ class SocialAnalyticsServiceTest extends TestCase
 
         $this->assertCount(3, $byDay);
 
-        $day1 = collect($byDay)->firstWhere('date', '2026-05-17');
+        $day1 = collect($byDay)->firstWhere('date', $day1Date);
         $this->assertSame('cold', $day1['peak_rank']);
         $this->assertSame(5, $day1['click_count']);
 
-        $day2 = collect($byDay)->firstWhere('date', '2026-05-18');
+        $day2 = collect($byDay)->firstWhere('date', $day2Date);
         $this->assertSame('trending', $day2['peak_rank']); // trending > warming
+        $this->assertSame(5, $day2['click_count']);        // 3 warming + 2 trending
 
-        $day3 = collect($byDay)->firstWhere('date', '2026-05-19');
+        $day3 = collect($byDay)->firstWhere('date', $day3Date);
         $this->assertSame('viral', $day3['peak_rank']);
         $this->assertSame(8, $day3['click_count']);
     }
