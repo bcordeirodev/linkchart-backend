@@ -49,6 +49,31 @@ class LinkTrackingService
     public const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
 
     /**
+     * Well-known datacenter IP prefixes used as a lightweight fallback when the
+     * GeoIP provider (GeoLite2-City) does not return ISP data. Covers the most
+     * common public cloud ranges: AWS, GCP, Cloudflare, and DigitalOcean.
+     * Prefix-match only (not full CIDR) — sufficient for the highest-volume ranges.
+     */
+    private const DATACENTER_CIDR_PREFIXES = [
+        '3.',       // AWS us-east
+        '13.',      // AWS
+        '18.',      // AWS
+        '34.',      // GCP
+        '35.',      // GCP
+        '104.',     // Cloudflare / various
+        '130.211.', // GCP
+        '146.148.', // GCP
+        '162.243.', // DigitalOcean
+        '167.99.',  // DigitalOcean
+        '192.241.', // DigitalOcean
+        '198.199.', // DigitalOcean
+        '207.154.', // DigitalOcean
+        '45.55.',   // DigitalOcean
+        '52.',      // AWS
+        '54.',      // AWS
+    ];
+
+    /**
      * @param  ClickVelocityService  $clickVelocityService  Constructor-injected (R-12); tracks click
      *                                                      velocity via Redis sliding windows and falls
      *                                                      back gracefully when Redis is unavailable.
@@ -127,11 +152,11 @@ class LinkTrackingService
         $seasonData = $isoCode
             ? ['season' => $this->enrichSeason($isoCode, now())]
             : ['season' => null];
-        $connectionData = ['connection_type' => $this->classifyConnectionType($locationData['isp'] ?? null)];
+        $connectionData = ['connection_type' => $this->classifyConnectionType($locationData['isp'] ?? null, $ip)];
         $engineData = ['rendering_engine' => $this->deriveRenderingEngine($deviceData['browser'] ?? null)];
 
         // Phase 3 — quality scoring
-        $allFields = array_merge($deviceData, $behaviorData, $navigationData, $velocityData, $connectionData);
+        $allFields = array_merge($deviceData, $behaviorData, $navigationData, $velocityData, $connectionData, $performanceData);
         $qualityData = $this->calculateQualityScore($allFields);
 
         $click = Click::create(array_merge([
@@ -632,45 +657,69 @@ class LinkTrackingService
     }
 
     /**
-     * Classifies the ISP name into a connection type category.
+     * Classifies the connection type into a named category.
      *
-     * Uses keyword matching against the ISP string from GeoIP. Returns 'unknown'
-     * when ISP is null (e.g. free GeoLite2-City without ISP data).
+     * Primary path: keyword matching against the ISP string returned by GeoIP.
+     *
+     * Fallback (when ISP is null, e.g. GeoLite2-City without ASN data): checks
+     * the IP against DATACENTER_CIDR_PREFIXES. Private/loopback ranges are treated
+     * as 'residential' (internal networks). If no prefix matches, returns 'unknown'.
      *
      * @param  string|null  $isp  ISP name from GeoIP lookup, or null
+     * @param  string|null  $ip  Click IP address, used for the prefix-match fallback
      * @return string One of: datacenter, mobile, education, residential, unknown
      */
-    private function classifyConnectionType(?string $isp): string
+    private function classifyConnectionType(?string $isp, ?string $ip = null): string
     {
-        if (! $isp) {
-            return 'unknown';
+        if ($isp) {
+            $lower = strtolower($isp);
+
+            $datacenter = ['amazon', 'google', 'digitalocean', 'hetzner', 'ovh', 'vultr',
+                'linode', 'azure', 'cloudflare', 'akamai', 'fastly', 'microsoft'];
+            $mobile = ['claro', 'vivo', 'tim ', 'oi ', 'nextel', 't-mobile',
+                'verizon', 'at&t', 'sprint', 'net mobile'];
+            $education = ['university', 'universidade', 'instituto', 'college', 'escola'];
+
+            foreach ($datacenter as $kw) {
+                if (str_contains($lower, $kw)) {
+                    return 'datacenter';
+                }
+            }
+            foreach ($mobile as $kw) {
+                if (str_contains($lower, $kw)) {
+                    return 'mobile';
+                }
+            }
+            foreach ($education as $kw) {
+                if (str_contains($lower, $kw)) {
+                    return 'education';
+                }
+            }
+
+            return 'residential';
         }
 
-        $lower = strtolower($isp);
+        // ISP unavailable — fall back to prefix-based datacenter detection.
+        if ($ip) {
+            // Localhost and private ranges are internal networks, not datacenters.
+            foreach (['127.', '10.', '192.168.'] as $privatePrefix) {
+                if (str_starts_with($ip, $privatePrefix)) {
+                    return 'residential';
+                }
+            }
+            // RFC 1918 172.16.0.0/12 covers 172.16.x.x–172.31.x.x
+            if (preg_match('/^172\.(1[6-9]|2\d|3[01])\./', $ip)) {
+                return 'residential';
+            }
 
-        $datacenter = ['amazon', 'google', 'digitalocean', 'hetzner', 'ovh', 'vultr',
-            'linode', 'azure', 'cloudflare', 'akamai', 'fastly', 'microsoft'];
-        $mobile = ['claro', 'vivo', 'tim ', 'oi ', 'nextel', 't-mobile',
-            'verizon', 'at&t', 'sprint', 'net mobile'];
-        $education = ['university', 'universidade', 'instituto', 'college', 'escola'];
-
-        foreach ($datacenter as $kw) {
-            if (str_contains($lower, $kw)) {
-                return 'datacenter';
+            foreach (self::DATACENTER_CIDR_PREFIXES as $prefix) {
+                if (str_starts_with($ip, $prefix)) {
+                    return 'datacenter';
+                }
             }
         }
-        foreach ($mobile as $kw) {
-            if (str_contains($lower, $kw)) {
-                return 'mobile';
-            }
-        }
-        foreach ($education as $kw) {
-            if (str_contains($lower, $kw)) {
-                return 'education';
-            }
-        }
 
-        return 'residential';
+        return 'unknown';
     }
 
     /**
