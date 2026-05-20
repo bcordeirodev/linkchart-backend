@@ -162,17 +162,20 @@ class Link extends Model
      * Returns the full public short URL for this link.
      *
      * When short_domain is set (link was created after user activated a subdomain),
-     * uses that hostname with the scheme derived from config('app.redirect_url').
+     * uses that hostname with the scheme derived from config('app.redirect_url') so
+     * the custom-domain URL is always consistent with the default redirect base URL.
      * Falls back to the global redirect_url for links with no custom domain.
      */
     public function getShortedUrl(): string
     {
+        $redirectUrl = config('app.redirect_url', 'http://localhost:8000');
+
         if ($this->short_domain) {
-            $scheme = parse_url(config('app.redirect_url', 'http://localhost:8000'), PHP_URL_SCHEME);
+            $scheme = parse_url($redirectUrl, PHP_URL_SCHEME) ?? 'https';
             return "{$scheme}://{$this->short_domain}/{$this->slug}";
         }
 
-        return config('app.redirect_url', 'http://localhost:8000') . '/' . $this->slug;
+        return $redirectUrl . '/' . $this->slug;
     }
 
     /**
