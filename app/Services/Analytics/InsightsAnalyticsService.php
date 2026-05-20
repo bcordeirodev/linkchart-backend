@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use App\Services\Analytics\Insights\Generators\DeviceInsightGenerator;
@@ -60,11 +61,12 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      * non-null insight payloads, and computes a summary over them.
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array{insights: array, summary: array{total_insights: int, high_priority: int, actionable_insights: int, avg_confidence: float}, analytics_data: array, generated_at: string}
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
-    public function getLinkInsightsAnalytics(int $linkId): array
+    public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
         Link::findOrFail($linkId);
         $totalClicks = Click::where('link_id', $linkId)->count();

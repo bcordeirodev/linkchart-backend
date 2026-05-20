@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
@@ -40,11 +41,14 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * ModelNotFoundException is thrown via Link::findOrFail).
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
+     * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array{data: array{heatmap_data: array, top_countries: array, top_states: array, top_cities: array, continents: array}, meta: array}
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
-    public function getLinkGeographicAnalytics(int $linkId): array
+    public function getLinkGeographicAnalytics(int $linkId, ?AnalyticsFilters $filters = null, ?string $continent = null, int $minClicks = 0): array
     {
         $link = Link::findOrFail($linkId);
 
