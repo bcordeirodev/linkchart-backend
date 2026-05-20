@@ -134,4 +134,30 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         $this->assertSame(0.0, $quality['bot_percentage']);
         $this->assertSame(0.0, $quality['avg_fingerprint_score']);
     }
+
+    public function test_social_platform_breakdown_returns_counts_and_percentages(): void
+    {
+        Click::factory()->count(30)->create(['link_id' => $this->link->id, 'social_platform' => 'instagram']);
+        Click::factory()->count(20)->create(['link_id' => $this->link->id, 'social_platform' => 'tiktok']);
+        Click::factory()->count(50)->create(['link_id' => $this->link->id, 'social_platform' => null]);
+
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
+        $breakdown = $result['social_platform_breakdown'];
+
+        $this->assertNotEmpty($breakdown);
+        $instagram = collect($breakdown)->firstWhere('platform', 'instagram');
+        $this->assertNotNull($instagram);
+        $this->assertSame(30, $instagram['clicks']);
+        // Percentage is relative to ALL clicks (100 total)
+        $this->assertEqualsWithDelta(30.0, $instagram['percentage'], 0.1);
+    }
+
+    public function test_social_platform_breakdown_excludes_null_platform(): void
+    {
+        Click::factory()->count(10)->create(['link_id' => $this->link->id, 'social_platform' => null]);
+
+        $result = $this->service->getLinkAudienceAnalytics($this->link->id);
+
+        $this->assertSame([], $result['social_platform_breakdown']);
+    }
 }

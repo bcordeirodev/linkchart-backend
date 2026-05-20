@@ -60,6 +60,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'connection_type_breakdown' => [],
                 'rendering_engine' => [],
                 'navigation_context_breakdown' => [],
+                'social_platform_breakdown' => [],
                 'return_visitor_stats' => ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0],
                 'quality_breakdown' => ['tiers' => [], 'bot_clicks' => 0, 'bot_percentage' => 0.0, 'avg_fingerprint_score' => 0.0],
             ];
@@ -79,6 +80,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'connection_type_breakdown' => $this->getConnectionTypeBreakdown($linkId),
             'rendering_engine' => $this->getRenderingEngineBreakdown($linkId),
             'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId),
+            'social_platform_breakdown' => $this->getSocialPlatformBreakdown($linkId),
             'return_visitor_stats' => $this->getReturnVisitorStats($linkId),
             'quality_breakdown' => $this->getQualityBreakdown($linkId),
         ];
@@ -371,6 +373,34 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
             ])
             ->values()
+            ->toArray();
+    }
+
+    /**
+     * Returns click distribution grouped by social platform (referer-detected).
+     *
+     * Only includes clicks where social_platform IS NOT NULL (i.e., clicks after
+     * the 2026-05-19 migration with an identifiable social referer). Returns empty
+     * array when no such clicks exist.
+     *
+     * @return array<int, array{platform: string, clicks: int, percentage: float}>
+     */
+    private function getSocialPlatformBreakdown(int $linkId): array
+    {
+        $total = Click::where('link_id', $linkId)->count();
+
+        return DB::table('clicks')
+            ->selectRaw('social_platform as platform, COUNT(*) as clicks')
+            ->where('link_id', $linkId)
+            ->whereNotNull('social_platform')
+            ->groupBy('social_platform')
+            ->orderByDesc('clicks')
+            ->get()
+            ->map(fn ($r) => [
+                'platform' => $r->platform,
+                'clicks' => (int) $r->clicks,
+                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 1) : 0.0,
+            ])
             ->toArray();
     }
 
