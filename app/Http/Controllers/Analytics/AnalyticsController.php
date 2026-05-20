@@ -238,7 +238,7 @@ class AnalyticsController extends BaseController
      *
      * Response shape: { success: true, data: DashboardAnalytics }
      *
-     * @param  Request  $request  Query param: hours (int, one of 1|24|168|720|0).
+     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, hours (legacy).
      */
     public function getLinkDashboardData(Request $request, int $linkId): JsonResponse
     {
@@ -254,14 +254,18 @@ class AnalyticsController extends BaseController
                 return $this->linkNotFound();
             }
 
-            $validHours = [1, 24, 168, 720];
-            $hours = in_array((int) $request->query('hours'), $validHours, true)
-                ? (int) $request->query('hours')
-                : 0;
+            // Legacy hours param: if date_from is absent and hours is valid, convert to date_from.
+            if (! $request->query('date_from')) {
+                $validHours = [1, 24, 168, 720];
+                $hours = in_array((int) $request->query('hours'), $validHours, true)
+                    ? (int) $request->query('hours')
+                    : 0;
+                if ($hours > 0) {
+                    $request->merge(['date_from' => now()->subHours($hours)->toDateTimeString()]);
+                }
+            }
 
-            $filters = $hours > 0
-                ? new AnalyticsFilters(dateFrom: now()->subHours($hours)->toDateTimeString())
-                : null;
+            $filters = AnalyticsFilters::fromRequest($request);
 
             $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId, $filters);
 
