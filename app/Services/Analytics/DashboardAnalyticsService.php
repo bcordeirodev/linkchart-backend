@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use App\Services\Analytics\Support\UserAgentParser;
@@ -32,12 +33,12 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * Returns an empty dashboard structure if the link does not exist (no exception).
      *
      * @param  int  $linkId  Link primary key.
-     * @param  int  $hours  Time window in hours (0 = all time).
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed> Keyed: summary, link_info, temporal_data, geographic_data, audience_data.
      */
-    public function getLinkDashboardAnalytics(int $linkId, int $hours = 0): array
+    public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        $since = $hours > 0 ? now()->subHours($hours) : null;
+        $since = $filters?->dateFrom;
         $link = Link::find($linkId);
 
         if (! $link) {

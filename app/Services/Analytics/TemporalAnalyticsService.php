@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Support\Facades\DB;
@@ -34,11 +35,13 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * ModelNotFoundException is thrown by Link::findOrFail).
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'. Filters clicks by is_weekend/is_business_hours before aggregating.
      * @return array<string, mixed> Keys: clicks_by_hour, clicks_by_day_of_week, hourly_patterns_local, weekend_vs_weekday, business_hours_analysis, holiday_impact, seasonal_distribution.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
-    public function getLinkTemporalAnalytics(int $linkId): array
+    public function getLinkTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         Link::findOrFail($linkId);
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Analytics;
 
 use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
 use App\Contracts\Analytics\TemporalAnalyticsInterface;
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Http\Controllers\BaseController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -258,7 +259,11 @@ class AnalyticsController extends BaseController
                 ? (int) $request->query('hours')
                 : 0;
 
-            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId, $hours);
+            $filters = $hours > 0
+                ? new AnalyticsFilters(dateFrom: now()->subHours($hours)->toDateTimeString())
+                : null;
+
+            $analytics = $this->analyticsService->getLinkDashboardAnalytics($linkId, $filters);
 
             return response()->json([
                 'success' => true,
