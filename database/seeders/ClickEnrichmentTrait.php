@@ -46,13 +46,13 @@ trait ClickEnrichmentTrait
         $chPlatform = in_array($browser, ['Chrome', 'Edge', 'Opera', 'Brave'], true)
             ? match ($os) {
                 'Windows' => 'Windows',
-                'OS X'    => 'macOS',
+                'OS X' => 'macOS',
                 'Android' => 'Android',
-                'iOS'     => 'iOS',
-                'Linux'   => 'Linux',
-                default   => null,
+                'iOS' => 'iOS',
+                'Linux' => 'Linux',
+                default => null,
             }
-            : null;
+        : null;
         $isReturn = ! $isBot && (mt_rand(1, 100) <= 28);
         $sessionClicks = $isReturn ? mt_rand(2, 5) : 1;
 

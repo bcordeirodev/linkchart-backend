@@ -86,7 +86,7 @@ class UserSubdomain extends Model
      */
     public static function subdomainCacheKey(string $subdomain): string
     {
-        return 'subdomain:' . $subdomain;
+        return 'subdomain:'.$subdomain;
     }
 
     /**
@@ -94,7 +94,7 @@ class UserSubdomain extends Model
      */
     public static function userCacheKey(int $userId): string
     {
-        return 'subdomain:user:' . $userId;
+        return 'subdomain:user:'.$userId;
     }
 
     /**

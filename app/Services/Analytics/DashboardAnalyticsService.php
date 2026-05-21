@@ -40,7 +40,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      */
     public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        $filters ??= new AnalyticsFilters();
+        $filters ??= new AnalyticsFilters;
         $link = Link::find($linkId);
 
         if (! $link) {

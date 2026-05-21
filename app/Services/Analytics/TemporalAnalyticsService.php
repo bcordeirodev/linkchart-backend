@@ -44,7 +44,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     public function getLinkTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         Link::findOrFail($linkId);
-        $filters ??= new AnalyticsFilters();
+        $filters ??= new AnalyticsFilters;
 
         if (! $this->baseQuery($linkId, $filters, $segment)->exists()) {
             return [
@@ -84,10 +84,10 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         $query = $filters->applyToQuery(Click::where('link_id', $linkId));
 
         return match ($segment) {
-            'weekday'  => $query->where('is_weekend', false),
-            'weekend'  => $query->where('is_weekend', true),
+            'weekday' => $query->where('is_weekend', false),
+            'weekend' => $query->where('is_weekend', true),
             'business' => $query->where('is_business_hours', true),
-            default    => $query,
+            default => $query,
         };
     }
 
@@ -102,7 +102,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      */
     public function getAdvancedTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
-        $filters ??= new AnalyticsFilters();
+        $filters ??= new AnalyticsFilters;
         $clicks = $this->baseQuery($linkId, $filters, $segment)->get();
 
         return [
@@ -139,7 +139,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      */
     private function getClicksByHour(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
-        $filters ??= new AnalyticsFilters();
+        $filters ??= new AnalyticsFilters;
         $expr = $this->isSqlite()
             ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
             : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
@@ -170,7 +170,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      */
     private function getClicksByDayOfWeek(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
-        $filters ??= new AnalyticsFilters();
+        $filters ??= new AnalyticsFilters;
         $expr = $this->isSqlite()
             ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
             : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
@@ -498,8 +498,8 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             ->orderByRaw('DATE(created_at) ASC')
             ->get()
             ->map(fn ($r) => [
-                'date'        => $r->date,
-                'peak_rank'   => $r->peak_rank ?? 'cold',
+                'date' => $r->date,
+                'peak_rank' => $r->peak_rank ?? 'cold',
                 'click_count' => (int) $r->click_count,
             ])
             ->toArray();

@@ -172,10 +172,11 @@ class Link extends Model
 
         if ($this->short_domain) {
             $scheme = parse_url($redirectUrl, PHP_URL_SCHEME) ?? 'https';
+
             return "{$scheme}://{$this->short_domain}/{$this->slug}";
         }
 
-        return $redirectUrl . '/' . $this->slug;
+        return $redirectUrl.'/'.$this->slug;
     }
 
     /**

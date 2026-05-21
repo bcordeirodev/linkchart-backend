@@ -494,10 +494,6 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
     /**
      * Build a base Eloquent query for clicks belonging to the given link,
      * with date-range and bot-exclusion filters applied.
-     *
-     * @param  int              $linkId
-     * @param  AnalyticsFilters $filters
-     * @return \Illuminate\Database\Eloquent\Builder
      */
     private function baseQuery(int $linkId, AnalyticsFilters $filters): \Illuminate\Database\Eloquent\Builder
     {

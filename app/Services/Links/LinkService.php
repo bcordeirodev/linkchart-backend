@@ -85,7 +85,7 @@ class LinkService implements LinkServiceInterface
         // later releases their subdomain.
         $sub = \App\Models\UserSubdomain::findByUserCached($linkDTO->user_id);
         if ($sub) {
-            $data['short_domain'] = $sub->subdomain . '.' . config('app.domain');
+            $data['short_domain'] = $sub->subdomain.'.'.config('app.domain');
         }
 
         // Gera slug único se não fornecido
