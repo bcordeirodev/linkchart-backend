@@ -51,18 +51,18 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
     public function getLinkGeographicAnalytics(int $linkId, ?AnalyticsFilters $filters = null, ?string $continent = null, int $minClicks = 0): array
     {
         $link = Link::findOrFail($linkId);
-        $filters ??= new AnalyticsFilters();
+        $filters ??= new AnalyticsFilters;
 
         if (! $this->baseQuery($linkId, $filters, $continent)->exists()) {
             return [
                 'data' => [
-                    'heatmap_data'  => [],
+                    'heatmap_data' => [],
                     'top_countries' => [],
-                    'top_states'    => [],
-                    'top_cities'    => [],
-                    'continents'    => [],
+                    'top_states' => [],
+                    'top_cities' => [],
+                    'continents' => [],
                 ],
-                'meta' => $this->buildGeographicMeta($link, []),
+                'meta' => $this->buildGeographicMeta($link, [], $linkId, $filters, $continent),
             ];
         }
 
@@ -70,13 +70,13 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
 
         return [
             'data' => [
-                'heatmap_data'  => $heatmap,
+                'heatmap_data' => $heatmap,
                 'top_countries' => $this->filterByMinClicks($this->getTopCountriesOptimized($linkId, $filters, $continent), $minClicks),
-                'top_states'    => $this->filterByMinClicks($this->getTopStatesOptimized($linkId, $filters, $continent), $minClicks),
-                'top_cities'    => $this->filterByMinClicks($this->getTopCitiesOptimized($linkId, $filters, $continent), $minClicks),
-                'continents'    => $this->getTopContinents($linkId, $filters),
+                'top_states' => $this->filterByMinClicks($this->getTopStatesOptimized($linkId, $filters, $continent), $minClicks),
+                'top_cities' => $this->filterByMinClicks($this->getTopCitiesOptimized($linkId, $filters, $continent), $minClicks),
+                'continents' => $this->getTopContinents($linkId, $filters),
             ],
-            'meta' => $this->buildGeographicMeta($link, $heatmap),
+            'meta' => $this->buildGeographicMeta($link, $heatmap, $linkId, $filters, $continent),
         ];
     }
 
@@ -95,9 +95,9 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
     {
         $query = $filters->applyToQuery(
             Click::where('link_id', $linkId)
-                 ->whereNotNull('country')
-                 ->where('country', '!=', 'localhost')
-                 ->where('country', '!=', '')
+                ->whereNotNull('country')
+                ->where('country', '!=', 'localhost')
+                ->where('country', '!=', '')
         );
 
         return $query->when($continent, fn ($q) => $q->where('continent', $continent));
@@ -138,16 +138,16 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->groupBy('latitude', 'longitude', 'city', 'country', 'iso_code', 'currency', 'state_name', 'continent', 'timezone')
             ->orderBy('clicks', 'desc')->limit(500)->get()
             ->map(fn ($r) => [
-                'lat'        => (float) $r->latitude,
-                'lng'        => (float) $r->longitude,
-                'city'       => $r->city ?: 'Cidade Desconhecida',
-                'country'    => $r->country,
-                'clicks'     => (int) $r->clicks,
-                'iso_code'   => $r->iso_code,
-                'currency'   => $r->currency,
+                'lat' => (float) $r->latitude,
+                'lng' => (float) $r->longitude,
+                'city' => $r->city ?: 'Cidade Desconhecida',
+                'country' => $r->country,
+                'clicks' => (int) $r->clicks,
+                'iso_code' => $r->iso_code,
+                'currency' => $r->currency,
                 'state_name' => $r->state_name,
-                'continent'  => $r->continent,
-                'timezone'   => $r->timezone,
+                'continent' => $r->continent,
+                'timezone' => $r->timezone,
                 'last_click' => $r->last_click,
             ])
             ->toArray();
@@ -226,8 +226,8 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
     {
         $results = $filters->applyToQuery(
             Click::where('link_id', $linkId)
-                 ->whereNotNull('continent')
-                 ->where('continent', '!=', '')
+                ->whereNotNull('continent')
+                ->where('continent', '!=', '')
         )
             ->toBase()
             ->selectRaw('continent, COUNT(*) as clicks')
@@ -239,28 +239,44 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
 
         return $results->map(function ($row) use ($total) {
             return [
-                'continent'      => $row->continent,
+                'continent' => $row->continent,
                 'continent_name' => self::CONTINENT_NAMES[$row->continent] ?? $row->continent,
-                'clicks'         => (int) $row->clicks,
-                'percentage'     => $total > 0
+                'clicks' => (int) $row->clicks,
+                'percentage' => $total > 0
                     ? round(($row->clicks / $total) * 100, 1)
                     : 0.0,
             ];
         })->values()->toArray();
     }
 
-    private function buildGeographicMeta(Link $link, array $heatmap): array
+    /**
+     * Build geographic metadata using accurate COUNT(*) / COUNT(DISTINCT …) queries.
+     *
+     * Previous implementation derived totals from the heatmap array, which is
+     * capped at 500 lat/lng groups and requires non-null coordinates. This caused
+     * the metric cards to under-count whenever more than 500 distinct locations
+     * existed or when clicks lacked geo-coordinates.
+     *
+     * `max_clicks` and `total_locations` are still sourced from the heatmap
+     * because they describe the map visualisation, not the full dataset.
+     *
+     * @param  Link  $link  Link model instance.
+     * @param  array  $heatmap  Pre-computed heatmap rows (may be capped at 500).
+     * @param  int  $linkId  Link primary key (for fresh DB queries).
+     * @param  AnalyticsFilters  $filters  Active date-range / bot-exclusion filters.
+     * @param  ?string  $continent  Active continent scope, or null for all.
+     */
+    private function buildGeographicMeta(Link $link, array $heatmap, int $linkId, AnalyticsFilters $filters, ?string $continent = null): array
     {
-        $countries = array_filter(array_column($heatmap, 'country'));
-        $states = array_filter(array_column($heatmap, 'state_name'));
-        $cities = array_filter(array_column($heatmap, 'city'));
+        $base = fn () => $this->baseQuery($linkId, $filters, $continent);
+
         $clicks = array_column($heatmap, 'clicks');
 
         return [
-            'total_clicks' => array_sum($clicks),
-            'unique_countries' => count(array_unique($countries)),
-            'unique_states' => count(array_unique($states)),
-            'unique_cities' => count(array_unique($cities)),
+            'total_clicks' => $base()->count(),
+            'unique_countries' => $base()->distinct()->count('country'),
+            'unique_states' => $base()->whereNotNull('state')->where('state', '!=', '')->distinct()->count('state'),
+            'unique_cities' => $base()->whereNotNull('city')->where('city', '!=', '')->distinct()->count('city'),
             'max_clicks' => $clicks ? max($clicks) : 0,
             'total_locations' => count($heatmap),
             'last_updated' => now()->toISOString(),
