@@ -40,6 +40,19 @@ trait ClickEnrichmentTrait
         [$qualityTier, $qualityScore, $fingerprintScore] = $this->deriveQuality($isBot, $navContext);
         [$primaryLang, $langRegion] = $this->deriveLanguage($iso);
         $connType = $this->deriveConnectionType($device);
+        // ch_platform: simulates Sec-CH-UA-Platform Client Hint.
+        // Only Chromium-based browsers (Chrome, Edge, Opera, Brave) send this header;
+        // Safari and Firefox return null here, matching real-world behaviour.
+        $chPlatform = in_array($browser, ['Chrome', 'Edge', 'Opera', 'Brave'], true)
+            ? match ($os) {
+                'Windows' => 'Windows',
+                'OS X'    => 'macOS',
+                'Android' => 'Android',
+                'iOS'     => 'iOS',
+                'Linux'   => 'Linux',
+                default   => null,
+            }
+            : null;
         $isReturn = ! $isBot && (mt_rand(1, 100) <= 28);
         $sessionClicks = $isReturn ? mt_rand(2, 5) : 1;
 
@@ -65,6 +78,7 @@ trait ClickEnrichmentTrait
             'browser_version' => $browserVersion,
             'os' => $os,
             'os_version' => $osVersion,
+            'device' => $isBot ? 'bot' : $device,
             'is_mobile' => $isMobile,
             'is_tablet' => $isTablet,
             'is_desktop' => $isDesktop,
@@ -77,6 +91,7 @@ trait ClickEnrichmentTrait
             'primary_language' => $primaryLang,
             'language_region' => $langRegion,
             'connection_type' => $connType,
+            'ch_platform' => $chPlatform,
             'is_return_visitor' => $isReturn,
             'session_clicks' => $sessionClicks,
             'hour_of_day' => $hour,
