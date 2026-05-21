@@ -145,9 +145,10 @@ class SubdomainController extends Controller
     private function formatSubdomain(UserSubdomain $sub): array
     {
         $scheme = parse_url(config('app.redirect_url', 'http://localhost:8000'), PHP_URL_SCHEME) ?? 'https';
+
         return [
             'subdomain' => $sub->subdomain,
-            'full_url' => "{$scheme}://{$sub->subdomain}." . config('app.domain'),
+            'full_url' => "{$scheme}://{$sub->subdomain}.".config('app.domain'),
             'status' => $sub->status,
             'created_at' => $sub->created_at->toISOString(),
         ];

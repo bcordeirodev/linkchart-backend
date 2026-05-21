@@ -52,13 +52,13 @@ class TemporalFilterTest extends TestCase
     {
         // Weekday click (Monday 2026-01-05) — is_weekend=false
         Click::factory()->create([
-            'link_id'    => $this->link->id,
+            'link_id' => $this->link->id,
             'created_at' => '2026-01-05 10:00:00',
             'is_weekend' => false,
         ]);
         // Weekend click (Saturday 2026-01-10) — is_weekend=true
         Click::factory()->create([
-            'link_id'    => $this->link->id,
+            'link_id' => $this->link->id,
             'created_at' => '2026-01-10 10:00:00',
             'is_weekend' => true,
         ]);

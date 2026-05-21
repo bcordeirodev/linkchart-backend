@@ -62,10 +62,10 @@ class TemporalCoverageSeeder extends Seeder
             ['city' => 'Miami',       'state' => 'FL', 'state_name' => 'Florida',    'lat' => 25.7617, 'lng' => -80.1918,  'postal' => '33101'],
         ],
         'MX' => [['city' => 'Mexico City', 'state' => 'MC', 'state_name' => 'Mexico City',  'lat' => 19.4326,  'lng' => -99.1332, 'postal' => '06600']],
-        'AR' => [['city' => 'Buenos Aires','state' => 'BA', 'state_name' => 'Buenos Aires', 'lat' => -34.6037, 'lng' => -58.3816, 'postal' => 'C1002']],
+        'AR' => [['city' => 'Buenos Aires', 'state' => 'BA', 'state_name' => 'Buenos Aires', 'lat' => -34.6037, 'lng' => -58.3816, 'postal' => 'C1002']],
         'CO' => [['city' => 'Bogotá',      'state' => 'DC', 'state_name' => 'Cundinamarca', 'lat' => 4.7110,   'lng' => -74.0721, 'postal' => '110111']],
-        'PT' => [['city' => 'Lisbon',      'state' => 'LIS','state_name' => 'Lisboa',       'lat' => 38.7223,  'lng' => -9.1393,  'postal' => '1100-148']],
-        'GB' => [['city' => 'London',      'state' => 'ENG','state_name' => 'England',      'lat' => 51.5074,  'lng' => -0.1278,  'postal' => 'SW1A 1AA']],
+        'PT' => [['city' => 'Lisbon',      'state' => 'LIS', 'state_name' => 'Lisboa',       'lat' => 38.7223,  'lng' => -9.1393,  'postal' => '1100-148']],
+        'GB' => [['city' => 'London',      'state' => 'ENG', 'state_name' => 'England',      'lat' => 51.5074,  'lng' => -0.1278,  'postal' => 'SW1A 1AA']],
         'DE' => [['city' => 'Berlin',      'state' => 'BE', 'state_name' => 'Berlin',       'lat' => 52.5200,  'lng' => 13.4050,  'postal' => '10115']],
         'IN' => [['city' => 'Mumbai',      'state' => 'MH', 'state_name' => 'Maharashtra',  'lat' => 19.0760,  'lng' => 72.8777,  'postal' => '400001']],
     ];
@@ -115,9 +115,9 @@ class TemporalCoverageSeeder extends Seeder
         ['slug' => 'lp-mentoria-2025',  'url' => 'https://mentoria.brunodev.com.br/turma-2025',                     'title' => 'Mentoria Dev 2025 — Turma Aberta',   'description' => 'Programa de mentoria individual para devs',      'utm' => 'email'],
         ['slug' => 'gh-link-charts',    'url' => 'https://github.com/bcordeiro/link-charts',                        'title' => 'Link Charts — GitHub',               'description' => 'Repositório open source do encurtador',          'utm' => 'referral'],
         ['slug' => 'ig-perfil-bruno',   'url' => 'https://www.instagram.com/brunodev.br',                           'title' => 'Instagram @brunodev.br',             'description' => 'Bastidores do desenvolvimento e dicas rápidas',   'utm' => 'social'],
-        ['slug' => 'blog-nextjs15',     'url' => 'https://brunodev.com.br/blog/nextjs-15-app-router-guia-completo', 'title' => 'Next.js 15 App Router — Guia Completo','description' => 'Tutorial passo a passo do App Router',           'utm' => 'organic'],
+        ['slug' => 'blog-nextjs15',     'url' => 'https://brunodev.com.br/blog/nextjs-15-app-router-guia-completo', 'title' => 'Next.js 15 App Router — Guia Completo', 'description' => 'Tutorial passo a passo do App Router',           'utm' => 'organic'],
         ['slug' => 'shop-livros-dev',   'url' => 'https://amzn.to/livros-programacao-bruno',                        'title' => 'Lista de Livros Recomendados',        'description' => 'Livros de programação com affiliate',            'utm' => 'email'],
-        ['slug' => 'discord-comunidade','url' => 'https://discord.gg/brunodev-comunidade',                          'title' => 'Discord — Comunidade Bruno Dev',      'description' => 'Servidor Discord para devs em crescimento',      'utm' => 'social'],
+        ['slug' => 'discord-comunidade', 'url' => 'https://discord.gg/brunodev-comunidade',                          'title' => 'Discord — Comunidade Bruno Dev',      'description' => 'Servidor Discord para devs em crescimento',      'utm' => 'social'],
         ['slug' => 'li-perfil-bruno',   'url' => 'https://www.linkedin.com/in/brunocordeiro-dev',                   'title' => 'LinkedIn — Bruno Cordeiro',          'description' => 'Perfil profissional e conexões em tecnologia',   'utm' => 'referral'],
     ];
 
@@ -129,19 +129,19 @@ class TemporalCoverageSeeder extends Seeder
      * Base = 1 click per slot. Multiplier scales volume while keeping every
      * hour represented.
      *
-     * @var array<int,int>  keys 0-23, values 1-10
+     * @var array<int,int> keys 0-23, values 1-10
      */
     private array $hourWeights = [
-        0  => 1,   // midnight
-        1  => 1,
-        2  => 1,
-        3  => 1,
-        4  => 1,
-        5  => 2,   // early morning
-        6  => 3,
-        7  => 5,
-        8  => 7,   // morning rush
-        9  => 9,
+        0 => 1,   // midnight
+        1 => 1,
+        2 => 1,
+        3 => 1,
+        4 => 1,
+        5 => 2,   // early morning
+        6 => 3,
+        7 => 5,
+        8 => 7,   // morning rush
+        9 => 9,
         10 => 10,  // business hours peak
         11 => 10,
         12 => 9,   // lunch dip
@@ -177,15 +177,15 @@ class TemporalCoverageSeeder extends Seeder
 
     /** @var array<string,list<array{source:string,medium:string,campaign:string|null}>> */
     private array $utmPools = [
-        'social'   => [
+        'social' => [
             ['source' => 'instagram', 'medium' => 'social',   'campaign' => 'bio_link'],
             ['source' => 'tiktok',    'medium' => 'social',   'campaign' => 'creator_bio'],
             ['source' => 'youtube',   'medium' => 'social',   'campaign' => 'description'],
             ['source' => 'twitter',   'medium' => 'social',   'campaign' => 'pinned_tweet'],
             ['source' => 'linkedin',  'medium' => 'social',   'campaign' => 'profile_link'],
         ],
-        'email'    => [
-            ['source' => 'newsletter','medium' => 'email',    'campaign' => 'weekly_digest'],
+        'email' => [
+            ['source' => 'newsletter', 'medium' => 'email',    'campaign' => 'weekly_digest'],
             ['source' => 'sendgrid',  'medium' => 'email',    'campaign' => 'promo_may25'],
             ['source' => 'mailchimp', 'medium' => 'email',    'campaign' => 'launch_announcement'],
         ],
@@ -194,23 +194,23 @@ class TemporalCoverageSeeder extends Seeder
             ['source' => 'medium',    'medium' => 'referral', 'campaign' => null],
             ['source' => 'hashnode',  'medium' => 'referral', 'campaign' => null],
         ],
-        'organic'  => [
+        'organic' => [
             ['source' => 'google',    'medium' => 'organic',  'campaign' => null],
             ['source' => 'bing',      'medium' => 'organic',  'campaign' => null],
-            ['source' => 'duckduckgo','medium' => 'organic',  'campaign' => null],
+            ['source' => 'duckduckgo', 'medium' => 'organic',  'campaign' => null],
         ],
     ];
 
     /** Social platform weighted pool (platform => share out of 100 mobile clicks). */
     private array $socialPlatformWeights = [
         'instagram' => 26,
-        'tiktok'    => 20,
-        'youtube'   => 12,
-        'facebook'  => 8,
-        'twitter'   => 5,
-        'whatsapp'  => 4,
-        'telegram'  => 3,
-        null        => 22,
+        'tiktok' => 20,
+        'youtube' => 12,
+        'facebook' => 8,
+        'twitter' => 5,
+        'whatsapp' => 4,
+        'telegram' => 3,
+        null => 22,
     ];
 
     // ── Entry point ───────────────────────────────────────────────────────────
@@ -224,6 +224,7 @@ class TemporalCoverageSeeder extends Seeder
 
         if (! $user) {
             $this->command->error('User "'.self::USER_EMAIL.'" not found.');
+
             return;
         }
 
@@ -248,7 +249,6 @@ class TemporalCoverageSeeder extends Seeder
      * Ensures the link row exists, then inserts temporally-distributed clicks.
      *
      * @param  array{slug:string,url:string,title:string,description:string,utm:string|null}  $def
-     * @param  int  $userId
      * @param  list<string|null>  $platformPicker
      */
     private function processLink(array $def, int $userId, array $platformPicker): void
@@ -269,17 +269,17 @@ class TemporalCoverageSeeder extends Seeder
             $this->command->warn("  [{$def['slug']}] already exists (ID {$linkId}) — wiped {$deleted} old clicks, re-seeding.");
         } else {
             $linkId = DB::table('links')->insertGetId([
-                'slug'          => $def['slug'],
-                'original_url'  => $def['url'],
-                'title'         => $def['title'],
-                'description'   => $def['description'],
-                'user_id'       => $userId,
-                'is_active'     => true,
-                'is_demo'       => false,
-                'clicks'        => 0,
+                'slug' => $def['slug'],
+                'original_url' => $def['url'],
+                'title' => $def['title'],
+                'description' => $def['description'],
+                'user_id' => $userId,
+                'is_active' => true,
+                'is_demo' => false,
+                'clicks' => 0,
                 'health_status' => 'unknown',
-                'created_at'    => $now,
-                'updated_at'    => $now,
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
             $this->command->info("  [{$def['slug']}] created (ID {$linkId}).");
         }
@@ -306,10 +306,8 @@ class TemporalCoverageSeeder extends Seeder
      *   a per-slot count = round(hourWeight × dowWeight × baseFactor) + jitter.
      *   baseFactor ≈ 1-3 scales the overall volume per link.
      *
-     * @param  int  $linkId
-     * @param  string|null  $utmScenario
      * @param  list<string|null>  $platformPicker
-     * @return array{int, int}  [clicksInserted, utmRowsInserted]
+     * @return array{int, int} [clicksInserted, utmRowsInserted]
      */
     private function insertTemporalClicks(
         int $linkId,
@@ -321,14 +319,14 @@ class TemporalCoverageSeeder extends Seeder
         // baseFactor: different per link to vary total volumes (1.2 – 3.5)
         $baseFactor = round(mt_rand(120, 350) / 100, 2);
 
-        $clicks  = [];
+        $clicks = [];
         $utmRows = [];
         $utmPool = $utmScenario ? $this->utmPools[$utmScenario] : [];
 
         for ($daysAgo = 0; $daysAgo < self::DAYS_BACK; $daysAgo++) {
-            $date   = $today->copy()->subDays($daysAgo);
-            $dow    = (int) $date->format('N'); // 1=Mon … 7=Sun
-            $dowW   = $this->dowWeights[$dow];
+            $date = $today->copy()->subDays($daysAgo);
+            $dow = (int) $date->format('N'); // 1=Mon … 7=Sun
+            $dowW = $this->dowWeights[$dow];
 
             for ($hour = 0; $hour < 24; $hour++) {
                 $hourW = $this->hourWeights[$hour];
@@ -339,14 +337,14 @@ class TemporalCoverageSeeder extends Seeder
                 for ($c = 0; $c < $slotCount; $c++) {
                     $clickDate = $date->copy()->setTime($hour, mt_rand(0, 59), mt_rand(0, 59));
 
-                    $country  = $this->countries[array_rand($this->countries)];
-                    $iso      = $country['iso'];
+                    $country = $this->countries[array_rand($this->countries)];
+                    $iso = $country['iso'];
 
                     $deviceRoll = mt_rand(1, 100);
                     $device = match (true) {
                         $deviceRoll <= 62 => 'mobile',
                         $deviceRoll <= 94 => 'desktop',
-                        default           => 'tablet',
+                        default => 'tablet',
                     };
 
                     $ua = $device === 'desktop'
@@ -355,7 +353,7 @@ class TemporalCoverageSeeder extends Seeder
 
                     // Navigation context & social platform
                     $socialPlatform = null;
-                    $navContext     = 'direct';
+                    $navContext = 'direct';
 
                     if ($device === 'mobile') {
                         $socialPlatform = $platformPicker[mt_rand(0, count($platformPicker) - 1)];
@@ -376,41 +374,41 @@ class TemporalCoverageSeeder extends Seeder
 
                     // viral_rank: recency-biased
                     $viralRank = match (true) {
-                        $daysAgo <= 7  => mt_rand(1, 100) <= 35 ? 'viral'    : 'trending',
+                        $daysAgo <= 7 => mt_rand(1, 100) <= 35 ? 'viral' : 'trending',
                         $daysAgo <= 21 => mt_rand(1, 100) <= 40 ? 'trending' : 'warming',
-                        $daysAgo <= 49 => mt_rand(1, 100) <= 45 ? 'warming'  : 'cold',
-                        default        => 'cold',
+                        $daysAgo <= 49 => mt_rand(1, 100) <= 45 ? 'warming' : 'cold',
+                        default => 'cold',
                     };
 
                     // Geo
                     $cityOpts = $this->cities[$iso] ?? $this->cities['BR'];
-                    $city     = $cityOpts[array_rand($cityOpts)];
-                    $prefix   = $this->ipPrefixes[$iso] ?? '192.168.';
-                    $ip       = $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
+                    $city = $cityOpts[array_rand($cityOpts)];
+                    $prefix = $this->ipPrefixes[$iso] ?? '192.168.';
+                    $ip = $prefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
 
                     $enriched = $this->enrichClickData($ua, $device, null, $clickDate, $iso);
 
                     $clicks[] = array_merge($enriched, [
-                        'link_id'            => $linkId,
-                        'ip'                 => $ip,
-                        'user_agent'         => $ua,
-                        'referer'            => null,
-                        'country'            => $country['name'],
-                        'iso_code'           => $iso,
-                        'city'               => $city['city'],
-                        'state'              => $city['state'],
-                        'state_name'         => $city['state_name'],
-                        'postal_code'        => $city['postal'],
-                        'latitude'           => $city['lat'],
-                        'longitude'          => $city['lng'],
-                        'timezone'           => $country['timezone'],
-                        'continent'          => $country['continent'],
-                        'currency'           => $country['currency'],
-                        'social_platform'    => $socialPlatform,
+                        'link_id' => $linkId,
+                        'ip' => $ip,
+                        'user_agent' => $ua,
+                        'referer' => null,
+                        'country' => $country['name'],
+                        'iso_code' => $iso,
+                        'city' => $city['city'],
+                        'state' => $city['state'],
+                        'state_name' => $city['state_name'],
+                        'postal_code' => $city['postal'],
+                        'latitude' => $city['lat'],
+                        'longitude' => $city['lng'],
+                        'timezone' => $country['timezone'],
+                        'continent' => $country['continent'],
+                        'currency' => $country['currency'],
+                        'social_platform' => $socialPlatform,
                         'navigation_context' => $navContext,
-                        'viral_rank'         => $viralRank,
-                        'created_at'         => $clickDate->toDateTimeString(),
-                        'updated_at'         => $clickDate->toDateTimeString(),
+                        'viral_rank' => $viralRank,
+                        'created_at' => $clickDate->toDateTimeString(),
+                        'updated_at' => $clickDate->toDateTimeString(),
                     ]);
 
                     // Flush to DB in batches to avoid memory buildup
@@ -433,8 +431,8 @@ class TemporalCoverageSeeder extends Seeder
         // Attach UTM rows to ~30 % of clicks
         $utmCount = 0;
         if ($utmPool) {
-            $utmTarget  = (int) round($inserted * 0.30);
-            $clickIds   = DB::table('clicks')
+            $utmTarget = (int) round($inserted * 0.30);
+            $clickIds = DB::table('clicks')
                 ->where('link_id', $linkId)
                 ->orderByDesc('id')
                 ->limit($utmTarget)
@@ -447,14 +445,14 @@ class TemporalCoverageSeeder extends Seeder
             foreach ($clickIds as $idx => $clickId) {
                 $entry = $utmPool[$idx % count($utmPool)];
                 $utmBatch[] = [
-                    'click_id'     => $clickId,
-                    'utm_source'   => $entry['source'],
-                    'utm_medium'   => $entry['medium'],
+                    'click_id' => $clickId,
+                    'utm_source' => $entry['source'],
+                    'utm_medium' => $entry['medium'],
                     'utm_campaign' => $entry['campaign'] ?? null,
-                    'utm_term'     => null,
-                    'utm_content'  => null,
-                    'created_at'   => $nowStr,
-                    'updated_at'   => $nowStr,
+                    'utm_term' => null,
+                    'utm_content' => null,
+                    'created_at' => $nowStr,
+                    'updated_at' => $nowStr,
                 ];
 
                 if (count($utmBatch) >= 500) {
@@ -495,8 +493,6 @@ class TemporalCoverageSeeder extends Seeder
 
     /**
      * Prints a summary table showing coverage across hours and days.
-     *
-     * @param  int  $userId
      */
     private function printSummary(int $userId): void
     {
@@ -509,12 +505,12 @@ class TemporalCoverageSeeder extends Seeder
 
         $totalAll = 0;
         foreach ($links as $link) {
-            $total  = DB::table('clicks')->where('link_id', $link->id)->count();
+            $total = DB::table('clicks')->where('link_id', $link->id)->count();
             $mobile = DB::table('clicks')->where('link_id', $link->id)->where('is_mobile', 1)->count();
             $social = DB::table('clicks')->where('link_id', $link->id)->whereNotNull('social_platform')->count();
-            $iab    = DB::table('clicks')->where('link_id', $link->id)->where('navigation_context', 'in_app_webview')->count();
-            $viral  = DB::table('clicks')->where('link_id', $link->id)->whereIn('viral_rank', ['viral', 'trending'])->count();
-            $utm    = DB::table('link_utms')
+            $iab = DB::table('clicks')->where('link_id', $link->id)->where('navigation_context', 'in_app_webview')->count();
+            $viral = DB::table('clicks')->where('link_id', $link->id)->whereIn('viral_rank', ['viral', 'trending'])->count();
+            $utm = DB::table('link_utms')
                 ->join('clicks', 'link_utms.click_id', '=', 'clicks.id')
                 ->where('clicks.link_id', $link->id)->count();
 
@@ -540,7 +536,7 @@ class TemporalCoverageSeeder extends Seeder
             ->get();
 
         foreach ($hourRows as $r) {
-            $bar  = str_repeat('█', min(60, (int) round($r->cnt / max(1, $totalAll / 24 / 2))));
+            $bar = str_repeat('█', min(60, (int) round($r->cnt / max(1, $totalAll / 24 / 2))));
             $this->command->line(sprintf('    %02d:xx  %6d  %s', $r->hour_of_day ?? 0, $r->cnt, $bar));
         }
 
@@ -557,9 +553,9 @@ class TemporalCoverageSeeder extends Seeder
             ->get();
 
         foreach ($dowRows as $r) {
-            $dow  = $r->day_of_week ?? 0;
+            $dow = $r->day_of_week ?? 0;
             $name = $dayNames[$dow] ?? '???';
-            $bar  = str_repeat('█', min(60, (int) round($r->cnt / max(1, $totalAll / 7 / 2))));
+            $bar = str_repeat('█', min(60, (int) round($r->cnt / max(1, $totalAll / 7 / 2))));
             $this->command->line(sprintf('    %s  %7d  %s', $name, $r->cnt, $bar));
         }
     }

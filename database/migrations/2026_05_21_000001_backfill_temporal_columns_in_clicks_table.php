@@ -76,18 +76,18 @@ return new class extends Migration
         ");
 
         // 3. Recalculate is_weekend from day_of_week (all rows with day_of_week set)
-        DB::statement("
+        DB::statement('
             UPDATE clicks
             SET is_weekend = CASE WHEN day_of_week IN (6, 7) THEN 1 ELSE 0 END
             WHERE day_of_week IS NOT NULL
-        ");
+        ');
 
         // 4. Recalculate is_business_hours from hour_of_day (all rows with hour_of_day set)
-        DB::statement("
+        DB::statement('
             UPDATE clicks
             SET is_business_hours = CASE WHEN hour_of_day BETWEEN 9 AND 17 THEN 1 ELSE 0 END
             WHERE hour_of_day IS NOT NULL
-        ");
+        ');
     }
 
     /**
@@ -99,35 +99,35 @@ return new class extends Migration
     private function upPostgres(): void
     {
         // 1. Backfill day_of_week (null rows only)
-        DB::statement("
+        DB::statement('
             UPDATE clicks
             SET day_of_week = CASE
                 WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7
                 ELSE EXTRACT(DOW FROM created_at)::int
             END
             WHERE day_of_week IS NULL
-        ");
+        ');
 
         // 2. Backfill hour_of_day (null rows only)
-        DB::statement("
+        DB::statement('
             UPDATE clicks
             SET hour_of_day = EXTRACT(HOUR FROM created_at)::int
             WHERE hour_of_day IS NULL
-        ");
+        ');
 
         // 3. Recalculate is_weekend from day_of_week (all rows with day_of_week set)
-        DB::statement("
+        DB::statement('
             UPDATE clicks
             SET is_weekend = (day_of_week IN (6, 7))
             WHERE day_of_week IS NOT NULL
-        ");
+        ');
 
         // 4. Recalculate is_business_hours from hour_of_day (all rows with hour_of_day set)
-        DB::statement("
+        DB::statement('
             UPDATE clicks
             SET is_business_hours = (hour_of_day BETWEEN 9 AND 17)
             WHERE hour_of_day IS NOT NULL
-        ");
+        ');
     }
 
     /**

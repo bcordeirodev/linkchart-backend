@@ -29,8 +29,8 @@ return new class extends Migration
         // Guard: SQLite (used in tests) does not support WHERE-clause indexes.
         if (DB::getDriverName() === 'pgsql') {
             DB::statement(
-                "CREATE UNIQUE INDEX user_subdomains_subdomain_active_unique"
-                . " ON user_subdomains (subdomain) WHERE status = 'active'"
+                'CREATE UNIQUE INDEX user_subdomains_subdomain_active_unique'
+                ." ON user_subdomains (subdomain) WHERE status = 'active'"
             );
         }
     }

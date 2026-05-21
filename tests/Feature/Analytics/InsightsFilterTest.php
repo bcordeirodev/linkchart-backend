@@ -52,13 +52,13 @@ class InsightsFilterTest extends TestCase
     {
         // 2 old clicks — should be excluded by the filter
         Click::factory()->count(2)->create([
-            'link_id'    => $this->link->id,
+            'link_id' => $this->link->id,
             'created_at' => now()->subDays(30),
         ]);
 
         // 3 recent clicks — should be included
         Click::factory()->count(3)->create([
-            'link_id'    => $this->link->id,
+            'link_id' => $this->link->id,
             'created_at' => now()->subDays(1),
         ]);
 
@@ -77,14 +77,14 @@ class InsightsFilterTest extends TestCase
     public function test_exclude_bots_removes_bot_clicks(): void
     {
         Click::factory()->count(2)->create([
-            'link_id'      => $this->link->id,
-            'is_bot'       => false,
+            'link_id' => $this->link->id,
+            'is_bot' => false,
             'quality_tier' => 'organic',
         ]);
 
         Click::factory()->count(3)->create([
-            'link_id'      => $this->link->id,
-            'is_bot'       => true,
+            'link_id' => $this->link->id,
+            'is_bot' => true,
             'quality_tier' => 'likely_fraud',
         ]);
 
@@ -102,12 +102,12 @@ class InsightsFilterTest extends TestCase
     {
         Click::factory()->count(2)->create([
             'link_id' => $this->link->id,
-            'is_bot'  => false,
+            'is_bot' => false,
         ]);
 
         Click::factory()->count(2)->create([
             'link_id' => $this->link->id,
-            'is_bot'  => true,
+            'is_bot' => true,
         ]);
 
         $response = $this->actingAs($this->user, 'api')

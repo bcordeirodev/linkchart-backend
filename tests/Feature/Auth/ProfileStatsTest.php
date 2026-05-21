@@ -27,7 +27,7 @@ class ProfileStatsTest extends TestCase
     private function makeVerifiedUser(): User
     {
         return User::factory()->create([
-            'email_verified'    => true,
+            'email_verified' => true,
             'email_verified_at' => now(),
         ]);
     }
@@ -63,7 +63,7 @@ class ProfileStatsTest extends TestCase
     /** @test */
     public function test_only_counts_links_belonging_to_authenticated_user(): void
     {
-        $user  = $this->makeVerifiedUser();
+        $user = $this->makeVerifiedUser();
         $other = $this->makeVerifiedUser();
         Link::factory()->create(['user_id' => $user->id,  'clicks' => 5]);
         Link::factory()->create(['user_id' => $other->id, 'clicks' => 100]);

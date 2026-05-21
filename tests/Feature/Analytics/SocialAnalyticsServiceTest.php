@@ -16,6 +16,7 @@ class SocialAnalyticsServiceTest extends TestCase
     use RefreshDatabase;
 
     private DashboardAnalyticsService $service;
+
     private Link $link;
 
     protected function setUp(): void
@@ -113,30 +114,30 @@ class SocialAnalyticsServiceTest extends TestCase
 
         // Day 1: all cold
         Click::factory()->count(5)->create([
-            'link_id'    => $link->id,
+            'link_id' => $link->id,
             'viral_rank' => 'cold',
-            'created_at' => now()->subDays(5)->format('Y-m-d') . ' 10:00:00',
+            'created_at' => now()->subDays(5)->format('Y-m-d').' 10:00:00',
         ]);
         // Day 2: mix of warming and trending → peak = trending
         Click::factory()->count(3)->create([
-            'link_id'    => $link->id,
+            'link_id' => $link->id,
             'viral_rank' => 'warming',
-            'created_at' => now()->subDays(4)->format('Y-m-d') . ' 10:00:00',
+            'created_at' => now()->subDays(4)->format('Y-m-d').' 10:00:00',
         ]);
         Click::factory()->count(2)->create([
-            'link_id'    => $link->id,
+            'link_id' => $link->id,
             'viral_rank' => 'trending',
-            'created_at' => now()->subDays(4)->format('Y-m-d') . ' 14:00:00',
+            'created_at' => now()->subDays(4)->format('Y-m-d').' 14:00:00',
         ]);
         // Day 3: viral
         Click::factory()->count(8)->create([
-            'link_id'    => $link->id,
+            'link_id' => $link->id,
             'viral_rank' => 'viral',
-            'created_at' => now()->subDays(3)->format('Y-m-d') . ' 09:00:00',
+            'created_at' => now()->subDays(3)->format('Y-m-d').' 09:00:00',
         ]);
         // Click with null viral_rank — excluded by whereNotNull; date is outside 90-day window
         Click::factory()->create([
-            'link_id'    => $link->id,
+            'link_id' => $link->id,
             'viral_rank' => null,
             'created_at' => now()->subDays(200)->startOfDay()->toDateTimeString(),
         ]);

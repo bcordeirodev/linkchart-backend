@@ -35,17 +35,17 @@ class GeographicFilterTest extends TestCase
     public function test_continent_filter_scopes_results(): void
     {
         Click::factory()->create([
-            'link_id'   => $this->link->id,
-            'country'   => 'Brazil',
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
             'continent' => 'SA',
-            'latitude'  => -23.5,
+            'latitude' => -23.5,
             'longitude' => -46.6,
         ]);
         Click::factory()->create([
-            'link_id'   => $this->link->id,
-            'country'   => 'Germany',
+            'link_id' => $this->link->id,
+            'country' => 'Germany',
             'continent' => 'EU',
-            'latitude'  => 52.5,
+            'latitude' => 52.5,
             'longitude' => 13.4,
         ]);
 
@@ -64,15 +64,15 @@ class GeographicFilterTest extends TestCase
     public function test_date_from_scopes_geographic_data(): void
     {
         Click::factory()->create([
-            'link_id'    => $this->link->id,
-            'country'    => 'Brazil',
-            'continent'  => 'SA',
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
+            'continent' => 'SA',
             'created_at' => '2026-01-01',
         ]);
         Click::factory()->create([
-            'link_id'    => $this->link->id,
-            'country'    => 'Germany',
-            'continent'  => 'EU',
+            'link_id' => $this->link->id,
+            'country' => 'Germany',
+            'continent' => 'EU',
             'created_at' => '2026-03-01',
         ]);
 
@@ -90,8 +90,8 @@ class GeographicFilterTest extends TestCase
     public function test_no_filters_returns_all_data(): void
     {
         Click::factory()->count(4)->create([
-            'link_id'   => $this->link->id,
-            'country'   => 'Brazil',
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
             'continent' => 'SA',
         ]);
 

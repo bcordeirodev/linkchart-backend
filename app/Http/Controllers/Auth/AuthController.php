@@ -248,14 +248,11 @@ class AuthController extends Controller
      *
      * Auth: JWT + email verified
      * Response shape: { data: { total_links, total_clicks, links_this_month, clicks_this_month } } (200)
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
      */
     public function stats(Request $request): JsonResponse
     {
-        $userId         = $request->user()->id;
-        $startOfMonth   = now()->startOfMonth();
+        $userId = $request->user()->id;
+        $startOfMonth = now()->startOfMonth();
 
         $row = DB::table('links')
             ->where('user_id', $userId)
@@ -278,10 +275,10 @@ class AuthController extends Controller
 
         return response()->json([
             'data' => [
-                'total_links'        => (int) $row->total_links,
-                'total_clicks'       => (int) $row->total_clicks,
-                'links_this_month'   => (int) $linksThisMonth,
-                'clicks_this_month'  => (int) $clicksThisMonth,
+                'total_links' => (int) $row->total_links,
+                'total_clicks' => (int) $row->total_clicks,
+                'links_this_month' => (int) $linksThisMonth,
+                'clicks_this_month' => (int) $clicksThisMonth,
             ],
         ]);
     }

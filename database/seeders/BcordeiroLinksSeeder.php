@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Seeds multiple links with thousands of realistic clicks for the user bcordeiro.001@gmail.com.
@@ -33,7 +32,7 @@ class BcordeiroLinksSeeder extends Seeder
         ['name' => 'Brazil',         'iso' => 'BR', 'currency' => 'BRL', 'timezone' => 'America/Sao_Paulo',   'continent' => 'SA'],
         ['name' => 'United States',  'iso' => 'US', 'currency' => 'USD', 'timezone' => 'America/New_York',    'continent' => 'NA'],
         ['name' => 'Mexico',         'iso' => 'MX', 'currency' => 'MXN', 'timezone' => 'America/Mexico_City', 'continent' => 'NA'],
-        ['name' => 'Argentina',      'iso' => 'AR', 'currency' => 'ARS', 'timezone' => 'America/Buenos_Aires','continent' => 'SA'],
+        ['name' => 'Argentina',      'iso' => 'AR', 'currency' => 'ARS', 'timezone' => 'America/Buenos_Aires', 'continent' => 'SA'],
         ['name' => 'Colombia',       'iso' => 'CO', 'currency' => 'COP', 'timezone' => 'America/Bogota',      'continent' => 'SA'],
         ['name' => 'India',          'iso' => 'IN', 'currency' => 'INR', 'timezone' => 'Asia/Kolkata',        'continent' => 'AS'],
         ['name' => 'United Kingdom', 'iso' => 'GB', 'currency' => 'GBP', 'timezone' => 'Europe/London',       'continent' => 'EU'],
@@ -52,16 +51,16 @@ class BcordeiroLinksSeeder extends Seeder
         ],
         'US' => [
             ['city' => 'New York',         'state' => 'NY', 'state_name' => 'New York',         'lat' => 40.7128,  'lng' => -74.0060, 'postal' => '10001'],
-            ['city' => 'Los Angeles',      'state' => 'CA', 'state_name' => 'California',       'lat' => 34.0522,  'lng' => -118.2437,'postal' => '90001'],
+            ['city' => 'Los Angeles',      'state' => 'CA', 'state_name' => 'California',       'lat' => 34.0522,  'lng' => -118.2437, 'postal' => '90001'],
             ['city' => 'Miami',            'state' => 'FL', 'state_name' => 'Florida',          'lat' => 25.7617,  'lng' => -80.1918, 'postal' => '33101'],
         ],
         'MX' => [['city' => 'Mexico City', 'state' => 'MC', 'state_name' => 'Mexico City',     'lat' => 19.4326,  'lng' => -99.1332, 'postal' => '06600']],
-        'AR' => [['city' => 'Buenos Aires','state' => 'BA', 'state_name' => 'Buenos Aires',    'lat' => -34.6037, 'lng' => -58.3816, 'postal' => 'C1002']],
+        'AR' => [['city' => 'Buenos Aires', 'state' => 'BA', 'state_name' => 'Buenos Aires',    'lat' => -34.6037, 'lng' => -58.3816, 'postal' => 'C1002']],
         'CO' => [['city' => 'Bogotá',      'state' => 'DC', 'state_name' => 'Cundinamarca',    'lat' => 4.7110,   'lng' => -74.0721, 'postal' => '110111']],
         'IN' => [['city' => 'Mumbai',      'state' => 'MH', 'state_name' => 'Maharashtra',     'lat' => 19.0760,  'lng' => 72.8777,  'postal' => '400001']],
-        'GB' => [['city' => 'London',      'state' => 'ENG','state_name' => 'England',         'lat' => 51.5074,  'lng' => -0.1278,  'postal' => 'SW1A 1AA']],
+        'GB' => [['city' => 'London',      'state' => 'ENG', 'state_name' => 'England',         'lat' => 51.5074,  'lng' => -0.1278,  'postal' => 'SW1A 1AA']],
         'DE' => [['city' => 'Berlin',      'state' => 'BE', 'state_name' => 'Berlin',          'lat' => 52.5200,  'lng' => 13.4050,  'postal' => '10115']],
-        'PT' => [['city' => 'Lisbon',      'state' => 'LIS','state_name' => 'Lisboa',          'lat' => 38.7223,  'lng' => -9.1393,  'postal' => '1100-148']],
+        'PT' => [['city' => 'Lisbon',      'state' => 'LIS', 'state_name' => 'Lisboa',          'lat' => 38.7223,  'lng' => -9.1393,  'postal' => '1100-148']],
         'ES' => [['city' => 'Madrid',      'state' => 'MD', 'state_name' => 'Comunidad de Madrid', 'lat' => 40.4168, 'lng' => -3.7038, 'postal' => '28001']],
     ];
 
@@ -98,75 +97,75 @@ class BcordeiroLinksSeeder extends Seeder
      */
     private array $linkDefs = [
         [
-            'slug'         => 'yt-curso-dev',
-            'url'          => 'https://www.youtube.com/@brunofullstack',
-            'title'        => 'Canal YouTube — Bruno Dev',
-            'description'  => 'Conteúdo de programação, dicas de carreira e projetos ao vivo',
-            'min'          => 3200,
-            'max'          => 4800,
+            'slug' => 'yt-curso-dev',
+            'url' => 'https://www.youtube.com/@brunofullstack',
+            'title' => 'Canal YouTube — Bruno Dev',
+            'description' => 'Conteúdo de programação, dicas de carreira e projetos ao vivo',
+            'min' => 3200,
+            'max' => 4800,
             'utm_scenario' => 'social',
         ],
         [
-            'slug'         => 'lp-mentoria-2025',
-            'url'          => 'https://mentoria.brunodev.com.br/turma-2025',
-            'title'        => 'Mentoria Dev 2025 — Turma Aberta',
-            'description'  => 'Programa de mentoria individual para devs que querem acelerar a carreira',
-            'min'          => 2100,
-            'max'          => 3500,
+            'slug' => 'lp-mentoria-2025',
+            'url' => 'https://mentoria.brunodev.com.br/turma-2025',
+            'title' => 'Mentoria Dev 2025 — Turma Aberta',
+            'description' => 'Programa de mentoria individual para devs que querem acelerar a carreira',
+            'min' => 2100,
+            'max' => 3500,
             'utm_scenario' => 'email',
         ],
         [
-            'slug'         => 'gh-link-charts',
-            'url'          => 'https://github.com/bcordeiro/link-charts',
-            'title'        => 'Link Charts — GitHub',
-            'description'  => 'Repositório open source do encurtador de URLs com analytics avançado',
-            'min'          => 1400,
-            'max'          => 2200,
+            'slug' => 'gh-link-charts',
+            'url' => 'https://github.com/bcordeiro/link-charts',
+            'title' => 'Link Charts — GitHub',
+            'description' => 'Repositório open source do encurtador de URLs com analytics avançado',
+            'min' => 1400,
+            'max' => 2200,
             'utm_scenario' => 'referral',
         ],
         [
-            'slug'         => 'ig-perfil-bruno',
-            'url'          => 'https://www.instagram.com/brunodev.br',
-            'title'        => 'Instagram @brunodev.br',
-            'description'  => 'Bastidores do desenvolvimento e dicas rápidas de código',
-            'min'          => 4200,
-            'max'          => 5800,
+            'slug' => 'ig-perfil-bruno',
+            'url' => 'https://www.instagram.com/brunodev.br',
+            'title' => 'Instagram @brunodev.br',
+            'description' => 'Bastidores do desenvolvimento e dicas rápidas de código',
+            'min' => 4200,
+            'max' => 5800,
             'utm_scenario' => 'social',
         ],
         [
-            'slug'         => 'blog-nextjs15',
-            'url'          => 'https://brunodev.com.br/blog/nextjs-15-app-router-guia-completo',
-            'title'        => 'Next.js 15 App Router — Guia Completo',
-            'description'  => 'Tutorial passo a passo do App Router no Next.js 15 com TypeScript',
-            'min'          => 1800,
-            'max'          => 2900,
+            'slug' => 'blog-nextjs15',
+            'url' => 'https://brunodev.com.br/blog/nextjs-15-app-router-guia-completo',
+            'title' => 'Next.js 15 App Router — Guia Completo',
+            'description' => 'Tutorial passo a passo do App Router no Next.js 15 com TypeScript',
+            'min' => 1800,
+            'max' => 2900,
             'utm_scenario' => 'organic',
         ],
         [
-            'slug'         => 'li-perfil',
-            'url'          => 'https://www.linkedin.com/in/brunocordeiro-dev',
-            'title'        => 'LinkedIn — Bruno Cordeiro',
-            'description'  => 'Perfil profissional e conexões na área de tecnologia',
-            'min'          => 900,
-            'max'          => 1600,
+            'slug' => 'li-perfil',
+            'url' => 'https://www.linkedin.com/in/brunocordeiro-dev',
+            'title' => 'LinkedIn — Bruno Cordeiro',
+            'description' => 'Perfil profissional e conexões na área de tecnologia',
+            'min' => 900,
+            'max' => 1600,
             'utm_scenario' => 'referral',
         ],
         [
-            'slug'         => 'shop-livros-dev',
-            'url'          => 'https://amzn.to/livros-programacao-bruno',
-            'title'        => 'Lista de Livros Recomendados',
-            'description'  => 'Livros de programação que mudaram minha carreira (com affiliate)',
-            'min'          => 2600,
-            'max'          => 3800,
+            'slug' => 'shop-livros-dev',
+            'url' => 'https://amzn.to/livros-programacao-bruno',
+            'title' => 'Lista de Livros Recomendados',
+            'description' => 'Livros de programação que mudaram minha carreira (com affiliate)',
+            'min' => 2600,
+            'max' => 3800,
             'utm_scenario' => 'email',
         ],
         [
-            'slug'         => 'discord-comunidade',
-            'url'          => 'https://discord.gg/brunodev-comunidade',
-            'title'        => 'Discord — Comunidade Bruno Dev',
-            'description'  => 'Servidor Discord para devs em crescimento — tire dúvidas e networking',
-            'min'          => 3500,
-            'max'          => 4900,
+            'slug' => 'discord-comunidade',
+            'url' => 'https://discord.gg/brunodev-comunidade',
+            'title' => 'Discord — Comunidade Bruno Dev',
+            'description' => 'Servidor Discord para devs em crescimento — tire dúvidas e networking',
+            'min' => 3500,
+            'max' => 4900,
             'utm_scenario' => 'social',
         ],
     ];
@@ -200,13 +199,13 @@ class BcordeiroLinksSeeder extends Seeder
     /** Social platform weights (platform => % of mobile clicks). */
     private array $socialPlatformWeights = [
         'instagram' => 28,
-        'tiktok'    => 22,
-        'youtube'   => 12,
-        'facebook'  => 8,
-        'twitter'   => 5,
-        'whatsapp'  => 4,
-        'telegram'  => 3,
-        null        => 18, // no platform (direct / browser referral)
+        'tiktok' => 22,
+        'youtube' => 12,
+        'facebook' => 8,
+        'twitter' => 5,
+        'whatsapp' => 4,
+        'telegram' => 3,
+        null => 18, // no platform (direct / browser referral)
     ];
 
     /**
@@ -237,7 +236,6 @@ class BcordeiroLinksSeeder extends Seeder
      * Creates (or reuses) a link and injects clicks for it.
      *
      * @param  array{slug: string, url: string, title: string, description: string, min: int, max: int, utm_scenario: string|null}  $def
-     * @param  int  $userId
      */
     private function processLink(array $def, int $userId): void
     {
@@ -251,17 +249,17 @@ class BcordeiroLinksSeeder extends Seeder
             $this->command->warn("  Link slug '{$def['slug']}' already exists (ID {$linkId}). Skipping creation, adding clicks…");
         } else {
             $linkId = DB::table('links')->insertGetId([
-                'slug'         => $def['slug'],
+                'slug' => $def['slug'],
                 'original_url' => $def['url'],
-                'title'        => $def['title'],
-                'description'  => $def['description'],
-                'user_id'      => $userId,
-                'is_active'    => true,
-                'is_demo'      => false,
-                'clicks'       => 0,
-                'health_status'=> 'unknown',
-                'created_at'   => $now,
-                'updated_at'   => $now,
+                'title' => $def['title'],
+                'description' => $def['description'],
+                'user_id' => $userId,
+                'is_active' => true,
+                'is_demo' => false,
+                'clicks' => 0,
+                'health_status' => 'unknown',
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
 
             $this->command->info("  Created link '{$def['slug']}' (ID {$linkId}).");
@@ -282,7 +280,6 @@ class BcordeiroLinksSeeder extends Seeder
     /**
      * Generates and batch-inserts realistic clicks for a link.
      *
-     * @param  int  $linkId
      * @param  int  $count  Target total number of clicks to insert
      * @param  string|null  $utmScenario  Key in $this->utmScenarios or null
      */
@@ -320,12 +317,12 @@ class BcordeiroLinksSeeder extends Seeder
             $device = match (true) {
                 $deviceRoll <= 62 => 'mobile',
                 $deviceRoll <= 94 => 'desktop',
-                default           => 'tablet',
+                default => 'tablet',
             };
 
             $ua = match ($device) {
                 'mobile', 'tablet' => $this->mobileUAs[array_rand($this->mobileUAs)],
-                default            => $this->desktopUAs[array_rand($this->desktopUAs)],
+                default => $this->desktopUAs[array_rand($this->desktopUAs)],
             };
 
             $socialPlatform = null;
@@ -353,10 +350,10 @@ class BcordeiroLinksSeeder extends Seeder
 
             // viral_rank based on recency (mirrors AnalyticsDemoSeeder logic)
             $viralRank = match (true) {
-                $daysAgo <= 7  => (mt_rand(1, 100) <= 30 ? 'viral'    : 'trending'),
+                $daysAgo <= 7 => (mt_rand(1, 100) <= 30 ? 'viral' : 'trending'),
                 $daysAgo <= 20 => (mt_rand(1, 100) <= 40 ? 'trending' : 'warming'),
-                $daysAgo <= 50 => (mt_rand(1, 100) <= 50 ? 'warming'  : 'cold'),
-                default        => 'cold',
+                $daysAgo <= 50 => (mt_rand(1, 100) <= 50 ? 'warming' : 'cold'),
+                default => 'cold',
             };
 
             // Geo
@@ -374,26 +371,26 @@ class BcordeiroLinksSeeder extends Seeder
             $enriched = $this->enrichClickData($ua, $device, null, $date, $iso);
 
             $click = array_merge($enriched, [
-                'link_id'            => $linkId,
-                'ip'                 => $ip,
-                'user_agent'         => $ua,
-                'referer'            => null,
-                'country'            => $country['name'],
-                'iso_code'           => $iso,
-                'city'               => $cityData['city'],
-                'state'              => $cityData['state'],
-                'state_name'         => $cityData['state_name'],
-                'postal_code'        => $cityData['postal'],
-                'latitude'           => $cityData['lat'],
-                'longitude'          => $cityData['lng'],
-                'timezone'           => $country['timezone'],
-                'continent'          => $country['continent'],
-                'currency'           => $country['currency'],
-                'social_platform'    => $socialPlatform,
+                'link_id' => $linkId,
+                'ip' => $ip,
+                'user_agent' => $ua,
+                'referer' => null,
+                'country' => $country['name'],
+                'iso_code' => $iso,
+                'city' => $cityData['city'],
+                'state' => $cityData['state'],
+                'state_name' => $cityData['state_name'],
+                'postal_code' => $cityData['postal'],
+                'latitude' => $cityData['lat'],
+                'longitude' => $cityData['lng'],
+                'timezone' => $country['timezone'],
+                'continent' => $country['continent'],
+                'currency' => $country['currency'],
+                'social_platform' => $socialPlatform,
                 'navigation_context' => $navContext,
-                'viral_rank'         => $viralRank,
-                'created_at'         => $date->toDateTimeString(),
-                'updated_at'         => $date->toDateTimeString(),
+                'viral_rank' => $viralRank,
+                'created_at' => $date->toDateTimeString(),
+                'updated_at' => $date->toDateTimeString(),
             ]);
 
             $clicks[] = $click;
@@ -413,20 +410,20 @@ class BcordeiroLinksSeeder extends Seeder
                 ->pluck('id')
                 ->toArray();
 
-            $pickedIds  = array_slice($insertedIds, 0, min($utmCount, count($insertedIds)));
+            $pickedIds = array_slice($insertedIds, 0, min($utmCount, count($insertedIds)));
             $nowStr = Carbon::now()->toDateTimeString();
 
             foreach ($pickedIds as $idx => $clickId) {
                 $entry = $utmPool[$idx % count($utmPool)];
                 $utmRows[] = [
-                    'click_id'     => $clickId,
-                    'utm_source'   => $entry['source'],
-                    'utm_medium'   => $entry['medium'],
+                    'click_id' => $clickId,
+                    'utm_source' => $entry['source'],
+                    'utm_medium' => $entry['medium'],
                     'utm_campaign' => $entry['campaign'] ?? null,
-                    'utm_term'     => null,
-                    'utm_content'  => null,
-                    'created_at'   => $nowStr,
-                    'updated_at'   => $nowStr,
+                    'utm_term' => null,
+                    'utm_content' => null,
+                    'created_at' => $nowStr,
+                    'updated_at' => $nowStr,
                 ];
             }
 
@@ -460,19 +457,17 @@ class BcordeiroLinksSeeder extends Seeder
 
     /**
      * Prints a per-link summary table to the console after all seeding is done.
-     *
-     * @param  int  $userId
      */
     private function printGlobalSummary(int $userId): void
     {
         $links = DB::table('links')->where('user_id', $userId)->orderBy('id')->get();
 
         foreach ($links as $link) {
-            $total   = DB::table('clicks')->where('link_id', $link->id)->count();
-            $mobile  = DB::table('clicks')->where('link_id', $link->id)->where('is_mobile', 1)->count();
-            $social  = DB::table('clicks')->where('link_id', $link->id)->whereNotNull('social_platform')->count();
-            $iab     = DB::table('clicks')->where('link_id', $link->id)->where('navigation_context', 'in_app_webview')->count();
-            $viral   = DB::table('clicks')->where('link_id', $link->id)->whereIn('viral_rank', ['viral', 'trending'])->count();
+            $total = DB::table('clicks')->where('link_id', $link->id)->count();
+            $mobile = DB::table('clicks')->where('link_id', $link->id)->where('is_mobile', 1)->count();
+            $social = DB::table('clicks')->where('link_id', $link->id)->whereNotNull('social_platform')->count();
+            $iab = DB::table('clicks')->where('link_id', $link->id)->where('navigation_context', 'in_app_webview')->count();
+            $viral = DB::table('clicks')->where('link_id', $link->id)->whereIn('viral_rank', ['viral', 'trending'])->count();
             $withUtm = DB::table('link_utms')
                 ->join('clicks', 'link_utms.click_id', '=', 'clicks.id')
                 ->where('clicks.link_id', $link->id)

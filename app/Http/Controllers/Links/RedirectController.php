@@ -116,11 +116,13 @@ class RedirectController extends Controller
 
             if ($subdomainCtx === false) {
                 AppLogger::redirectBlocked($slug, 'subdomain_not_found');
+
                 return $this->renderErrorPage('Link não encontrado ou inativo');
             }
 
             if ($subdomainCtx !== null && $link->user_id !== $subdomainCtx->user_id) {
                 AppLogger::redirectBlocked($slug, 'subdomain_ownership_mismatch');
+
                 return $this->renderErrorPage('Link não encontrado ou inativo');
             }
 

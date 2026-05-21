@@ -29,12 +29,12 @@ class ResolveSubdomainContext
         $appDomain = config('app.domain', 'localhost');
         $host = $request->getHost();
 
-        if ($host === $appDomain || ! str_ends_with($host, '.' . $appDomain)) {
+        if ($host === $appDomain || ! str_ends_with($host, '.'.$appDomain)) {
             // Root domain or unrelated host — no subdomain context
             return $next($request);
         }
 
-        $label = substr($host, 0, strlen($host) - strlen('.' . $appDomain));
+        $label = substr($host, 0, strlen($host) - strlen('.'.$appDomain));
 
         // Reserved labels (e.g. 'redirect', 'api', 'www') are system subdomains,
         // not user subdomains — treat them the same as the root domain.

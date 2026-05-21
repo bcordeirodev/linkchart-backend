@@ -24,7 +24,7 @@ class AnalyticsDemoSeeder extends Seeder
         ['name' => 'Brazil',         'iso' => 'BR', 'currency' => 'BRL', 'timezone' => 'America/Sao_Paulo',   'continent' => 'SA'],
         ['name' => 'United States',  'iso' => 'US', 'currency' => 'USD', 'timezone' => 'America/New_York',    'continent' => 'NA'],
         ['name' => 'Mexico',         'iso' => 'MX', 'currency' => 'MXN', 'timezone' => 'America/Mexico_City', 'continent' => 'NA'],
-        ['name' => 'Argentina',      'iso' => 'AR', 'currency' => 'ARS', 'timezone' => 'America/Buenos_Aires','continent' => 'SA'],
+        ['name' => 'Argentina',      'iso' => 'AR', 'currency' => 'ARS', 'timezone' => 'America/Buenos_Aires', 'continent' => 'SA'],
         ['name' => 'Colombia',       'iso' => 'CO', 'currency' => 'COP', 'timezone' => 'America/Bogota',      'continent' => 'SA'],
         ['name' => 'India',          'iso' => 'IN', 'currency' => 'INR', 'timezone' => 'Asia/Kolkata',        'continent' => 'AS'],
         ['name' => 'United Kingdom', 'iso' => 'GB', 'currency' => 'GBP', 'timezone' => 'Europe/London',       'continent' => 'EU'],
@@ -35,11 +35,11 @@ class AnalyticsDemoSeeder extends Seeder
     private array $cityMap = [
         'BR' => ['city' => 'São Paulo',  'state' => 'SP', 'state_name' => 'São Paulo',       'lat' => -23.5505, 'lng' => -46.6333, 'postal' => '01310-100'],
         'US' => ['city' => 'Miami',      'state' => 'FL', 'state_name' => 'Florida',         'lat' => 25.7617,  'lng' => -80.1918, 'postal' => '33101'],
-        'MX' => ['city' => 'Mexico City','state' => 'MC', 'state_name' => 'Mexico City',     'lat' => 19.4326,  'lng' => -99.1332, 'postal' => '06600'],
-        'AR' => ['city' => 'Buenos Aires','state' => 'BA', 'state_name' => 'Buenos Aires',   'lat' => -34.6037, 'lng' => -58.3816, 'postal' => 'C1002'],
+        'MX' => ['city' => 'Mexico City', 'state' => 'MC', 'state_name' => 'Mexico City',     'lat' => 19.4326,  'lng' => -99.1332, 'postal' => '06600'],
+        'AR' => ['city' => 'Buenos Aires', 'state' => 'BA', 'state_name' => 'Buenos Aires',   'lat' => -34.6037, 'lng' => -58.3816, 'postal' => 'C1002'],
         'CO' => ['city' => 'Bogotá',     'state' => 'DC', 'state_name' => 'Cundinamarca',    'lat' => 4.7110,   'lng' => -74.0721, 'postal' => '110111'],
         'IN' => ['city' => 'Mumbai',     'state' => 'MH', 'state_name' => 'Maharashtra',     'lat' => 19.0760,  'lng' => 72.8777,  'postal' => '400001'],
-        'GB' => ['city' => 'London',     'state' => 'ENG','state_name' => 'England',         'lat' => 51.5074,  'lng' => -0.1278,  'postal' => 'SW1A 1AA'],
+        'GB' => ['city' => 'London',     'state' => 'ENG', 'state_name' => 'England',         'lat' => 51.5074,  'lng' => -0.1278,  'postal' => 'SW1A 1AA'],
         'DE' => ['city' => 'Berlin',     'state' => 'BE', 'state_name' => 'Berlin',          'lat' => 52.5200,  'lng' => 13.4050,  'postal' => '10115'],
     ];
 
@@ -93,8 +93,6 @@ class AnalyticsDemoSeeder extends Seeder
 
     /**
      * Seeds all demo data for a single link.
-     *
-     * @param  object  $link
      */
     private function seedLink(object $link): void
     {
@@ -113,10 +111,10 @@ class AnalyticsDemoSeeder extends Seeder
 
         foreach ($viralRankDays as $daysAgo => $rank) {
             $dayClicks = match ($rank) {
-                'viral'    => mt_rand(15, 20),
+                'viral' => mt_rand(15, 20),
                 'trending' => mt_rand(8, 14),
-                'warming'  => mt_rand(3, 7),
-                default    => mt_rand(1, 3), // cold
+                'warming' => mt_rand(3, 7),
+                default => mt_rand(1, 3), // cold
             };
 
             for ($i = 0; $i < $dayClicks; $i++) {
@@ -137,12 +135,12 @@ class AnalyticsDemoSeeder extends Seeder
         // 60 clicks with social_platform set, weighted by platform popularity.
         $platformWeights = [
             'instagram' => 24,
-            'tiktok'    => 21,
-            'youtube'   => 9,
-            'facebook'  => 3,
-            'twitter'   => 1,
-            'whatsapp'  => 1,
-            'telegram'  => 1,
+            'tiktok' => 21,
+            'youtube' => 9,
+            'facebook' => 3,
+            'twitter' => 1,
+            'whatsapp' => 1,
+            'telegram' => 1,
         ];
 
         foreach ($platformWeights as $platform => $count) {
@@ -160,7 +158,7 @@ class AnalyticsDemoSeeder extends Seeder
         // 60 clicks with navigation_context=in_app_webview and is_mobile=1.
         // ~55% iOS, ~45% Android.
         $iabTotal = 60;
-        $iosCount  = (int) round($iabTotal * 0.55);
+        $iosCount = (int) round($iabTotal * 0.55);
         $droidCount = $iabTotal - $iosCount;
 
         for ($i = 0; $i < $iosCount; $i++) {
@@ -203,7 +201,7 @@ class AnalyticsDemoSeeder extends Seeder
         $utmSources = [
             ['source' => 'instagram',   'medium' => 'social',  'campaign' => 'bio_link'],
             ['source' => 'tiktok',      'medium' => 'social',  'campaign' => 'creator_bio'],
-            ['source' => 'linktree',    'medium' => 'referral','campaign' => null],
+            ['source' => 'linktree',    'medium' => 'referral', 'campaign' => null],
             ['source' => 'newsletter',  'medium' => 'email',   'campaign' => 'weekly_digest'],
             ['source' => 'google',      'medium' => 'cpc',     'campaign' => 'brand_search'],
         ];
@@ -214,14 +212,14 @@ class AnalyticsDemoSeeder extends Seeder
         foreach ($utmClickIds as $idx => $clickId) {
             $entry = $utmSources[$idx % count($utmSources)];
             $utmRows[] = [
-                'click_id'     => $clickId,
-                'utm_source'   => $entry['source'],
-                'utm_medium'   => $entry['medium'],
+                'click_id' => $clickId,
+                'utm_source' => $entry['source'],
+                'utm_medium' => $entry['medium'],
                 'utm_campaign' => $entry['campaign'],
-                'utm_term'     => null,
-                'utm_content'  => null,
-                'created_at'   => $now,
-                'updated_at'   => $now,
+                'utm_term' => null,
+                'utm_content' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
             ];
         }
 
@@ -252,10 +250,10 @@ class AnalyticsDemoSeeder extends Seeder
         $schedule = [];
         for ($d = 0; $d <= 29; $d++) {
             $schedule[$d] = match (true) {
-                $d <= 9  => 'viral',
+                $d <= 9 => 'viral',
                 $d <= 16 => 'trending',
                 $d <= 23 => 'warming',
-                default  => 'cold',
+                default => 'cold',
             };
         }
 
@@ -265,7 +263,6 @@ class AnalyticsDemoSeeder extends Seeder
     /**
      * Builds a single click record array ready for DB::table()->insert().
      *
-     * @param  int  $linkId
      * @param  string  $ua  User-Agent string
      * @param  Carbon  $date  Timestamp for the click
      * @param  array<string, string>  $country  Country data from $this->countries
@@ -289,15 +286,15 @@ class AnalyticsDemoSeeder extends Seeder
         ?string $osOverride = null,
         ?string $osVersionOverride = null,
     ): array {
-        $isMobile  = $device === 'mobile';
-        $isTablet  = $device === 'tablet';
+        $isMobile = $device === 'mobile';
+        $isTablet = $device === 'tablet';
         $isDesktop = $device === 'desktop';
 
         $iso = $country['iso'];
         $cityData = $this->cityMap[$iso] ?? $this->cityMap['BR'];
 
         [$browser, $browserVersion, $osDetected, $osVersionDetected] = $this->parseBrowserOs($ua, $device);
-        $os        = $osOverride        ?? $osDetected;
+        $os = $osOverride ?? $osDetected;
         $osVersion = $osVersionOverride ?? $osVersionDetected;
 
         $engine = $this->deriveEngine($browser);
@@ -305,7 +302,7 @@ class AnalyticsDemoSeeder extends Seeder
         $connType = $isMobile ? (mt_rand(1, 10) <= 6 ? 'cellular' : 'wifi') : 'broadband';
 
         $hour = (int) $date->format('H');
-        $dow  = (int) $date->format('N'); // 1=Mon … 7=Sun
+        $dow = (int) $date->format('N'); // 1=Mon … 7=Sun
         $isWeekend = $dow >= 6;
 
         $ipRanges = [
@@ -317,51 +314,51 @@ class AnalyticsDemoSeeder extends Seeder
         $ip = $ipPrefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
 
         return [
-            'link_id'           => $linkId,
-            'ip'                => $ip,
-            'user_agent'        => $ua,
-            'referer'           => null,
-            'country'           => $country['name'],
-            'iso_code'          => $iso,
-            'city'              => $cityData['city'],
-            'state'             => $cityData['state'],
-            'state_name'        => $cityData['state_name'],
-            'postal_code'       => $cityData['postal'],
-            'latitude'          => $cityData['lat'],
-            'longitude'         => $cityData['lng'],
-            'timezone'          => $country['timezone'],
-            'continent'         => $country['continent'],
-            'currency'          => $country['currency'],
-            'device'            => $device,
-            'browser'           => $browser,
-            'browser_version'   => $browserVersion,
-            'os'                => $os,
-            'os_version'        => $osVersion,
-            'is_mobile'         => $isMobile,
-            'is_tablet'         => $isTablet,
-            'is_desktop'        => $isDesktop,
-            'is_bot'            => false,
-            'navigation_context'=> $navContext,
-            'social_platform'   => $socialPlatform,
-            'viral_rank'        => $viralRank,
-            'rendering_engine'  => $engine,
-            'primary_language'  => $lang,
-            'language_region'   => $langRegion,
-            'connection_type'   => $connType,
-            'quality_tier'      => 'organic',
-            'quality_score'     => mt_rand(70, 100),
+            'link_id' => $linkId,
+            'ip' => $ip,
+            'user_agent' => $ua,
+            'referer' => null,
+            'country' => $country['name'],
+            'iso_code' => $iso,
+            'city' => $cityData['city'],
+            'state' => $cityData['state'],
+            'state_name' => $cityData['state_name'],
+            'postal_code' => $cityData['postal'],
+            'latitude' => $cityData['lat'],
+            'longitude' => $cityData['lng'],
+            'timezone' => $country['timezone'],
+            'continent' => $country['continent'],
+            'currency' => $country['currency'],
+            'device' => $device,
+            'browser' => $browser,
+            'browser_version' => $browserVersion,
+            'os' => $os,
+            'os_version' => $osVersion,
+            'is_mobile' => $isMobile,
+            'is_tablet' => $isTablet,
+            'is_desktop' => $isDesktop,
+            'is_bot' => false,
+            'navigation_context' => $navContext,
+            'social_platform' => $socialPlatform,
+            'viral_rank' => $viralRank,
+            'rendering_engine' => $engine,
+            'primary_language' => $lang,
+            'language_region' => $langRegion,
+            'connection_type' => $connType,
+            'quality_tier' => 'organic',
+            'quality_score' => mt_rand(70, 100),
             'fingerprint_score' => 0,
             'is_return_visitor' => false,
-            'session_clicks'    => 1,
-            'hour_of_day'       => $hour,
-            'day_of_week'       => $dow,
-            'day_of_month'      => (int) $date->format('j'),
-            'month'             => (int) $date->format('n'),
-            'year'              => (int) $date->format('Y'),
-            'is_weekend'        => $isWeekend,
+            'session_clicks' => 1,
+            'hour_of_day' => $hour,
+            'day_of_week' => $dow,
+            'day_of_month' => (int) $date->format('j'),
+            'month' => (int) $date->format('n'),
+            'year' => (int) $date->format('Y'),
+            'is_weekend' => $isWeekend,
             'is_business_hours' => ! $isWeekend && $hour >= 9 && $hour < 18,
-            'created_at'        => $date->toDateTimeString(),
-            'updated_at'        => $date->toDateTimeString(),
+            'created_at' => $date->toDateTimeString(),
+            'updated_at' => $date->toDateTimeString(),
         ];
     }
 
@@ -423,9 +420,9 @@ class AnalyticsDemoSeeder extends Seeder
     {
         return match ($browser) {
             'Chrome', 'Edge', 'Opera' => 'blink',
-            'Firefox'                 => 'gecko',
-            'Safari'                  => 'webkit',
-            default                   => 'unknown',
+            'Firefox' => 'gecko',
+            'Safari' => 'webkit',
+            default => 'unknown',
         };
     }
 
