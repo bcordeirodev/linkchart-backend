@@ -101,8 +101,9 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkSummaryAnalytics'])->where('id', '[0-9]+'); // moved to AnalyticsController
     });
 
-    // === META-DADOS DE LINKS (sparkline, trend, preview, health) ===
+    // === META-DADOS DE LINKS (sparkline, trend, preview, health, url-meta) ===
     Route::prefix('links')->controller(\App\Http\Controllers\Links\LinkMetaController::class)->group(function () {
+        Route::get('/url-meta', 'urlMeta')->middleware('throttle:url-meta');
         Route::post('/batch-meta', 'batchMeta');
         Route::get('/{id}/sparkline', 'sparkline')->where('id', '[0-9]+');
         Route::get('/{id}/trend', 'trend')->where('id', '[0-9]+');
