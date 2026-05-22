@@ -300,7 +300,26 @@ class LinkController extends BaseController
                 : 'created_at';
             $sortDir = strtolower((string) $request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
+            // Date range filter (sent as "yyyy-MM-dd HH:mm:ss" strings by the frontend)
+            $dateFrom = $request->input('date_from');
+            $dateTo = $request->input('date_to');
+
+            // Bot exclusion filter — defaults to false (show all) for the clicks tab
+            $excludeBots = filter_var($request->input('exclude_bots', false), FILTER_VALIDATE_BOOLEAN);
+
             $query = \App\Models\Click::where('link_id', $link->id)->with('utm');
+
+            if ($dateFrom) {
+                $query->where('created_at', '>=', $dateFrom);
+            }
+
+            if ($dateTo) {
+                $query->where('created_at', '<=', $dateTo);
+            }
+
+            if ($excludeBots) {
+                $query->where('is_bot', false);
+            }
 
             if ($search !== '') {
                 $needle = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
@@ -352,6 +371,7 @@ class LinkController extends BaseController
                     'referer' => $referer,
                     'referer_host' => $refererHost ?: ($referer && $referer !== '-' ? null : 'Direct'),
                     'click_source' => $click->click_source,
+                    'navigation_context' => $click->navigation_context,
                     'is_return_visitor' => (bool) $click->is_return_visitor,
                     'response_time' => $click->response_time,
                     'utm' => $click->utm ? [
@@ -376,6 +396,9 @@ class LinkController extends BaseController
                     'sort_by' => $sortBy,
                     'sort_dir' => $sortDir,
                     'search' => $search,
+                    'date_from' => $dateFrom,
+                    'date_to' => $dateTo,
+                    'exclude_bots' => $excludeBots,
                 ],
             ]);
         } catch (\Exception $e) {
