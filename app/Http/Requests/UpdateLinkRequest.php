@@ -32,14 +32,14 @@ class UpdateLinkRequest extends FormRequest
             'original_url' => [
                 'sometimes',
                 'url',
-                'max:2048',
+                'max:4096',
                 'regex:/^https?:\/\//',
             ],
             'title' => 'sometimes|string|max:100',
             'slug' => [
                 'sometimes',
                 'string',
-                'max:50',
+                'max:100',
                 'regex:/^[a-zA-Z0-9\-_]+$/',
             ],
             'description' => 'sometimes|string|max:500',
@@ -87,7 +87,7 @@ class UpdateLinkRequest extends FormRequest
     {
         return [
             'original_url.url' => 'A URL deve ser válida.',
-            'original_url.max' => 'A URL não pode ter mais de 2048 caracteres.',
+            'original_url.max' => 'A URL não pode ter mais de 4096 caracteres.',
             'original_url.regex' => 'A URL deve começar com http:// ou https://.',
 
             'expires_at.date' => 'A data de expiração deve ser uma data válida.',
