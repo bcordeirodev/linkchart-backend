@@ -112,11 +112,12 @@ interface LinkAnalyticsOrchestratorInterface
      * See that interface for the full return shape.
      *
      * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed> Audience analytics payload.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkAudienceAnalytics(int $linkId): array;
+    public function getLinkAudienceAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array;
 
     /**
      * Return business insights (automated insights + summary + supporting analytics) for the given link.

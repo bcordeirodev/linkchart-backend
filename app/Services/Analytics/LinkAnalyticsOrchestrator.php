@@ -137,11 +137,12 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      * Delegates to AudienceAnalyticsService::getLinkAudienceAnalytics.
      *
      * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @return array<string, mixed>
      */
-    public function getLinkAudienceAnalytics(int $linkId): array
+    public function getLinkAudienceAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->audience->getLinkAudienceAnalytics($linkId);
+        return $this->audience->getLinkAudienceAnalytics($linkId, $filters);
     }
 
     /**
