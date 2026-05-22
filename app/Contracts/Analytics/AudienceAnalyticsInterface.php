@@ -17,12 +17,15 @@ namespace App\Contracts\Analytics;
  */
 interface AudienceAnalyticsInterface
 {
+    // NOTE: AnalyticsFilters is imported by concrete implementations; the interface
+    // uses the fully-qualified class name in the signature below to avoid requiring
+    // an import inside the interface file.
     /**
      * Return a full audience analytics payload for the given link.
      *
      * Throws `\Illuminate\Database\Eloquent\ModelNotFoundException` if `$linkId`
      * does not exist. Returns an array with all keys set to empty values when the
-     * link exists but has no recorded clicks yet.
+     * link exists but has no recorded clicks that match the supplied filters.
      *
      * Return shape (keys always present):
      * ```
@@ -46,9 +49,10 @@ interface AudienceAnalyticsInterface
      * ```
      *
      * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?\App\DTOs\Analytics\AnalyticsFilters  $filters  Date-range and bot-exclusion filters. Null = no filter applied.
      * @return array<string, mixed> Audience analytics payload as described above.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
-    public function getLinkAudienceAnalytics(int $linkId): array;
+    public function getLinkAudienceAnalytics(int $linkId, ?\App\DTOs\Analytics\AnalyticsFilters $filters = null): array;
 }

@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use App\Services\Analytics\Support\UserAgentParser;
@@ -18,6 +19,10 @@ use Illuminate\Support\Facades\DB;
  * return partial or empty results for clicks recorded before the corresponding
  * Phase 1/2/3 schema migrations.
  *
+ * All queries respect the supplied `AnalyticsFilters` (date range + bot exclusion).
+ * The total denominator used for percentage calculations is always derived from the
+ * same filtered dataset so that percentages stay internally consistent.
+ *
  * Side effects: read-only queries on clicks. No cache, no queue, no log calls.
  *
  * Language distribution uses two strategies:
@@ -31,21 +36,24 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
     public function __construct(private readonly UserAgentParser $uaParser) {}
 
     /**
-     * Returns a comprehensive audience analytics payload for the given link.
+     * Returns a comprehensive audience analytics payload for the given link,
+     * filtered by the supplied `AnalyticsFilters`.
      *
-     * Returns empty arrays for every breakdown when no clicks exist (link must exist
-     * or ModelNotFoundException is thrown by Link::findOrFail).
+     * Returns empty arrays for every breakdown when no clicks match the filters
+     * (link must exist or ModelNotFoundException is thrown via Link::findOrFail).
      *
      * @param  int  $linkId  Link primary key.
-     * @return array<string, mixed> Keyed by breakdown name (device_breakdown, browser_breakdown, etc.).
+     * @param  ?AnalyticsFilters  $filters  Date-range and bot-exclusion constraints. Null = no filter.
+     * @return array<string, mixed> Keyed by breakdown name.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
-    public function getLinkAudienceAnalytics(int $linkId): array
+    public function getLinkAudienceAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
         Link::findOrFail($linkId);
+        $filters ??= new AnalyticsFilters;
 
-        if (! Click::where('link_id', $linkId)->exists()) {
+        if (! $this->baseQuery($linkId, $filters)->exists()) {
             return [
                 'device_breakdown' => [],
                 'browser_breakdown' => [],
@@ -67,32 +75,56 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
         }
 
         return [
-            'device_breakdown' => $this->getDeviceBreakdown($linkId),
-            'browser_breakdown' => $this->getBrowserBreakdown($linkId),
-            'os_breakdown' => $this->getOSBreakdown($linkId),
-            'browsers' => $this->getBrowserDistribution($linkId),
-            'operating_systems' => $this->getOSDistribution($linkId),
-            'device_performance' => $this->getDevicePerformance($linkId),
-            'languages' => $this->getLanguageDistribution($linkId),
-            'language_breakdown' => $this->getLanguageBreakdown($linkId),
-            'platform_breakdown' => $this->getPlatformBreakdown($linkId),
-            'data_saver' => $this->getDataSaverStats($linkId),
-            'connection_type_breakdown' => $this->getConnectionTypeBreakdown($linkId),
-            'rendering_engine' => $this->getRenderingEngineBreakdown($linkId),
-            'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId),
-            'social_platform_breakdown' => $this->getSocialPlatformBreakdown($linkId),
-            'return_visitor_stats' => $this->getReturnVisitorStats($linkId),
-            'quality_breakdown' => $this->getQualityBreakdown($linkId),
+            'device_breakdown' => $this->getDeviceBreakdown($linkId, $filters),
+            'browser_breakdown' => $this->getBrowserBreakdown($linkId, $filters),
+            'os_breakdown' => $this->getOSBreakdown($linkId, $filters),
+            'browsers' => $this->getBrowserDistribution($linkId, $filters),
+            'operating_systems' => $this->getOSDistribution($linkId, $filters),
+            'device_performance' => $this->getDevicePerformance($linkId, $filters),
+            'languages' => $this->getLanguageDistribution($linkId, $filters),
+            'language_breakdown' => $this->getLanguageBreakdown($linkId, $filters),
+            'platform_breakdown' => $this->getPlatformBreakdown($linkId, $filters),
+            'data_saver' => $this->getDataSaverStats($linkId, $filters),
+            'connection_type_breakdown' => $this->getConnectionTypeBreakdown($linkId, $filters),
+            'rendering_engine' => $this->getRenderingEngineBreakdown($linkId, $filters),
+            'navigation_context_breakdown' => $this->getNavigationContextBreakdown($linkId, $filters),
+            'social_platform_breakdown' => $this->getSocialPlatformBreakdown($linkId, $filters),
+            'return_visitor_stats' => $this->getReturnVisitorStats($linkId, $filters),
+            'quality_breakdown' => $this->getQualityBreakdown($linkId, $filters),
         ];
     }
 
-    private function getDeviceBreakdown(int $linkId): array
+    /**
+     * Returns a filtered Eloquent builder scoped to the given link's clicks.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
+     */
+    private function baseQuery(int $linkId, AnalyticsFilters $filters): \Illuminate\Database\Eloquent\Builder
     {
-        $total = Click::where('link_id', $linkId)->count();
+        return $filters->applyToQuery(Click::where('link_id', $linkId));
+    }
 
-        return DB::table('clicks')
+    /**
+     * Returns a filtered raw query builder scoped to the given link's clicks.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
+     */
+    private function rawQuery(int $linkId, AnalyticsFilters $filters): \Illuminate\Database\Query\Builder
+    {
+        return $filters->applyToQuery(DB::table('clicks')->where('link_id', $linkId));
+    }
+
+    /**
+     * @return array<int, array{device: string, clicks: int, percentage: float}>
+     */
+    private function getDeviceBreakdown(int $linkId, AnalyticsFilters $filters): array
+    {
+        $total = $this->baseQuery($linkId, $filters)->count();
+
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw('device, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('device')
             ->groupBy('device')
             ->orderBy('clicks', 'desc')
@@ -106,11 +138,13 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->toArray();
     }
 
-    private function getBrowserBreakdown(int $linkId): array
+    /**
+     * @return array<int, array{browser: string, clicks: int}>
+     */
+    private function getBrowserBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(browser, 'Unknown') as browser, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->groupBy('browser')
             ->orderBy('clicks', 'desc')
             ->limit(10)
@@ -122,11 +156,13 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->toArray();
     }
 
-    private function getOSBreakdown(int $linkId): array
+    /**
+     * @return array<int, array{os: string, clicks: int}>
+     */
+    private function getOSBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(os, 'Unknown') as os, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->groupBy('os')
             ->orderBy('clicks', 'desc')
             ->limit(10)
@@ -138,11 +174,13 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->toArray();
     }
 
-    private function getBrowserDistribution(int $linkId): array
+    /**
+     * @return array<int, array{browser: string, version: ?string, clicks: int, percentage: float}>
+     */
+    private function getBrowserDistribution(int $linkId, AnalyticsFilters $filters): array
     {
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw('browser, browser_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
-            ->where('link_id', $linkId)
             ->whereNotNull('browser')
             ->groupBy('browser', 'browser_version')
             ->orderBy('clicks', 'desc')
@@ -157,11 +195,13 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->toArray();
     }
 
-    private function getOSDistribution(int $linkId): array
+    /**
+     * @return array<int, array{os: string, version: ?string, clicks: int, percentage: float}>
+     */
+    private function getOSDistribution(int $linkId, AnalyticsFilters $filters): array
     {
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw('os, os_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
-            ->where('link_id', $linkId)
             ->whereNotNull('os')
             ->groupBy('os', 'os_version')
             ->orderBy('clicks', 'desc')
@@ -176,11 +216,13 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->toArray();
     }
 
-    private function getDevicePerformance(int $linkId): array
+    /**
+     * @return array<int, array{device: string, avg_response_time: float, min_response_time: float, max_response_time: float, total_clicks: int}>
+     */
+    private function getDevicePerformance(int $linkId, AnalyticsFilters $filters): array
     {
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw('device, AVG(response_time) as avg_response_time, MIN(response_time) as min_response_time, MAX(response_time) as max_response_time, COUNT(*) as total_clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('device')
             ->whereNotNull('response_time')
             ->groupBy('device')
@@ -196,11 +238,13 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->toArray();
     }
 
-    private function getLanguageDistribution(int $linkId): array
+    /**
+     * @return array<int, array{language: string, clicks: int, percentage: float}>
+     */
+    private function getLanguageDistribution(int $linkId, AnalyticsFilters $filters): array
     {
-        $clicks = DB::table('clicks')
+        $clicks = $this->rawQuery($linkId, $filters)
             ->select('accept_language')
-            ->where('link_id', $linkId)
             ->whereNotNull('accept_language')
             ->get();
 
@@ -238,13 +282,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array<int, array{language: string, region: ?string, clicks: int, percentage: float}>
      */
-    private function getLanguageBreakdown(int $linkId): array
+    private function getLanguageBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(primary_language, 'unknown') as language, language_region, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->whereNotNull('primary_language')
             ->groupBy('primary_language', 'language_region')
             ->orderBy('clicks', 'desc')
@@ -267,13 +310,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array<int, array{platform: string, clicks: int, percentage: float}>
      */
-    private function getPlatformBreakdown(int $linkId): array
+    private function getPlatformBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw('ch_platform as platform, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('ch_platform')
             ->groupBy('ch_platform')
             ->orderBy('clicks', 'desc')
@@ -295,13 +337,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array<int, array{type: string, clicks: int, percentage: float}>
      */
-    private function getConnectionTypeBreakdown(int $linkId): array
+    private function getConnectionTypeBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(connection_type, 'unknown') as type, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->groupBy('connection_type')
             ->orderBy('clicks', 'desc')
             ->get()
@@ -321,13 +362,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array<int, array{engine: string, clicks: int, percentage: float}>
      */
-    private function getRenderingEngineBreakdown(int $linkId): array
+    private function getRenderingEngineBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(rendering_engine, 'unknown') as engine, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->groupBy('rendering_engine')
             ->orderBy('clicks', 'desc')
             ->get()
@@ -348,13 +388,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array<int, array{context: string, clicks: int, percentage: float}>
      */
-    private function getNavigationContextBreakdown(int $linkId): array
+    private function getNavigationContextBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        $rows = DB::table('clicks')
+        $rows = $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(navigation_context, 'unknown') as context, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->groupBy('navigation_context')
             ->orderBy('clicks', 'desc')
             ->get();
@@ -385,13 +424,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array<int, array{platform: string, clicks: int, percentage: float}>
      */
-    private function getSocialPlatformBreakdown(int $linkId): array
+    private function getSocialPlatformBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        return DB::table('clicks')
+        return $this->rawQuery($linkId, $filters)
             ->selectRaw('social_platform as platform, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('social_platform')
             ->groupBy('social_platform')
             ->orderByDesc('clicks')
@@ -413,17 +451,16 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array{return_rate: float, new_rate: float, avg_session_clicks: float}
      */
-    private function getReturnVisitorStats(int $linkId): array
+    private function getReturnVisitorStats(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
         if ($total === 0) {
             return ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0];
         }
 
-        $returnCount = Click::where('link_id', $linkId)->where('is_return_visitor', true)->count();
-        $avgSession = DB::table('clicks')
-            ->where('link_id', $linkId)
+        $returnCount = $this->baseQuery($linkId, $filters)->where('is_return_visitor', true)->count();
+        $avgSession = $this->rawQuery($linkId, $filters)
             ->whereNotNull('session_clicks')
             ->avg('session_clicks');
 
@@ -442,13 +479,12 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array{tiers: array, bot_clicks: int, bot_percentage: float, avg_fingerprint_score: float}
      */
-    private function getQualityBreakdown(int $linkId): array
+    private function getQualityBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
 
-        $tiers = DB::table('clicks')
+        $tiers = $this->rawQuery($linkId, $filters)
             ->selectRaw('quality_tier, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('quality_tier')
             ->groupBy('quality_tier')
             ->orderBy('clicks', 'desc')
@@ -460,10 +496,8 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ])
             ->toArray();
 
-        $botClicks = Click::where('link_id', $linkId)->where('is_bot', true)->count();
-        $avgFingerprint = DB::table('clicks')
-            ->where('link_id', $linkId)
-            ->avg('fingerprint_score');
+        $botClicks = $this->baseQuery($linkId, $filters)->where('is_bot', true)->count();
+        $avgFingerprint = $this->rawQuery($linkId, $filters)->avg('fingerprint_score');
 
         return [
             'tiers' => $tiers,
@@ -480,13 +514,10 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
      *
      * @return array{clicks: int, total: int, percentage: float}
      */
-    private function getDataSaverStats(int $linkId): array
+    private function getDataSaverStats(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = Click::where('link_id', $linkId)->count();
-        $dataSaver = DB::table('clicks')
-            ->where('link_id', $linkId)
-            ->where('is_data_saver', true)
-            ->count();
+        $total = $this->baseQuery($linkId, $filters)->count();
+        $dataSaver = $this->baseQuery($linkId, $filters)->where('is_data_saver', true)->count();
 
         return [
             'clicks' => $dataSaver,
