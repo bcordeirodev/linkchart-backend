@@ -32,18 +32,34 @@ use Illuminate\Support\Facades\Http;
 class LinkPreviewService
 {
     /**
-     * Standard social-crawler UA shared with RedirectController.
-     * Platforms (YouTube, LinkedIn, etc.) recognise this UA and serve their
-     * full Open Graph meta tags in response to it.
+     * Primary social-crawler UA, shared with RedirectController.
+     * Most platforms (YouTube, LinkedIn, Shopee, etc.) serve their full Open
+     * Graph meta tags in response to this UA.
      */
     private const FETCH_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
 
     /**
+     * Fallback UA tried when the primary fetch returns no og:image_url.
+     *
+     * Amazon and some other e-commerce platforms block facebookexternalhit
+     * (Meta is a competing shopping platform) but serve full OG data to
+     * Twitterbot. This fallback is only used on cache miss when the primary
+     * UA produces an empty image — adding at most one extra HTTP request
+     * per URL per 24-hour TTL window.
+     */
+    private const FETCH_UA_FALLBACK = 'Twitterbot/1.0';
+
+    /**
      * Fetches Open Graph metadata and a favicon URL for the given URL.
      *
-     * For YouTube, the oEmbed API is tried first (structured JSON, no HTML
-     * parsing). For all other URLs, an HTTP GET is issued with the social-
-     * crawler UA and the response is parsed via DOMDocument.
+     * Fetch strategy:
+     *   1. YouTube: oEmbed JSON endpoint — structured data, no HTML parsing.
+     *   2. Primary HTML fetch: {@see FETCH_UA} (facebookexternalhit). Works for
+     *      most platforms including Shopee, LinkedIn, affiliate networks.
+     *   3. Fallback HTML fetch: {@see FETCH_UA_FALLBACK} (Twitterbot). Used only
+     *      when the primary fetch returns no og:image_url. Amazon and certain
+     *      e-commerce platforms block facebookexternalhit but serve full OG data
+     *      to Twitterbot.
      *
      * On HTTP failure or exception, returns an empty metadata set with the
      * favicon URL still populated (derived from the host, no HTTP call needed).
@@ -53,8 +69,10 @@ class LinkPreviewService
      */
     public function fetchPreview(string $url): array
     {
+        $favicon = $this->faviconUrl($url);
+
         $empty = [
-            'favicon_url' => $this->faviconUrl($url),
+            'favicon_url' => $favicon,
             'og_title' => null,
             'og_image_url' => null,
             'og_description' => null,
@@ -69,9 +87,42 @@ class LinkPreviewService
             // oEmbed failed (private/deleted) — fall through to HTML fetch.
         }
 
+        // Primary fetch with facebookexternalhit.
+        $data = $this->doFetch($url, self::FETCH_UA);
+
+        // UA fallback: Amazon (and similar e-commerce platforms) block facebookexternalhit
+        // but accept Twitterbot and return full OG data including product images.
+        if ($data === null || empty($data['og_image_url'])) {
+            $fallback = $this->doFetch($url, self::FETCH_UA_FALLBACK);
+            if ($fallback !== null && ! empty($fallback['og_image_url'])) {
+                $fallback['favicon_url'] = $favicon;
+
+                return $fallback;
+            }
+        }
+
+        if ($data !== null) {
+            $data['favicon_url'] = $favicon;
+
+            return $data;
+        }
+
+        return $empty;
+    }
+
+    /**
+     * Issue a single HTTP GET for $url with the given $userAgent and parse OG tags.
+     *
+     * Returns the parsed OG data array on HTTP 2xx, or null on non-2xx response
+     * or on any exception (network error, TLS failure, timeout, etc.).
+     *
+     * @return array{og_title: string|null, og_image_url: string|null, og_description: string|null}|null
+     */
+    private function doFetch(string $url, string $userAgent): ?array
+    {
         try {
             $response = Http::withHeaders([
-                'User-Agent' => self::FETCH_UA,
+                'User-Agent' => $userAgent,
                 'Accept' => 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
             ])
                 ->connectTimeout(3)
@@ -80,15 +131,12 @@ class LinkPreviewService
                 ->get($url);
 
             if (! $response->ok()) {
-                return $empty;
+                return null;
             }
 
-            $data = $this->parseOg($response->body());
-            $data['favicon_url'] = $this->faviconUrl($url);
-
-            return $data;
+            return $this->parseOg($response->body());
         } catch (\Throwable) {
-            return $empty;
+            return null;
         }
     }
 

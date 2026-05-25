@@ -292,4 +292,56 @@ class RedirectTest extends TestCase
         $response->assertStatus(404);
         $this->assertStringContainsString('Link não encontrado', $response->getContent());
     }
+
+    /**
+     * Amazon and some e-commerce platforms block facebookexternalhit but serve
+     * full OG data (including og:image) to Twitterbot. The controller must retry
+     * with the fallback UA when the primary fetch returns no image, and the
+     * resulting og:image must appear in the preview HTML served to crawlers.
+     */
+    public function test_ua_fallback_is_used_when_primary_ua_returns_no_image(): void
+    {
+        Queue::fake();
+
+        // Laravel 12's Http::fake() always MERGES into stubCallbacks — it never
+        // replaces. setUp() already registered a catch-all '*' handler that wins
+        // for every URL. We must clear stubCallbacks first so the UA-aware fake
+        // below is the only handler in effect for this test.
+        $prop = new \ReflectionProperty(\Illuminate\Http\Client\Factory::class, 'stubCallbacks');
+        $prop->setAccessible(true);
+        $prop->setValue(Http::getFacadeRoot(), new \Illuminate\Support\Collection);
+
+        // Simulate a platform (e.g., Amazon) that blocks facebookexternalhit
+        // (no og:image) but accepts Twitterbot (returns full OG data).
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $ua = $request->header('User-Agent')[0] ?? '';
+            if (str_contains($ua, 'Twitterbot')) {
+                return Http::response(
+                    '<html><head>'
+                    .'<meta property="og:title" content="Product Title"/>'
+                    .'<meta property="og:image" content="https://example.com/product.jpg"/>'
+                    .'</head><body/></html>',
+                    200
+                );
+            }
+
+            // Primary UA (facebookexternalhit): page without og:image.
+            return Http::response(
+                '<html><head><title>Product Title</title></head><body/></html>',
+                200
+            );
+        });
+
+        $link = $this->makeLink(['original_url' => 'https://shop.example.com/product/123']);
+
+        $response = $this->withHeaders(['User-Agent' => 'WhatsApp/2.23.24.76 A'])
+            ->get('/r/'.$link->slug);
+
+        $response->assertStatus(200);
+        $this->assertStringContainsString(
+            'content="https://example.com/product.jpg"',
+            $response->getContent(),
+            'og:image from Twitterbot fallback must appear in the preview HTML'
+        );
+    }
 }
