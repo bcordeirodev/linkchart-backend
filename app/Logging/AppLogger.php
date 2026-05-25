@@ -37,6 +37,8 @@ final class AppLogger
 
     public const OG_FETCH_NON_OK = 'og.fetch_non_ok';
 
+    public const OG_FETCH_SUCCESS = 'og.fetch_succeeded';
+
     public const TRACKING_CLICK_REGISTERED = 'tracking.click_registered';
 
     public const TRACKING_LINK_NOT_FOUND = 'tracking.link_not_found';
@@ -193,6 +195,19 @@ final class AppLogger
         self::write('redirect', 'info', self::OG_FETCH_SKIPPED, [
             'url' => $url,
             'reason' => $reason,
+        ]);
+    }
+
+    /**
+     * OG metadata successfully fetched and parsed.
+     *
+     * @param  string  $source  'oembed' | 'html' — which path produced the data.
+     */
+    public static function ogFetchSucceeded(string $url, string $source): void
+    {
+        self::write('redirect', 'info', self::OG_FETCH_SUCCESS, [
+            'url' => $url,
+            'source' => $source,
         ]);
     }
 

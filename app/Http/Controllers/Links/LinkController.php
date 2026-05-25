@@ -9,6 +9,7 @@ use App\Http\Controllers\BaseController;
 use App\Http\Requests\CreateLinkRequest;
 use App\Http\Requests\UpdateLinkRequest;
 use App\Http\Resources\LinkResource;
+use App\Jobs\FetchLinkPreviewJob;
 use App\Services\Links\LinkAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -129,6 +130,10 @@ class LinkController extends BaseController
 
             // Log da criação
             $this->auditService->logCreated($link, auth()->guard('api')->id(), $request);
+
+            // Pre-warm the dashboard preview so the thumbnail is ready when the
+            // user navigates to the links list immediately after creating a link.
+            FetchLinkPreviewJob::dispatch($link->id, $link->original_url);
 
             return response()->json([
                 'message' => 'Link criado com sucesso.',
