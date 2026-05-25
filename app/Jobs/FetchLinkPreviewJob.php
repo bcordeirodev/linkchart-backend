@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Logging\AppLogger;
 use App\Models\LinkPreview;
 use App\Services\Links\LinkPreviewService;
 use Illuminate\Bus\Queueable;
@@ -31,11 +32,11 @@ use Illuminate\Queue\SerializesModels;
  *     framework failed-job handler).
  *
  * Retry policy:
- *   - `$tries = 2` — two attempts before the job is discarded.
- *   - `$backoff`: not explicitly set; uses the Laravel framework default
- *     (0 seconds — immediate retry).
- *   - On final failure: no `failed()` callback; the job is silently moved to
- *     the failed-jobs table. Preview data simply remains stale.
+ *   - `$tries = 3` — three attempts before the job is discarded.
+ *   - `$backoff`: [10, 60] — 10 s before attempt 2, 60 s before attempt 3,
+ *     so a temporarily unavailable host has time to recover.
+ *   - On final failure: `failed()` logs via AppLogger::jobFailed to the
+ *     `jobs` channel; the job then moves to the failed-jobs table.
  *
  * Idempotency: YES.
  *   `updateOrCreate` is keyed on `link_id`. Re-running the job just
@@ -49,9 +50,20 @@ class FetchLinkPreviewJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 2;
+    public int $tries = 3;
 
     public int $timeout = 30;
+
+    /**
+     * Exponential-ish backoff: wait 10 s before retry 2, 60 s before retry 3.
+     * Gives a temporarily unavailable host time to recover without hammering it.
+     *
+     * @return int[]
+     */
+    public function backoff(): array
+    {
+        return [10, 60];
+    }
 
     public function __construct(
         public readonly int $linkId,
@@ -66,5 +78,15 @@ class FetchLinkPreviewJob implements ShouldQueue
             ['link_id' => $this->linkId],
             array_merge($data, ['fetched_at' => now()])
         );
+    }
+
+    /**
+     * Called after all retry attempts are exhausted.
+     * Writes a structured error entry to the jobs log channel so the failure
+     * is observable without having to query the failed_jobs table.
+     */
+    public function failed(\Throwable $e): void
+    {
+        AppLogger::jobFailed(self::class, $e, $this->attempts());
     }
 }
