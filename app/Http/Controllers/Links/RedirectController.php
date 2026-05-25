@@ -53,14 +53,24 @@ class RedirectController extends Controller
     private const METADATA_CACHE_TTL_SECONDS = 86400;
 
     /**
-     * Standard social-crawler User-Agent used when fetching OG metadata.
+     * Primary social-crawler User-Agent used when fetching OG metadata.
      *
-     * Most platforms (YouTube, LinkedIn, Twitter, etc.) serve their full
-     * Open Graph tags in response to recognised social-crawler UAs.
+     * Most platforms (YouTube, LinkedIn, Twitter, Shopee, etc.) serve their
+     * full Open Graph tags in response to recognised social-crawler UAs.
      * A custom non-standard UA typically results in a stripped or consent
      * page with no real metadata.
      */
-    private const METADATA_FETCH_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+    private const METADATA_FETCH_UA_PRIMARY = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
+    /**
+     * Fallback User-Agent tried when the primary UA produces no og:image.
+     *
+     * Some e-commerce platforms (Amazon, Mercado Livre, etc.) deliberately
+     * withhold product images from Meta / Facebook crawlers because Meta
+     * operates a competing shopping platform. Twitterbot is accepted by most
+     * of those platforms and returns full OG data including og:image.
+     */
+    private const METADATA_FETCH_UA_FALLBACK = 'Twitterbot/1.0';
 
     private const BOT_USER_AGENT_PATTERNS = [
         'WhatsApp',
@@ -240,11 +250,15 @@ class RedirectController extends Controller
     /**
      * Fetch and cache Open Graph metadata for the given URL (24-hour TTL).
      *
-     * For YouTube URLs the public oEmbed API is tried first; it returns clean
-     * structured JSON without the need to parse HTML and without anti-bot
-     * filtering. For all other URLs (and as a YouTube fallback), an HTTP GET is
-     * issued with the {@see METADATA_FETCH_UA} social-crawler User-Agent so
-     * platforms serve their full OG tags instead of a generic page.
+     * Fetch strategy:
+     *   1. YouTube: public oEmbed JSON endpoint — clean structured data, no HTML
+     *      parsing, no anti-bot filtering.
+     *   2. Primary HTML fetch: {@see METADATA_FETCH_UA_PRIMARY} (facebookexternalhit).
+     *      Works for most social platforms, affiliate networks, and Shopee.
+     *   3. Fallback HTML fetch: {@see METADATA_FETCH_UA_FALLBACK} (Twitterbot).
+     *      Triggered only when the primary fetch returns no og:image. Amazon and
+     *      some other e-commerce platforms block facebookexternalhit (Meta is a
+     *      competing shopping platform) but serve full OG data to Twitterbot.
      *
      * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}
      */
@@ -273,45 +287,77 @@ class RedirectController extends Controller
                 // oEmbed failed (private/deleted video) — fall through to HTML fetch.
             }
 
-            try {
-                $response = Http::withHeaders([
-                    'User-Agent' => self::METADATA_FETCH_UA,
-                ])
-                    ->connectTimeout(3)
-                    ->timeout(5)
-                    ->retry(2, 200)
-                    ->withOptions([
-                        'allow_redirects' => [
-                            'max' => 5,
-                            'strict' => true,
-                            'protocols' => ['http', 'https'],
-                        ],
-                    ])
-                    ->get($url);
+            // Primary fetch: facebookexternalhit works for most platforms.
+            $metadata = $this->doHtmlFetch($url, self::METADATA_FETCH_UA_PRIMARY);
 
-                if (! $response->ok()) {
-                    AppLogger::ogFetchNonOk($url, $response->status());
+            // UA fallback: Amazon and certain e-commerce platforms block facebookexternalhit
+            // because Meta operates a competing shopping platform. Retry with Twitterbot,
+            // which those platforms accept and which returns full OG data.
+            if ($metadata === null || empty($metadata['og_image'])) {
+                $fallback = $this->doHtmlFetch($url, self::METADATA_FETCH_UA_FALLBACK);
+                if ($fallback !== null && ! empty($fallback['og_image'])) {
+                    AppLogger::ogFetchSucceeded($url, 'html_fallback');
 
-                    return $this->getDefaultMetadata($url);
+                    return $fallback;
                 }
+            }
 
-                // Limit to 512 KB — OG tags live in <head>, typically < 32 KB.
-                // Prevents a 10 MB+ HTML page from consuming excessive memory.
-                $body = $response->body();
-                if (strlen($body) > 524288) {
-                    $body = substr($body, 0, 524288);
-                }
-
-                $metadata = $this->parseMetaTags($body, $url);
+            if ($metadata !== null) {
                 AppLogger::ogFetchSucceeded($url, 'html');
 
                 return $metadata;
-            } catch (\Throwable $e) {
-                AppLogger::ogFetchFailed($url, $e);
-
-                return $this->getDefaultMetadata($url);
             }
+
+            return $this->getDefaultMetadata($url);
         });
+    }
+
+    /**
+     * Issue a single HTTP GET for $url with the given $userAgent and parse OG tags.
+     *
+     * The body is truncated at 512 KB — OG tags live in <head> (typically < 32 KB),
+     * so truncating prevents huge pages from consuming excessive memory.
+     *
+     * Returns the parsed metadata array on HTTP 2xx, or null on non-2xx response
+     * or on any exception (network error, TLS failure, timeout, etc.).
+     *
+     * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}|null
+     */
+    private function doHtmlFetch(string $url, string $userAgent): ?array
+    {
+        try {
+            $response = Http::withHeaders([
+                'User-Agent' => $userAgent,
+            ])
+                ->connectTimeout(3)
+                ->timeout(5)
+                ->retry(2, 200)
+                ->withOptions([
+                    'allow_redirects' => [
+                        'max' => 5,
+                        'strict' => true,
+                        'protocols' => ['http', 'https'],
+                    ],
+                ])
+                ->get($url);
+
+            if (! $response->ok()) {
+                AppLogger::ogFetchNonOk($url, $response->status());
+
+                return null;
+            }
+
+            $body = $response->body();
+            if (strlen($body) > 524288) {
+                $body = substr($body, 0, 524288);
+            }
+
+            return $this->parseMetaTags($body, $url);
+        } catch (\Throwable $e) {
+            AppLogger::ogFetchFailed($url, $e);
+
+            return null;
+        }
     }
 
     /**
