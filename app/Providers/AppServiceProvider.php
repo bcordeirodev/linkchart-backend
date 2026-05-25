@@ -71,5 +71,11 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('subdomain-claim', function (Request $request) {
             return Limit::perHour(5)->by($request->user()?->id);
         });
+
+        // 30 consultas/min por usuário para busca de metadados de URL arbitrária.
+        // Debounced no frontend (~700 ms), portanto raramente atinge o limite em uso normal.
+        RateLimiter::for('url-meta', function (Request $request) {
+            return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }

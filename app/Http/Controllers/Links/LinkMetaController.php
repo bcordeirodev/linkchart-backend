@@ -6,6 +6,7 @@ use App\Jobs\FetchLinkPreviewJob;
 use App\Models\Link;
 use App\Models\LinkPreview;
 use App\Services\Analytics\MetricsService;
+use App\Services\Links\LinkPreviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -19,17 +20,59 @@ use Illuminate\Routing\Controller;
  * field names or nesting without a corresponding frontend update.
  *
  * Routes (all under api.auth:api + verified middleware, prefix /api/links):
+ *   GET    /api/links/url-meta          → urlMeta
  *   POST   /api/links/batch-meta        → batchMeta
  *   GET    /api/links/{id}/sparkline    → sparkline
  *   GET    /api/links/{id}/trend        → trend
  *   GET    /api/links/{id}/preview      → preview
  *   GET    /api/links/{id}/health       → health
  *
- * Depends on: MetricsService (injected), FetchLinkPreviewJob (dispatched).
+ * Depends on: MetricsService (injected), FetchLinkPreviewJob (dispatched),
+ *             LinkPreviewService (instantiated inline in urlMeta).
  */
 class LinkMetaController extends Controller
 {
     public function __construct(private MetricsService $metricsService) {}
+
+    /**
+     * GET /api/links/url-meta?url=<encoded-url>
+     *
+     * Fetches Open Graph metadata (og:title, og:image, favicon) for an arbitrary
+     * URL provided by the authenticated user. Used by the create-link form and the
+     * public shortener to suggest a slug derived from the page title.
+     *
+     * All failures are intentionally swallowed and mapped to null fields so the
+     * caller can treat any 200 with og_title=null as a "no suggestion available"
+     * signal without special-casing errors.
+     *
+     * Middleware: api.auth:api, verified
+     * Rate limit: url-meta (30/min per user)
+     * Auth: required
+     *
+     * Response shape (LOCKED): { data: { og_title: string|null, og_image_url: string|null, favicon_url: string|null } }
+     *
+     * @param  Request  $request  Query param: url (string, required, valid URL).
+     */
+    public function urlMeta(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'url' => ['required', 'string', 'url', 'max:2048'],
+        ]);
+
+        $empty = ['og_title' => null, 'og_image_url' => null, 'favicon_url' => null];
+
+        try {
+            $preview = (new LinkPreviewService)->fetchPreview($validated['url']);
+
+            return response()->json(['data' => [
+                'og_title' => $preview['og_title'] ?? null,
+                'og_image_url' => $preview['og_image_url'] ?? null,
+                'favicon_url' => $preview['favicon_url'] ?? null,
+            ]]);
+        } catch (\Throwable) {
+            return response()->json(['data' => $empty]);
+        }
+    }
 
     /**
      * POST /api/links/batch-meta

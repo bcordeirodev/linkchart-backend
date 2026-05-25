@@ -36,7 +36,7 @@ class CreatePublicLinkRequest extends FormRequest
             'original_url' => [
                 'required',
                 'url',
-                'max:2048',
+                'max:4096',
                 'regex:/^https?:\/\//',
                 function ($attribute, $value, $fail) {
                     // Bloquear IPs privados (sem dependência de API externa)
@@ -57,7 +57,7 @@ class CreatePublicLinkRequest extends FormRequest
                 'nullable',
                 'string',
                 'min:3',
-                'max:20', // Mais restritivo para links públicos
+                'max:100',
                 'alpha_dash',
                 'unique:links,slug',
                 'not_in:api,admin,www,mail,ftp,app,web,public,short,link,url', // Mais slugs reservados
@@ -73,13 +73,13 @@ class CreatePublicLinkRequest extends FormRequest
         return [
             'original_url.required' => 'A URL é obrigatória.',
             'original_url.url' => 'A URL deve ser válida.',
-            'original_url.max' => 'A URL não pode ter mais de 2048 caracteres.',
+            'original_url.max' => 'A URL não pode ter mais de 4096 caracteres.',
             'original_url.regex' => 'A URL deve começar com http:// ou https://.',
 
             'title.max' => 'O título não pode ter mais de 100 caracteres.',
 
             'custom_slug.min' => 'O slug personalizado deve ter pelo menos 3 caracteres.',
-            'custom_slug.max' => 'O slug personalizado não pode ter mais de 20 caracteres.',
+            'custom_slug.max' => 'O slug personalizado não pode ter mais de 100 caracteres.',
             'custom_slug.alpha_dash' => 'O slug pode conter apenas letras, números, hífens e underscores.',
             'custom_slug.unique' => 'Este slug já está em uso.',
             'custom_slug.not_in' => 'Este slug é reservado e não pode ser usado.',
