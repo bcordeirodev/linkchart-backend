@@ -155,7 +155,7 @@ class RedirectController extends Controller
             }
 
             $isBot = $this->isBotUserAgent($request->userAgent());
-            $isPreview = $request->has('preview');
+            $isPreview = $request->boolean('preview');
 
             if (! $isBot && ! $isPreview) {
                 $this->dispatchTracking($link, $request, $slug);
@@ -256,13 +256,18 @@ class RedirectController extends Controller
             return $this->getDefaultMetadata($url);
         }
 
-        $cacheKey = 'metadata_'.md5($url);
+        // Normalize the URL (strip tracking params) only for the cache key so
+        // that the same page reached via ?utm_source=twitter and ?fbclid=xyz
+        // shares one cache entry. The actual HTTP request uses the original URL.
+        $cacheKey = 'metadata_'.md5($this->normalizeMetaUrl($url));
 
         return Cache::remember($cacheKey, self::METADATA_CACHE_TTL_SECONDS, function () use ($url) {
             // YouTube: oEmbed API gives clean structured data without HTML parsing.
             if ($this->isYouTubeUrl($url)) {
                 $ytMeta = $this->fetchYouTubeOembed($url);
                 if ($ytMeta !== null) {
+                    AppLogger::ogFetchSucceeded($url, 'oembed');
+
                     return $ytMeta;
                 }
                 // oEmbed failed (private/deleted video) — fall through to HTML fetch.
@@ -290,7 +295,17 @@ class RedirectController extends Controller
                     return $this->getDefaultMetadata($url);
                 }
 
-                return $this->parseMetaTags($response->body(), $url);
+                // Limit to 512 KB — OG tags live in <head>, typically < 32 KB.
+                // Prevents a 10 MB+ HTML page from consuming excessive memory.
+                $body = $response->body();
+                if (strlen($body) > 524288) {
+                    $body = substr($body, 0, 524288);
+                }
+
+                $metadata = $this->parseMetaTags($body, $url);
+                AppLogger::ogFetchSucceeded($url, 'html');
+
+                return $metadata;
             } catch (\Throwable $e) {
                 AppLogger::ogFetchFailed($url, $e);
 
@@ -347,6 +362,8 @@ class RedirectController extends Controller
                 'og_title' => $title,
                 'og_description' => $description,
                 'og_image' => $thumbnail,
+                'og_image_width' => $videoId ? 1280 : null,
+                'og_image_height' => $videoId ? 720 : null,
                 'og_type' => 'video.other',
                 'url' => $url,
             ];
@@ -355,6 +372,50 @@ class RedirectController extends Controller
 
             return null;
         }
+    }
+
+    /**
+     * Strip well-known tracking query parameters from a URL so that the same
+     * destination page reached via different campaign URLs shares one cache entry.
+     *
+     * Only the query string is modified — scheme, host, path, and semantic params
+     * (e.g., YouTube's `v=`) are preserved. The original URL (not the normalised
+     * one) is used for the actual HTTP fetch so destination sites that require
+     * specific params continue to serve the correct page.
+     *
+     * Stripped params: UTM family, fbclid, gclid, msclkid, ttclid, twclid,
+     * YouTube's `si` / `feature`, Instagram's `igshid`, Google Analytics `_ga`,
+     * common `ref` / `ref_src` / `ref_url` referral markers.
+     */
+    private function normalizeMetaUrl(string $url): string
+    {
+        $parsed = parse_url($url);
+        if (! isset($parsed['query'])) {
+            return $url;
+        }
+
+        parse_str($parsed['query'], $params);
+
+        $trackingParams = [
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+            'fbclid', 'gclid', 'msclkid', 'ttclid', 'twclid',
+            'si', 'feature',
+            'igshid',
+            '_ga',
+            'ref', 'ref_src', 'ref_url',
+        ];
+
+        foreach ($trackingParams as $param) {
+            unset($params[$param]);
+        }
+
+        $scheme = $parsed['scheme'] ?? 'https';
+        $host = $parsed['host'] ?? '';
+        $path = $parsed['path'] ?? '';
+        $query = $params ? '?'.http_build_query($params) : '';
+        $fragment = isset($parsed['fragment']) ? '#'.$parsed['fragment'] : '';
+
+        return "{$scheme}://{$host}{$path}{$query}{$fragment}";
     }
 
     /**
@@ -381,8 +442,25 @@ class RedirectController extends Controller
     }
 
     /**
-     * Proteção básica contra SSRF: rejeita esquemas não-HTTP, hostnames
-     * internos (*.local, *.internal, localhost) e IPs privados/loopback literais.
+     * SSRF protection: reject non-HTTP schemes, internal hostnames, private/
+     * reserved literal IPs (IPv4 and IPv6), and hostnames that resolve to a
+     * private IP at the time of the check (DNS rebinding mitigation).
+     *
+     * Checks performed:
+     *   1. Scheme must be http or https.
+     *   2. Hardcoded loopback aliases (localhost, 0.0.0.0).
+     *   3. *.local / *.internal / *.localhost TLD suffixes.
+     *   4. Literal IPv4 in private/reserved ranges (10/8, 172.16/12, 192.168/16,
+     *      169.254/16, 127/8).
+     *   5. Literal IPv6 in loopback (::1) or private ranges (fc00::/7, fd00::/8,
+     *      and IPv4-mapped equivalents like ::ffff:127.0.0.1).
+     *   6. DNS resolution: hostname is resolved to an IPv4 address and the
+     *      resolved IP is checked against private/reserved ranges. This prevents
+     *      DNS rebinding attacks where a hostname passes the string checks but
+     *      resolves to an internal IP at request time.
+     *      Note: gethostbyname() covers IPv4 only; IPv6-only hosts are not
+     *      checked via DNS here — mitigated by rejecting unknown IPv6 literals
+     *      in check 5.
      */
     private function isSafeFetchUrl(string $url): bool
     {
@@ -399,17 +477,38 @@ class RedirectController extends Controller
 
         $host = strtolower($parsed['host']);
 
+        // 1. Hardcoded loopback aliases.
         if (in_array($host, ['localhost', 'localhost.localdomain', '0.0.0.0'], true)) {
             return false;
         }
 
+        // 2. Internal TLD suffixes.
         if (preg_match('/\.(local|internal|localhost)$/', $host)) {
             return false;
         }
 
-        if (filter_var($host, FILTER_VALIDATE_IP)
-            && ! filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-            return false;
+        // 3. Literal IPv4 in private/reserved ranges.
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            return (bool) filter_var($host, FILTER_VALIDATE_IP,
+                FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        }
+
+        // 4. Literal IPv6 (parse_url strips brackets — host is raw IPv6 string).
+        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            return (bool) filter_var($host, FILTER_VALIDATE_IP,
+                FILTER_FLAG_IPV6 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        }
+
+        // 5. DNS rebinding mitigation: resolve the hostname to an IPv4 address
+        //    and reject if it falls in a private/reserved range.
+        //    gethostbyname() returns the input unchanged on resolution failure,
+        //    so the !== check correctly skips validation when DNS lookup fails.
+        $resolvedIp = gethostbyname($host);
+        if ($resolvedIp !== $host) {
+            if (! filter_var($resolvedIp, FILTER_VALIDATE_IP,
+                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return false;
+            }
         }
 
         return true;
@@ -423,19 +522,20 @@ class RedirectController extends Controller
             $metadata['title'] = html_entity_decode(trim(strip_tags($matches[1])));
         }
 
+        // Normalize property names: colons in sub-properties (og:image:width) are
+        // replaced with underscores so callers use consistent array keys like
+        // og_image_width rather than og_image:width.
         preg_match_all('/<meta\s+property=["\']og:([^"\']+)["\']\s+content=["\']([^"\']+)["\']/i', $html, $ogMatches);
         for ($i = 0; $i < count($ogMatches[0]); $i++) {
-            $property = $ogMatches[1][$i];
-            $content = $ogMatches[2][$i];
-            $metadata['og_'.$property] = html_entity_decode($content);
+            $key = 'og_'.str_replace(':', '_', $ogMatches[1][$i]);
+            $metadata[$key] = html_entity_decode($ogMatches[2][$i]);
         }
 
         preg_match_all('/<meta\s+content=["\']([^"\']+)["\']\s+property=["\']og:([^"\']+)["\']/i', $html, $ogMatchesAlt);
         for ($i = 0; $i < count($ogMatchesAlt[0]); $i++) {
-            $content = $ogMatchesAlt[1][$i];
-            $property = $ogMatchesAlt[2][$i];
-            if (! isset($metadata['og_'.$property])) {
-                $metadata['og_'.$property] = html_entity_decode($content);
+            $key = 'og_'.str_replace(':', '_', $ogMatchesAlt[2][$i]);
+            if (! isset($metadata[$key])) {
+                $metadata[$key] = html_entity_decode($ogMatchesAlt[1][$i]);
             }
         }
 
@@ -457,8 +557,13 @@ class RedirectController extends Controller
             }
         }
 
-        if (isset($metadata['description']) && ! empty($metadata['description'])) {
-            if (strpos($metadata['og_description'], 'Clique para acessar') !== false) {
+        // Replace the default og_description with the real meta description when
+        // the page provided one. Compare against the exact default string rather
+        // than a substring so a legitimate description containing those words is
+        // not discarded.
+        if (! empty($metadata['description'])) {
+            $defaultOgDesc = "Clique para acessar {$domain}";
+            if (($metadata['og_description'] ?? '') === $defaultOgDesc) {
                 $metadata['og_description'] = $metadata['description'];
             }
         }
@@ -499,9 +604,19 @@ class RedirectController extends Controller
 
         $refreshDelay = $isBot ? 5 : 2;
 
+        $ogType = e($metadata['og_type'] ?? 'website');
         $imageTag = $this->renderMetaImageTag($image, 'og:image', 'property');
         $twitterImageTag = $this->renderMetaImageTag($image, 'twitter:image', 'name');
         $displayUrl = $this->truncateUrl($targetUrl, 60);
+
+        // og:image:width/height let crawlers (WhatsApp, Facebook) validate image
+        // dimensions without downloading it — preview appears faster and a too-small
+        // image is skipped without a wasted HTTP round-trip.
+        $imageWidth = isset($metadata['og_image_width']) ? (int) $metadata['og_image_width'] : null;
+        $imageHeight = isset($metadata['og_image_height']) ? (int) $metadata['og_image_height'] : null;
+        $imageDimTags = ($imageWidth > 0 && $imageHeight > 0)
+            ? "    <meta property=\"og:image:width\" content=\"{$imageWidth}\">\n    <meta property=\"og:image:height\" content=\"{$imageHeight}\">"
+            : '';
 
         $html = <<<HTML
 <!DOCTYPE html>
@@ -512,11 +627,12 @@ class RedirectController extends Controller
     <meta http-equiv="refresh" content="{$refreshDelay};url={$targetUrl}">
 
     <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
+    <meta property="og:type" content="{$ogType}">
     <meta property="og:url" content="{$targetUrl}">
     <meta property="og:title" content="{$title}">
     <meta property="og:description" content="{$description}">
     {$imageTag}
+{$imageDimTags}
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
