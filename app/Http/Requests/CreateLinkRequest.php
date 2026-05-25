@@ -32,7 +32,7 @@ class CreateLinkRequest extends FormRequest
             'original_url' => [
                 'required',
                 'url',
-                'max:2048',
+                'max:4096',
                 'regex:/^https?:\/\//',
             ],
             'title' => [
@@ -75,7 +75,7 @@ class CreateLinkRequest extends FormRequest
                 'nullable',
                 'string',
                 'min:3',
-                'max:50',
+                'max:100',
                 'alpha_dash',
                 'unique:links,slug',
                 'not_in:api,admin,www,mail,ftp', // Slugs reservados
@@ -99,7 +99,7 @@ class CreateLinkRequest extends FormRequest
         return [
             'original_url.required' => 'A URL original é obrigatória.',
             'original_url.url' => 'A URL deve ser válida.',
-            'original_url.max' => 'A URL não pode ter mais de 2048 caracteres.',
+            'original_url.max' => 'A URL não pode ter mais de 4096 caracteres.',
             'original_url.regex' => 'A URL deve começar com http:// ou https://.',
 
             'expires_at.date' => 'A data de expiração deve ser uma data válida.',
@@ -111,7 +111,7 @@ class CreateLinkRequest extends FormRequest
             'starts_in.before' => 'A data de início deve ser anterior à data de expiração.',
 
             'custom_slug.min' => 'O slug personalizado deve ter pelo menos 3 caracteres.',
-            'custom_slug.max' => 'O slug personalizado não pode ter mais de 50 caracteres.',
+            'custom_slug.max' => 'O slug personalizado não pode ter mais de 100 caracteres.',
             'custom_slug.alpha_dash' => 'O slug pode conter apenas letras, números, hífens e underscores.',
             'custom_slug.unique' => 'Este slug já está em uso.',
             'custom_slug.not_in' => 'Este slug é reservado e não pode ser usado.',
