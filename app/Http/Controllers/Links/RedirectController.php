@@ -52,6 +52,16 @@ class RedirectController extends Controller
 {
     private const METADATA_CACHE_TTL_SECONDS = 86400;
 
+    /**
+     * Standard social-crawler User-Agent used when fetching OG metadata.
+     *
+     * Most platforms (YouTube, LinkedIn, Twitter, etc.) serve their full
+     * Open Graph tags in response to recognised social-crawler UAs.
+     * A custom non-standard UA typically results in a stripped or consent
+     * page with no real metadata.
+     */
+    private const METADATA_FETCH_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
     private const BOT_USER_AGENT_PATTERNS = [
         'WhatsApp',
         'Telegram',
@@ -227,6 +237,17 @@ class RedirectController extends Controller
         return $agent->isRobot();
     }
 
+    /**
+     * Fetch and cache Open Graph metadata for the given URL (24-hour TTL).
+     *
+     * For YouTube URLs the public oEmbed API is tried first; it returns clean
+     * structured JSON without the need to parse HTML and without anti-bot
+     * filtering. For all other URLs (and as a YouTube fallback), an HTTP GET is
+     * issued with the {@see METADATA_FETCH_UA} social-crawler User-Agent so
+     * platforms serve their full OG tags instead of a generic page.
+     *
+     * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}
+     */
     private function fetchOriginalMetadata(string $url): array
     {
         if (! $this->isSafeFetchUrl($url)) {
@@ -238,9 +259,18 @@ class RedirectController extends Controller
         $cacheKey = 'metadata_'.md5($url);
 
         return Cache::remember($cacheKey, self::METADATA_CACHE_TTL_SECONDS, function () use ($url) {
+            // YouTube: oEmbed API gives clean structured data without HTML parsing.
+            if ($this->isYouTubeUrl($url)) {
+                $ytMeta = $this->fetchYouTubeOembed($url);
+                if ($ytMeta !== null) {
+                    return $ytMeta;
+                }
+                // oEmbed failed (private/deleted video) — fall through to HTML fetch.
+            }
+
             try {
                 $response = Http::withHeaders([
-                    'User-Agent' => 'LinkChart/1.0 (Metadata Fetcher)',
+                    'User-Agent' => self::METADATA_FETCH_UA,
                 ])
                     ->connectTimeout(3)
                     ->timeout(5)
@@ -267,6 +297,87 @@ class RedirectController extends Controller
                 return $this->getDefaultMetadata($url);
             }
         });
+    }
+
+    /**
+     * Fetch YouTube video metadata via the public oEmbed JSON endpoint.
+     *
+     * Returns an array compatible with {@see getDefaultMetadata()} on success,
+     * or null if the endpoint returns a non-2xx response (private/deleted video)
+     * or if the JSON contains no usable title.
+     *
+     * The oEmbed thumbnail is always hqdefault (480×360). When a video ID can
+     * be extracted, the thumbnail is upgraded to maxresdefault (1280×720),
+     * which is the image WhatsApp and other platforms display in link previews.
+     *
+     * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}|null
+     */
+    private function fetchYouTubeOembed(string $url): ?array
+    {
+        try {
+            $oembedUrl = 'https://www.youtube.com/oembed?url='.urlencode($url).'&format=json';
+            $response = Http::connectTimeout(3)->timeout(5)->get($oembedUrl);
+
+            if (! $response->ok()) {
+                return null;
+            }
+
+            $data = $response->json();
+            $title = isset($data['title']) && $data['title'] !== '' ? $data['title'] : null;
+
+            if (! $title) {
+                return null;
+            }
+
+            $authorName = $data['author_name'] ?? null;
+            $description = $authorName
+                ? "Por {$authorName} • YouTube"
+                : 'YouTube';
+
+            // Prefer maxresdefault (1280×720) over oEmbed's hqdefault (480×360).
+            $thumbnail = $data['thumbnail_url'] ?? null;
+            $videoId = $this->extractYouTubeVideoId($url);
+            if ($videoId) {
+                $thumbnail = "https://i.ytimg.com/vi/{$videoId}/maxresdefault.jpg";
+            }
+
+            return [
+                'title' => $title,
+                'description' => $description,
+                'og_title' => $title,
+                'og_description' => $description,
+                'og_image' => $thumbnail,
+                'og_type' => 'video.other',
+                'url' => $url,
+            ];
+        } catch (\Throwable $e) {
+            AppLogger::ogFetchFailed($url, $e);
+
+            return null;
+        }
+    }
+
+    /**
+     * Return true if the URL hostname belongs to YouTube.
+     */
+    private function isYouTubeUrl(string $url): bool
+    {
+        $host = strtolower(parse_url($url, PHP_URL_HOST) ?? '');
+
+        return in_array($host, ['youtube.com', 'www.youtube.com', 'youtu.be', 'm.youtube.com'], true);
+    }
+
+    /**
+     * Extract the 11-character YouTube video ID from a watch or short URL.
+     * Returns null if the URL does not match either pattern.
+     */
+    private function extractYouTubeVideoId(string $url): ?string
+    {
+        if (preg_match('/(?:youtube\.com\/watch\?.*?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $url, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
     }
 
     /**
