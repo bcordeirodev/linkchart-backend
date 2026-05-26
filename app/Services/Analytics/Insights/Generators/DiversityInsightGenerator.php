@@ -16,6 +16,10 @@ class DiversityInsightGenerator implements InsightGeneratorInterface
     /**
      * Returns a geographic diversity insight, or null if ≤5 countries reached.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
      * @return array<string, mixed>|null
@@ -35,12 +39,16 @@ class DiversityInsightGenerator implements InsightGeneratorInterface
         return [
             'type' => 'geographic',
             'title' => 'Alcance Internacional',
+            'title_key' => 'insights.generators.diversity.international.title',
             'description' => "Seu link alcançou {$countries} países diferentes, mostrando potencial global.",
+            'description_key' => 'insights.generators.diversity.international.description',
+            'description_params' => ['countries' => $countries],
             'priority' => $countries > 10 ? 'high' : 'medium',
             'actionable' => true,
             'confidence' => 0.85,
             'impact_score' => 8,
             'recommendation' => 'Considere expandir para mercados internacionais com maior tráfego.',
+            'recommendation_key' => 'insights.generators.diversity.international.recommendation',
         ];
     }
 }

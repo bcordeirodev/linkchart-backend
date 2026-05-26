@@ -17,6 +17,10 @@ class SecurityInsightGenerator implements InsightGeneratorInterface
     /**
      * Returns a suspicious activity insight, or null if no IP exceeds 50 clicks.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
      * @return array<string, mixed>|null
@@ -38,12 +42,16 @@ class SecurityInsightGenerator implements InsightGeneratorInterface
         return [
             'type' => 'security',
             'title' => 'Atividade Suspeita Detectada',
+            'title_key' => 'insights.generators.security.suspicious.title',
             'description' => "Detectamos {$n} IP(s) com atividade anormalmente alta. Monitore possível tráfego artificial.",
+            'description_key' => 'insights.generators.security.suspicious.description',
+            'description_params' => ['count' => $n],
             'priority' => 'high',
             'actionable' => true,
             'confidence' => 0.7,
             'impact_score' => 5,
             'recommendation' => 'Analise os IPs com maior atividade e considere implementar rate limiting.',
+            'recommendation_key' => 'insights.generators.security.suspicious.recommendation',
         ];
     }
 }

@@ -18,6 +18,10 @@ class EngagementInsightGenerator implements InsightGeneratorInterface
      * Returns a traffic trend insight, or null if previous period has no data
      * or the change is within ±20%.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
      * @return array<string, mixed>|null
@@ -37,25 +41,37 @@ class EngagementInsightGenerator implements InsightGeneratorInterface
             return null;
         }
 
-        $rate = (($recent - $old) / $old) * 100;
+        $rate = round((($recent - $old) / $old) * 100, 1);
 
         if (abs($rate) <= 20) {
             return null;
         }
 
+        $positive = $rate > 0;
+
         return [
             'type' => 'engagement',
-            'title' => $rate > 0 ? 'Crescimento Acelerado' : 'Declínio no Engajamento',
-            'description' => $rate > 0
+            'title' => $positive ? 'Crescimento Acelerado' : 'Declínio no Engajamento',
+            'title_key' => $positive
+                ? 'insights.generators.engagement.positiveGrowth.title'
+                : 'insights.generators.engagement.negativeGrowth.title',
+            'description' => $positive
                 ? "Seus cliques cresceram {$rate}% na última semana. Continue com a estratégia atual!"
                 : 'Seus cliques diminuíram '.abs($rate).'% na última semana. Revise sua estratégia de conteúdo.',
+            'description_key' => $positive
+                ? 'insights.generators.engagement.positiveGrowth.description'
+                : 'insights.generators.engagement.negativeGrowth.description',
+            'description_params' => ['rate' => abs($rate)],
             'priority' => abs($rate) > 50 ? 'high' : 'medium',
             'actionable' => $rate < 0,
             'confidence' => 0.8,
             'impact_score' => abs($rate) > 50 ? 9 : 6,
-            'recommendation' => $rate > 0
+            'recommendation' => $positive
                 ? 'Analise o que funcionou bem e replique a estratégia.'
                 : 'Revise o conteúdo, timing e canais de distribuição.',
+            'recommendation_key' => $positive
+                ? 'insights.generators.engagement.positiveGrowth.recommendation'
+                : 'insights.generators.engagement.negativeGrowth.recommendation',
         ];
     }
 }
