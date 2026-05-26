@@ -112,6 +112,37 @@ else
 fi
 docker exec linkchartapi rm -f /var/www/public/.opcache_reset.php
 
+# ── Queue worker health ───────────────────────────────────────────────────────
+# Workers may enter FATAL state on first boot if they crashed during the brief
+# window between container start and caches being warmed (e.g. transient boot
+# error). supervisord will NOT restart FATAL processes automatically — we must
+# detect and recover them here, after all artisan steps have completed.
+echo "Checking queue worker status..."
+FATAL_PROGRAMS=$(docker exec linkchartapi \
+    supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status 2>/dev/null \
+    | grep FATAL | awk '{print $1}' | tr '\n' ' ')
+
+if [ -n "$FATAL_PROGRAMS" ]; then
+    echo "  FATAL programs detected: $FATAL_PROGRAMS"
+    echo "  Restarting..."
+    docker exec linkchartapi \
+        supervisorctl -c /etc/supervisor/conf.d/supervisord.conf start \
+        $FATAL_PROGRAMS 2>&1 || true
+    sleep 4
+    # Verify they are now running
+    STILL_FATAL=$(docker exec linkchartapi \
+        supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status 2>/dev/null \
+        | grep FATAL | awk '{print $1}' | tr '\n' ' ')
+    if [ -n "$STILL_FATAL" ]; then
+        echo "WARNING: programs still in FATAL after restart: $STILL_FATAL"
+        docker exec linkchartapi cat /var/www/storage/logs/worker.log 2>/dev/null | tail -30 || true
+    else
+        echo "  All programs recovered — RUNNING"
+    fi
+else
+    echo "All queue workers are healthy"
+fi
+
 # ── Health check ──────────────────────────────────────────────────────────────
 # Note: /health is handled by nginx directly (return 200) — it does NOT test PHP.
 # We also check a PHP-routed endpoint to confirm FPM is actually working.
