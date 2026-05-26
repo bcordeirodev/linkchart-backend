@@ -269,15 +269,24 @@ class LinkController extends BaseController
      *   - search (string, matched against country/city/state/device/browser/os/ip/referer)
      *   - sort_by (string, one of created_at|country|city|state|device|browser|os|ip|referer)
      *   - sort_dir (asc|desc, default desc)
+     *   - date_from (string, ISO datetime, filters created_at >=)
+     *   - date_to (string, ISO datetime, filters created_at <=)
+     *   - exclude_bots (bool, default false)
+     *
+     * Each item in data includes social_platform (nullable, added 2026-05-19)
+     * and quality_tier (nullable, added Phase 3) so the frontend can render
+     * them with appropriate NULL handling for older clicks.
      *
      * Middleware: api.auth:api, verified
      * Auth: required
      * Owner check: yes — uses findOwnedLink.
      *
-     * Response shape: { data: Click[], meta: { total, per_page, current_page, last_page, from, to, sort_by, sort_dir, search } }
+     * Response shape: { data: Click[], meta: { total, per_page, current_page, last_page,
+     *                   from, to, sort_by, sort_dir, search, date_from, date_to, exclude_bots } }
      *                 Raw JSON — not wrapped by NormalizeApiResponse.
      *
-     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
+     * @param  string   $id       Numeric link ID (enforced by route constraint [0-9]+).
+     * @param  Request  $request  Query string parameters described above.
      */
     public function getClicksList(string $id, Request $request): JsonResponse
     {
@@ -376,9 +385,11 @@ class LinkController extends BaseController
                     'referer' => $referer,
                     'referer_host' => $refererHost ?: ($referer && $referer !== '-' ? null : 'Direct'),
                     'click_source' => $click->click_source,
+                    'social_platform' => $click->social_platform,
                     'navigation_context' => $click->navigation_context,
                     'is_return_visitor' => (bool) $click->is_return_visitor,
                     'response_time' => $click->response_time,
+                    'quality_tier' => $click->quality_tier,
                     'utm' => $click->utm ? [
                         'source' => $click->utm->utm_source,
                         'medium' => $click->utm->utm_medium,
