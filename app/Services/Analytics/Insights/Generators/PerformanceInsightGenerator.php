@@ -16,6 +16,10 @@ class PerformanceInsightGenerator implements InsightGeneratorInterface
     /**
      * Returns a response time performance insight, or null if no response_time data exists.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
      * @return array<string, mixed>|null
@@ -32,16 +36,27 @@ class PerformanceInsightGenerator implements InsightGeneratorInterface
         }
 
         $slow = $avg > 500;
+        $avgRounded = round($avg, 1);
 
         return [
             'type' => 'performance',
             'title' => $slow ? 'Velocidade de Resposta Lenta' : 'Boa Performance de Resposta',
-            'description' => "Tempo médio de resposta: {$avg}ms.",
+            'title_key' => $slow
+                ? 'insights.generators.performance.slow.title'
+                : 'insights.generators.performance.good.title',
+            'description' => "Tempo médio de resposta: {$avgRounded}ms.",
+            'description_key' => $slow
+                ? 'insights.generators.performance.slow.description'
+                : 'insights.generators.performance.good.description',
+            'description_params' => ['avg' => $avgRounded],
             'priority' => $slow ? 'high' : 'low',
             'actionable' => $slow,
             'confidence' => 0.8,
             'impact_score' => $slow ? 7 : 3,
             'recommendation' => $slow ? 'Otimize sua infraestrutura.' : 'Continue monitorando.',
+            'recommendation_key' => $slow
+                ? 'insights.generators.performance.slow.recommendation'
+                : 'insights.generators.performance.good.recommendation',
         ];
     }
 }
