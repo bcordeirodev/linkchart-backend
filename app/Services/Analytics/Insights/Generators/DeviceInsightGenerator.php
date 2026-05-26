@@ -16,6 +16,10 @@ class DeviceInsightGenerator implements InsightGeneratorInterface
     /**
      * Returns a device dominance insight, or null if no device data is present.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count for the link.
      * @return array<string, mixed>|null
@@ -39,12 +43,17 @@ class DeviceInsightGenerator implements InsightGeneratorInterface
         return [
             'type' => 'audience',
             'title' => 'Dispositivo Dominante',
+            'title_key' => 'insights.generators.device.dominant.title',
             'description' => "{$top->device} representa {$pct}% dos acessos.",
+            'description_key' => 'insights.generators.device.dominant.description',
+            'description_params' => ['device' => $top->device, 'pct' => $pct],
             'priority' => $pct > 70 ? 'high' : 'medium',
             'actionable' => true,
             'confidence' => 0.9,
             'impact_score' => 7,
             'recommendation' => "Otimize sua página de destino para {$top->device}.",
+            'recommendation_key' => 'insights.generators.device.dominant.recommendation',
+            'recommendation_params' => ['device' => $top->device],
         ];
     }
 }
