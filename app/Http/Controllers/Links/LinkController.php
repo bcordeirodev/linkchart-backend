@@ -285,7 +285,7 @@ class LinkController extends BaseController
      *                   from, to, sort_by, sort_dir, search, date_from, date_to, exclude_bots } }
      *                 Raw JSON — not wrapped by NormalizeApiResponse.
      *
-     * @param  string   $id       Numeric link ID (enforced by route constraint [0-9]+).
+     * @param  string  $id  Numeric link ID (enforced by route constraint [0-9]+).
      * @param  Request  $request  Query string parameters described above.
      */
     public function getClicksList(string $id, Request $request): JsonResponse

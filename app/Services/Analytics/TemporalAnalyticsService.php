@@ -559,10 +559,10 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     private function getDeviceByPeriodWithKeys($clicks): array
     {
         $periods = [
-            'dawn'      => ['range' => [0, 5],   'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'morning'   => ['range' => [6, 11],  'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'dawn' => ['range' => [0, 5],   'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'morning' => ['range' => [6, 11],  'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
             'afternoon' => ['range' => [12, 17], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'evening'   => ['range' => [18, 23], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'evening' => ['range' => [18, 23], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
         ];
 
         foreach ($clicks as $click) {
@@ -581,10 +581,10 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         }
 
         return array_values(array_map(fn ($key, $p) => [
-            'period'  => $key,
+            'period' => $key,
             'desktop' => $p['desktop'],
-            'mobile'  => $p['mobile'],
-            'tablet'  => $p['tablet'],
+            'mobile' => $p['mobile'],
+            'tablet' => $p['tablet'],
         ], array_keys($periods), $periods));
     }
 
@@ -663,17 +663,17 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             ->keyBy('bucket');
 
         $distribution = array_map(fn ($b) => [
-            'bucket'    => $b[0],
+            'bucket' => $b[0],
             'label_key' => $b[1],
-            'min_sec'   => $b[2],
-            'max_sec'   => $b[3],
-            'count'     => (int) ($rows->get($b[0])?->count ?? 0),
+            'min_sec' => $b[2],
+            'max_sec' => $b[3],
+            'count' => (int) ($rows->get($b[0])?->count ?? 0),
         ], $buckets);
 
         return [
             'velocity_distribution' => $distribution,
-            'phase2_available'      => $phase2Available,
-            'total_with_data'       => $withData,
+            'phase2_available' => $phase2Available,
+            'total_with_data' => $withData,
         ];
     }
 }
