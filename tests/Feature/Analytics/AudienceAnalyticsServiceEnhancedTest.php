@@ -27,6 +27,10 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         $this->service = new AudienceAnalyticsService(new UserAgentParser);
     }
 
+    /**
+     * Verifies that navigation_context_breakdown returns the phase-aware shape
+     * (array with 'data' and 'phase_available' keys) and computes correct counts.
+     */
     public function test_navigation_context_breakdown_returns_counts_and_percentages(): void
     {
         Click::factory()->count(45)->create(['link_id' => $this->link->id, 'navigation_context' => 'browser_direct']);
@@ -35,8 +39,13 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         Click::factory()->count(6)->create(['link_id' => $this->link->id, 'navigation_context' => 'api_programmatic']);
 
         $result = $this->service->getLinkAudienceAnalytics($this->link->id);
-        $breakdown = $result['navigation_context_breakdown'];
+        $wrapper = $result['navigation_context_breakdown'];
 
+        // Phase-aware shape: has 'data' and 'phase_available' keys.
+        $this->assertArrayHasKey('data', $wrapper);
+        $this->assertArrayHasKey('phase_available', $wrapper);
+
+        $breakdown = $wrapper['data'];
         $this->assertNotEmpty($breakdown);
 
         $direct = collect($breakdown)->firstWhere('context', 'browser_direct');
@@ -45,6 +54,10 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         $this->assertEquals(45.0, $direct['percentage']);
     }
 
+    /**
+     * Verifies that unknown (null) navigation_context entries below 1% of total are omitted
+     * from the data array of the phase-aware breakdown.
+     */
     public function test_navigation_context_breakdown_omits_unknown_below_one_percent(): void
     {
         Click::factory()->count(99)->create(['link_id' => $this->link->id, 'navigation_context' => 'browser_direct']);
@@ -52,16 +65,25 @@ class AudienceAnalyticsServiceEnhancedTest extends TestCase
         Click::factory()->create(['link_id' => $this->link->id, 'navigation_context' => null]);
 
         $result = $this->service->getLinkAudienceAnalytics($this->link->id);
-        $breakdown = $result['navigation_context_breakdown'];
+        $breakdown = $result['navigation_context_breakdown']['data'];
 
         $unknown = collect($breakdown)->firstWhere('context', 'unknown');
         $this->assertNull($unknown);
     }
 
+    /**
+     * Verifies that navigation_context_breakdown returns the empty phase-aware shape
+     * when there are no clicks for the link.
+     */
     public function test_navigation_context_breakdown_empty_when_no_clicks(): void
     {
         $result = $this->service->getLinkAudienceAnalytics($this->link->id);
-        $this->assertSame([], $result['navigation_context_breakdown']);
+        $wrapper = $result['navigation_context_breakdown'];
+
+        $this->assertArrayHasKey('data', $wrapper);
+        $this->assertArrayHasKey('phase_available', $wrapper);
+        $this->assertSame([], $wrapper['data']);
+        $this->assertFalse($wrapper['phase_available']);
     }
 
     public function test_return_visitor_stats_calculates_rate_correctly(): void
