@@ -126,7 +126,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
      * @param  ?string  $continent  Continent scope, or null for all continents.
      * @return array{0: array<int, array{lat: float, lng: float, city: string, country: string, clicks: int, iso_code: ?string, currency: ?string, state_name: ?string, continent: ?string, timezone: ?string, last_click: ?string}>, 1: bool, 2: int}
-     *         Tuple of [heatmap rows, heatmap_capped flag, total_locations_available].
+     *                                                                                                                                                                                                                                                 Tuple of [heatmap rows, heatmap_capped flag, total_locations_available].
      */
     private function getHeatmapData(int $linkId, AnalyticsFilters $filters, ?string $continent = null): array
     {
