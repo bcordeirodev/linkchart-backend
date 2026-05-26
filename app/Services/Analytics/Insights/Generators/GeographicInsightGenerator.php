@@ -16,6 +16,10 @@ class GeographicInsightGenerator implements InsightGeneratorInterface
     /**
      * Returns a top-country insight, or null if no geo-located clicks exist.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count for percentage calculation.
      * @return array<string, mixed>|null
@@ -40,12 +44,16 @@ class GeographicInsightGenerator implements InsightGeneratorInterface
         return [
             'type' => 'geographic',
             'title' => 'Mercado Principal',
+            'title_key' => 'insights.generators.geographic.mainMarket.title',
             'description' => "O {$top->country} representa {$pct}% dos seus cliques. Considere criar conteúdo específico para este mercado.",
+            'description_key' => 'insights.generators.geographic.mainMarket.description',
+            'description_params' => ['country' => $top->country, 'pct' => $pct],
             'priority' => $pct > 50 ? 'high' : 'medium',
             'actionable' => true,
             'confidence' => 0.9,
             'impact_score' => 8,
             'recommendation' => 'Crie campanhas direcionadas para este país e considere traduzir o conteúdo.',
+            'recommendation_key' => 'insights.generators.geographic.mainMarket.recommendation',
         ];
     }
 }

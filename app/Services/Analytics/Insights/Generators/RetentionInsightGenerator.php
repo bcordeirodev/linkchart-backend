@@ -19,6 +19,11 @@ class RetentionInsightGenerator implements InsightGeneratorInterface
     /**
      * Returns a retention rate insight, or null if no visitor data exists.
      *
+     * The returned array includes both the original Portuguese strings
+     * (for backwards compatibility) and i18n keys + params for frontend
+     * localisation via react-i18next. The benchmark label is passed as a
+     * separate `bench_key` so the frontend can translate it independently.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
      * @return array<string, mixed>|null Includes extra key: data_points (array with retention breakdown).
@@ -39,12 +44,24 @@ class RetentionInsightGenerator implements InsightGeneratorInterface
         $rate = round(($return / $total) * 100, 1);
         $bench = $rate >= 25 ? 'acima da média' : ($rate >= 15 ? 'na média' : 'abaixo da média');
 
+        // i18n key for the benchmark label so the frontend can translate it
+        $benchKey = $rate >= 25
+            ? 'insights.generators.retention.benchmark.above'
+            : ($rate >= 15 ? 'insights.generators.retention.benchmark.average' : 'insights.generators.retention.benchmark.below');
+
+        $excellent = $rate >= 25;
+
         return [
             'type' => 'retention',
             'title' => 'Taxa de Retenção',
-            'description' => "Sua taxa de visitantes recorrentes é {$rate}% ({$bench}). ".($rate >= 25
+            'title_key' => 'insights.generators.retention.rate.title',
+            'description' => "Sua taxa de visitantes recorrentes é {$rate}% ({$bench}). ".($excellent
                 ? 'Excelente! Seu conteúdo está gerando lealdade.'
                 : 'Considere estratégias para aumentar o retorno de visitantes.'),
+            'description_key' => $excellent
+                ? 'insights.generators.retention.excellent.description'
+                : 'insights.generators.retention.low.description',
+            'description_params' => ['rate' => $rate, 'bench' => $bench, 'bench_key' => $benchKey],
             'priority' => $rate < 15 ? 'high' : ($rate >= 25 ? 'low' : 'medium'),
             'actionable' => $rate < 25,
             'confidence' => 0.85,
@@ -52,11 +69,15 @@ class RetentionInsightGenerator implements InsightGeneratorInterface
             'recommendation' => $rate < 25
                 ? 'Implemente newsletters, notificações push ou conteúdo serializado.'
                 : 'Continue criando conteúdo de qualidade para manter a lealdade.',
+            'recommendation_key' => $excellent
+                ? 'insights.generators.retention.excellent.recommendation'
+                : 'insights.generators.retention.low.recommendation',
             'data_points' => [
                 'total_visitors' => $total,
                 'return_visitors' => $return,
                 'return_visitor_rate' => $rate,
                 'benchmark_comparison' => $bench,
+                'benchmark_key' => $benchKey,
             ],
         ];
     }

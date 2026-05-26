@@ -14,6 +14,7 @@ use App\Services\Analytics\Insights\Generators\RetentionInsightGenerator;
 use App\Services\Analytics\Insights\Generators\SecurityInsightGenerator;
 use App\Services\Analytics\Insights\Generators\TemporalInsightGenerator;
 use App\Services\Analytics\Insights\InsightGeneratorRegistry;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -60,9 +61,13 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
      * Otherwise delegates to InsightGeneratorRegistry::generate(), collects all
      * non-null insight payloads, and computes a summary over them.
      *
+     * `generated_at` reflects the MAX(created_at) of the clicks in scope,
+     * not the current wall-clock time, so callers know how fresh the data is.
+     * Returns null when there are no clicks at all.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @return array{insights: array, summary: array{total_insights: int, high_priority: int, actionable_insights: int, avg_confidence: float}, analytics_data: array, generated_at: string}
+     * @return array{insights: array, summary: array{total_insights: int, high_priority: int, actionable_insights: int, avg_confidence: float}, analytics_data: array, generated_at: string|null}
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
@@ -71,6 +76,12 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         $filters ??= new AnalyticsFilters;
         Link::findOrFail($linkId);
         $totalClicks = $this->baseQuery($linkId, $filters)->count();
+
+        $lastClickAt = $filters->applyToQuery(
+            DB::table('clicks')->where('link_id', $linkId)
+        )->max('created_at');
+
+        $generatedAt = $lastClickAt ? Carbon::parse($lastClickAt)->toISOString() : null;
 
         $analyticsData = [
             'retention' => $this->getReturnVisitorRate($linkId, $filters),
@@ -93,7 +104,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
                     'avg_confidence' => 0,
                 ],
                 'analytics_data' => $analyticsData,
-                'generated_at' => now()->toISOString(),
+                'generated_at' => $generatedAt,
             ];
         }
 
@@ -110,16 +121,22 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
                     : 0,
             ],
             'analytics_data' => $analyticsData,
-            'generated_at' => now()->toISOString(),
+            'generated_at' => $generatedAt,
         ];
     }
 
     /**
      * Compute return-visitor retention metrics for a link.
      *
+     * Removed fields (were fabricated):
+     *   - `retention_score`: was `min(100, return_rate * 1.5)` — arbitrary scaling.
+     *   - `benchmark_comparison`: used hardcoded thresholds unrelated to real benchmarks.
+     *
+     * Rates are returned as decimals in [0.0, 1.0] so callers control formatting.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  AnalyticsFilters  $filters  Active filter state.
-     * @return array{return_visitor_rate: float, new_visitor_rate: float, total_visitors: int, return_visitors: int, new_visitors: int, retention_score: float, benchmark_comparison: string}
+     * @return array{return_visitor_rate: float, new_visitor_rate: float, total_visitors: int, return_visitors: int, new_visitors: int}
      */
     private function getReturnVisitorRate(int $linkId, AnalyticsFilters $filters): array
     {
@@ -127,13 +144,11 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
 
         if ($totalVisitors === 0) {
             return [
-                'return_visitor_rate' => 0,
-                'new_visitor_rate' => 0,
+                'return_visitor_rate' => 0.0,
+                'new_visitor_rate' => 0.0,
                 'total_visitors' => 0,
                 'return_visitors' => 0,
                 'new_visitors' => 0,
-                'retention_score' => 0,
-                'benchmark_comparison' => 'insufficient_data',
             ];
         }
 
@@ -143,39 +158,29 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ->count('ip');
 
         $newVisitors = max(0, $totalVisitors - $returnVisitors);
-        $returnVisitorRate = round(($returnVisitors / $totalVisitors) * 100, 2);
-        $newVisitorRate = round(($newVisitors / $totalVisitors) * 100, 2);
-
-        $retentionScore = min(100, round($returnVisitorRate * 1.5, 1));
-
-        $benchmarkComparison = 'average';
-        if ($returnVisitorRate >= 40) {
-            $benchmarkComparison = 'excellent';
-        } elseif ($returnVisitorRate >= 25) {
-            $benchmarkComparison = 'good';
-        } elseif ($returnVisitorRate >= 15) {
-            $benchmarkComparison = 'average';
-        } else {
-            $benchmarkComparison = 'needs_improvement';
-        }
+        $returnRate = $returnVisitors / $totalVisitors;
 
         return [
-            'return_visitor_rate' => $returnVisitorRate,
-            'new_visitor_rate' => $newVisitorRate,
+            'return_visitor_rate' => round($returnRate, 4),
+            'new_visitor_rate' => round(1 - $returnRate, 4),
             'total_visitors' => $totalVisitors,
             'return_visitors' => $returnVisitors,
             'new_visitors' => $newVisitors,
-            'retention_score' => $retentionScore,
-            'benchmark_comparison' => $benchmarkComparison,
         ];
     }
 
     /**
      * Analyse session depth (how many clicks per session) for a link.
      *
+     * Removed fields (were fabricated):
+     *   - `engagement_score`: was `min(100, avg_session_depth * 20)` — arbitrary scaling.
+     *   - `session_quality`: label derived from hardcoded thresholds (4+ = excellent, etc.).
+     *
+     * `power_users_count` counts sessions with 3 or more clicks (high-engagement threshold).
+     *
      * @param  int  $linkId  Link primary key.
      * @param  AnalyticsFilters  $filters  Active filter state.
-     * @return array{avg_session_depth: float, max_session_depth: int, session_distribution: array, power_users_count: int, engagement_score: float, session_quality: string}
+     * @return array{avg_session_clicks: float, max_session_depth: int, session_distribution: array, power_users_count: int}
      */
     private function getSessionDepthAnalysis(int $linkId, AnalyticsFilters $filters): array
     {
@@ -197,12 +202,10 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
 
         if ($sessionData->isEmpty()) {
             return [
-                'avg_session_depth' => 0,
+                'avg_session_clicks' => 0,
                 'max_session_depth' => 0,
                 'session_distribution' => [],
                 'power_users_count' => 0,
-                'engagement_score' => 0,
-                'session_quality' => 'no_data',
             ];
         }
 
@@ -210,12 +213,10 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
 
         if ($totalUsers === 0) {
             return [
-                'avg_session_depth' => 0,
+                'avg_session_clicks' => 0,
                 'max_session_depth' => 0,
                 'session_distribution' => [],
                 'power_users_count' => 0,
-                'engagement_score' => 0,
-                'session_quality' => 'no_data',
             ];
         }
 
@@ -223,49 +224,38 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             return $item->session_clicks * $item->users;
         });
 
-        $avgSessionDepth = round($weightedSum / $totalUsers, 2);
-        $maxSessionDepth = $sessionData->max('session_clicks');
+        $avgDepth = round($weightedSum / $totalUsers, 2);
+        $maxDepth = $sessionData->max('session_clicks');
 
-        $powerUsersCount = $sessionData->where('session_clicks', '>=', 5)->sum('users');
-
-        $engagementScore = min(100, round($avgSessionDepth * 20, 1));
-
-        $sessionQuality = 'low';
-        if ($avgSessionDepth >= 4) {
-            $sessionQuality = 'excellent';
-        } elseif ($avgSessionDepth >= 2.5) {
-            $sessionQuality = 'good';
-        } elseif ($avgSessionDepth >= 1.5) {
-            $sessionQuality = 'average';
-        }
+        // Power users = sessions with 3+ clicks (meaningful engagement threshold)
+        $powerUsers = $sessionData->where('session_clicks', '>=', 3)->sum('users');
 
         $distribution = $sessionData->map(function ($item) use ($totalUsers) {
             return [
-                'session_clicks' => $item->session_clicks,
-                'users' => $item->users,
+                'clicks_count' => $item->session_clicks,
+                'frequency' => $item->users,
                 'percentage' => round(($item->users / $totalUsers) * 100, 1),
                 'avg_response_time' => round($item->avg_response_time ?? 0, 3),
             ];
         })->toArray();
 
         return [
-            'avg_session_depth' => $avgSessionDepth,
-            'max_session_depth' => $maxSessionDepth,
+            'avg_session_clicks' => $avgDepth,
+            'max_session_depth' => $maxDepth,
             'session_distribution' => $distribution,
-            'power_users_count' => $powerUsersCount,
-            'power_users_percentage' => round(($powerUsersCount / $totalUsers) * 100, 1),
-            'engagement_score' => $engagementScore,
-            'session_quality' => $sessionQuality,
-            'total_sessions' => $totalUsers,
+            'power_users_count' => $powerUsers,
         ];
     }
 
     /**
      * Analyse traffic sources and channel distribution for a link.
      *
+     * Recommendations use `message_key` (i18n key string) instead of hardcoded text so
+     * the frontend can translate them via `t(recommendation.message_key)`.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  AnalyticsFilters  $filters  Active filter state.
-     * @return array{sources: array, channels: array, top_source: array|null, source_diversity: int, total_clicks: int, recommendations: array}
+     * @return array{sources: array, channels: array, top_source: array|null, source_diversity: int, total_clicks: int, recommendations: array<int, array{type: string, message_key: string, priority: string}>}
      */
     private function getTrafficSourceAnalysis(int $linkId, AnalyticsFilters $filters): array
     {
@@ -351,7 +341,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         if (isset($channelData['social']) && $channelData['social']['percentage'] > 50) {
             $recommendations[] = [
                 'type' => 'optimization',
-                'message' => 'Alto tráfego social. Considere diversificar com SEO e email marketing.',
+                'message_key' => 'insights.recommendations.highSocialTraffic',
                 'priority' => 'medium',
             ];
         }
@@ -359,7 +349,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         if (isset($channelData['direct']) && $channelData['direct']['percentage'] > 70) {
             $recommendations[] = [
                 'type' => 'growth',
-                'message' => 'Tráfego muito direto. Explore campanhas em redes sociais para ampliar alcance.',
+                'message_key' => 'insights.recommendations.highDirectTraffic',
                 'priority' => 'high',
             ];
         }
@@ -367,7 +357,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         if ($sourceDiversity < 3) {
             $recommendations[] = [
                 'type' => 'diversification',
-                'message' => 'Baixa diversidade de fontes. Considere múltiplos canais para reduzir riscos.',
+                'message_key' => 'insights.recommendations.lowSourceDiversity',
                 'priority' => 'high',
             ];
         }

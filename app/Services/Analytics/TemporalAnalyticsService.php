@@ -37,7 +37,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * @param  int  $linkId  Link primary key.
      * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
      * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'. Filters clicks by is_weekend/is_business_hours before aggregating.
-     * @return array<string, mixed> Keys: clicks_by_hour, clicks_by_day_of_week, hourly_patterns_local, weekend_vs_weekday, business_hours_analysis, holiday_impact, seasonal_distribution.
+     * @return array<string, mixed> Keys: clicks_by_hour, clicks_by_day_of_week, hourly_patterns_local, weekend_vs_weekday, business_hours_analysis, holiday_impact, seasonal_distribution, viral_rank_by_day, click_velocity.
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
@@ -53,6 +53,11 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
                 'holiday_impact' => ['holiday_clicks' => 0, 'non_holiday_clicks' => 0, 'holiday_percentage' => 0, 'top_holidays' => []],
                 'seasonal_distribution' => [],
                 'viral_rank_by_day' => [],
+                'click_velocity' => [
+                    'velocity_distribution' => [],
+                    'phase2_available' => false,
+                    'total_with_data' => 0,
+                ],
             ];
         }
 
@@ -65,6 +70,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             'holiday_impact' => $this->getHolidayImpact($linkId, $filters, $segment),
             'seasonal_distribution' => $this->getSeasonalDistribution($linkId, $filters, $segment),
             'viral_rank_by_day' => $this->getViralRankByDay($linkId, $filters, $segment),
+            'click_velocity' => $this->getClickVelocityDistribution($linkId, $filters, $segment),
         ];
     }
 
@@ -114,7 +120,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             'timezone_analysis' => $this->getTimezoneAnalysis($clicks),
             'heatmap_data' => $this->getHourDayHeatmap($clicks),
             'daily_timeline' => $this->getDailyTimeline($linkId, $filters, $segment),
-            'device_by_period' => $this->getDeviceByPeriod($clicks),
+            'device_by_period' => $this->getDeviceByPeriodWithKeys($clicks),
             'holiday_impact' => $this->getHolidayImpact($linkId, $filters, $segment),
             'seasonal_distribution' => $this->getSeasonalDistribution($linkId, $filters, $segment),
         ];
@@ -375,16 +381,36 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return $result;
     }
 
+    /**
+     * Returns a day-by-day click timeline for the given link.
+     *
+     * When no explicit `dateFrom` filter is provided, results are capped to the
+     * last 90 days. In that case the response indicates `capped = true` and
+     * provides the earliest available click date so the frontend can inform the
+     * user and suggest using the date filter to access older data.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array{data: array<int, array{date: string, clicks: int, unique_visitors: int}>, capped: bool, earliest_available_at: string|null}
+     */
     private function getDailyTimeline(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
+        $capped = $filters->dateFrom === null;
+
+        // Determine the actual earliest click date before applying the cap so
+        // we can surface it in the response regardless of the cap.
+        $earliestAvailableAt = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw('DATE(MIN(created_at)) as earliest')
+            ->value('earliest');
+
         $query = $this->baseQuery($linkId, $filters, $segment);
 
-        // Cap to 90 days when no explicit date range is set.
-        if ($filters->dateFrom === null) {
+        if ($capped) {
             $query->where('created_at', '>=', now()->subDays(90));
         }
 
-        return $query
+        $data = $query
             ->selectRaw('DATE(created_at) as date, COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors')
             ->groupByRaw('DATE(created_at)')
             ->orderByRaw('date')
@@ -395,6 +421,12 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
                 'unique_visitors' => (int) $r->unique_visitors,
             ])
             ->toArray();
+
+        return [
+            'data' => $data,
+            'capped' => $capped,
+            'earliest_available_at' => $earliestAvailableAt,
+        ];
     }
 
     /**
@@ -463,9 +495,14 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * Returns clicks grouped by day with the peak viral rank for each day.
      *
      * Peak rank order: viral (4) > trending (3) > warming (2) > cold (1).
-     * Clicks with null viral_rank (pre-Phase 2) are excluded.
+     * Clicks with NULL viral_rank (pre-Phase 2) are included and mapped to the
+     * special value 'unranked' so they are visible in the frontend chart instead
+     * of being silently excluded.
      * Results ordered by date ascending.
      *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
      * @return array<int, array{date: string, peak_rank: string, click_count: int}>
      */
     private function getViralRankByDay(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
@@ -481,37 +518,51 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
             ->selectRaw("
                 DATE(created_at) as date,
                 COUNT(*) as click_count,
-                CASE MAX(CASE viral_rank
-                    WHEN 'viral'    THEN 4
-                    WHEN 'trending' THEN 3
-                    WHEN 'warming'  THEN 2
-                    WHEN 'cold'     THEN 1
-                END)
-                    WHEN 4 THEN 'viral'
-                    WHEN 3 THEN 'trending'
-                    WHEN 2 THEN 'warming'
-                    WHEN 1 THEN 'cold'
-                END as peak_rank
+                COALESCE(
+                    CASE MAX(CASE viral_rank
+                        WHEN 'viral'    THEN 4
+                        WHEN 'trending' THEN 3
+                        WHEN 'warming'  THEN 2
+                        WHEN 'cold'     THEN 1
+                        ELSE NULL
+                    END)
+                        WHEN 4 THEN 'viral'
+                        WHEN 3 THEN 'trending'
+                        WHEN 2 THEN 'warming'
+                        WHEN 1 THEN 'cold'
+                        ELSE NULL
+                    END,
+                    'unranked'
+                ) as peak_rank
             ")
-            ->whereNotNull('viral_rank')
             ->groupByRaw('DATE(created_at)')
             ->orderByRaw('DATE(created_at) ASC')
             ->get()
             ->map(fn ($r) => [
                 'date' => $r->date,
-                'peak_rank' => $r->peak_rank ?? 'cold',
+                'peak_rank' => $r->peak_rank ?? 'unranked',
                 'click_count' => (int) $r->click_count,
             ])
             ->toArray();
     }
 
-    private function getDeviceByPeriod($clicks): array
+    /**
+     * Aggregates click device types into four time-of-day periods.
+     *
+     * Returns period keys as lowercase strings ('dawn', 'morning', 'afternoon',
+     * 'evening') without translated labels — the frontend is responsible for
+     * mapping each key to a localised label via i18n.
+     *
+     * @param  \Illuminate\Support\Collection  $clicks  Click collection (already filtered).
+     * @return array<int, array{period: string, desktop: int, mobile: int, tablet: int}>
+     */
+    private function getDeviceByPeriodWithKeys($clicks): array
     {
         $periods = [
-            'dawn' => ['label' => 'Madrugada', 'range' => [0, 5],  'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'morning' => ['label' => 'Manhã',     'range' => [6, 11], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'afternoon' => ['label' => 'Tarde',     'range' => [12, 17], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'evening' => ['label' => 'Noite',     'range' => [18, 23], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'dawn'      => ['range' => [0, 5],   'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'morning'   => ['range' => [6, 11],  'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'afternoon' => ['range' => [12, 17], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
+            'evening'   => ['range' => [18, 23], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
         ];
 
         foreach ($clicks as $click) {
@@ -530,11 +581,99 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         }
 
         return array_values(array_map(fn ($key, $p) => [
-            'period' => $key,
-            'label' => $p['label'],
+            'period'  => $key,
             'desktop' => $p['desktop'],
-            'mobile' => $p['mobile'],
-            'tablet' => $p['tablet'],
+            'mobile'  => $p['mobile'],
+            'tablet'  => $p['tablet'],
         ], array_keys($periods), $periods));
+    }
+
+    /**
+     * @deprecated Use {@see getDeviceByPeriodWithKeys()} instead.
+     *   Kept only to avoid breaking callers that may still reference this method.
+     *   Will be removed in a future cleanup pass.
+     *
+     * @param  \Illuminate\Support\Collection  $clicks  Click collection.
+     * @return array<int, array{period: string, label: string, desktop: int, mobile: int, tablet: int}>
+     */
+    private function getDeviceByPeriod($clicks): array
+    {
+        $withKeys = $this->getDeviceByPeriodWithKeys($clicks);
+        $labels = [
+            'dawn' => 'Madrugada', 'morning' => 'Manhã',
+            'afternoon' => 'Tarde', 'evening' => 'Noite',
+        ];
+
+        return array_map(fn ($p) => array_merge($p, ['label' => $labels[$p['period']] ?? $p['period']]), $withKeys);
+    }
+
+    /**
+     * Computes a distribution of click velocity (seconds between consecutive clicks)
+     * bucketed into five categories: instant, very_fast, fast, moderate, slow.
+     *
+     * Pre-Phase 2 clicks have NULL in `seconds_since_last_click`. These are counted
+     * but excluded from the distribution buckets. The `phase2_available` flag is
+     * set to true when at least 50% of clicks carry non-NULL velocity data, which
+     * indicates Phase 2 tracking was active for the majority of the link's traffic.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array{
+     *     velocity_distribution: array<int, array{bucket: string, label_key: string, min_sec: int, max_sec: int|null, count: int}>,
+     *     phase2_available: bool,
+     *     total_with_data: int
+     * }
+     */
+    private function getClickVelocityDistribution(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
+    {
+        $totalClicks = $this->baseQuery($linkId, $filters, $segment)->count();
+
+        $withData = $this->baseQuery($linkId, $filters, $segment)
+            ->whereNotNull('seconds_since_last_click')
+            ->count();
+
+        $phase2Available = $totalClicks > 0 && ($withData / $totalClicks) >= 0.5;
+
+        // Bucket definitions: [bucket, label_key, min_sec, max_sec|null].
+        $buckets = [
+            ['instant',   'velocity.instant',  0,   1],
+            ['very_fast', 'velocity.veryFast', 1,   10],
+            ['fast',      'velocity.fast',     10,  60],
+            ['moderate',  'velocity.moderate', 60,  300],
+            ['slow',      'velocity.slow',     300, null],
+        ];
+
+        // Single query with CASE WHEN to bucket all velocities in one pass.
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("
+                CASE
+                    WHEN seconds_since_last_click IS NULL THEN NULL
+                    WHEN seconds_since_last_click < 1    THEN 'instant'
+                    WHEN seconds_since_last_click < 10   THEN 'very_fast'
+                    WHEN seconds_since_last_click < 60   THEN 'fast'
+                    WHEN seconds_since_last_click < 300  THEN 'moderate'
+                    ELSE 'slow'
+                END as bucket,
+                COUNT(*) as count
+            ")
+            ->whereNotNull('seconds_since_last_click')
+            ->groupByRaw('1')
+            ->get()
+            ->keyBy('bucket');
+
+        $distribution = array_map(fn ($b) => [
+            'bucket'    => $b[0],
+            'label_key' => $b[1],
+            'min_sec'   => $b[2],
+            'max_sec'   => $b[3],
+            'count'     => (int) ($rows->get($b[0])?->count ?? 0),
+        ], $buckets);
+
+        return [
+            'velocity_distribution' => $distribution,
+            'phase2_available'      => $phase2Available,
+            'total_with_data'       => $withData,
+        ];
     }
 }

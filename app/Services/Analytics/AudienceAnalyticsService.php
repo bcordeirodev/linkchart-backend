@@ -62,15 +62,16 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'operating_systems' => [],
                 'device_performance' => [],
                 'languages' => [],
-                'language_breakdown' => [],
-                'platform_breakdown' => [],
+                'language_breakdown' => ['data' => [], 'phase_available' => false],
+                'platform_breakdown' => ['data' => [], 'phase_available' => false, 'ch_mobile_breakdown' => ['mobile' => 0, 'not_mobile' => 0, 'unknown' => 0, 'phase1_available' => false]],
                 'data_saver' => ['clicks' => 0, 'total' => 0, 'percentage' => 0.0],
-                'connection_type_breakdown' => [],
-                'rendering_engine' => [],
-                'navigation_context_breakdown' => [],
+                'connection_type_breakdown' => ['data' => [], 'phase_available' => false],
+                'rendering_engine' => ['data' => [], 'phase_available' => false],
+                'navigation_context_breakdown' => ['data' => [], 'phase_available' => false],
                 'social_platform_breakdown' => [],
                 'return_visitor_stats' => ['return_rate' => 0.0, 'new_rate' => 0.0, 'avg_session_clicks' => 0.0],
-                'quality_breakdown' => ['tiers' => [], 'bot_clicks' => 0, 'bot_percentage' => 0.0, 'avg_fingerprint_score' => 0.0],
+                'quality_breakdown' => ['tiers' => [], 'bot_clicks' => 0, 'bot_percentage' => 0.0, 'avg_fingerprint_score' => 0.0, 'phase_available' => false],
+                'fetch_dest_breakdown' => ['data' => [], 'phase1_available' => false],
             ];
         }
 
@@ -91,6 +92,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'social_platform_breakdown' => $this->getSocialPlatformBreakdown($linkId, $filters),
             'return_visitor_stats' => $this->getReturnVisitorStats($linkId, $filters),
             'quality_breakdown' => $this->getQualityBreakdown($linkId, $filters),
+            'fetch_dest_breakdown' => $this->getFetchDestBreakdown($linkId, $filters),
         ];
     }
 
@@ -175,45 +177,101 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
     }
 
     /**
+     * Returns browser distribution with version and percentage.
+     *
+     * Uses PostgreSQL window functions when available for efficient percentage calculation.
+     * Falls back to a two-step PHP computation for SQLite (development/test environments).
+     *
      * @return array<int, array{browser: string, version: ?string, clicks: int, percentage: float}>
      */
     private function getBrowserDistribution(int $linkId, AnalyticsFilters $filters): array
     {
-        return $this->rawQuery($linkId, $filters)
-            ->selectRaw('browser, browser_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
+        $driver = DB::getDriverName();
+
+        if ($driver === 'pgsql') {
+            // PostgreSQL: efficient window-function percentage calculation in one query.
+            return $this->rawQuery($linkId, $filters)
+                ->selectRaw('browser, browser_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
+                ->whereNotNull('browser')
+                ->groupBy('browser', 'browser_version')
+                ->orderBy('clicks', 'desc')
+                ->limit(15)
+                ->get()
+                ->map(fn ($r) => [
+                    'browser' => $r->browser,
+                    'version' => $r->browser_version,
+                    'clicks' => (int) $r->clicks,
+                    'percentage' => (float) $r->percentage,
+                ])
+                ->toArray();
+        }
+
+        // SQLite fallback: compute total separately, then calculate percentage in PHP.
+        $rows = $this->rawQuery($linkId, $filters)
+            ->selectRaw('browser, browser_version, COUNT(*) as clicks')
             ->whereNotNull('browser')
             ->groupBy('browser', 'browser_version')
             ->orderBy('clicks', 'desc')
             ->limit(15)
-            ->get()
-            ->map(fn ($r) => [
-                'browser' => $r->browser,
-                'version' => $r->browser_version,
-                'clicks' => (int) $r->clicks,
-                'percentage' => (float) $r->percentage,
-            ])
-            ->toArray();
+            ->get();
+
+        $total = $rows->sum('clicks');
+
+        return $rows->map(fn ($r) => [
+            'browser' => $r->browser,
+            'version' => $r->browser_version,
+            'clicks' => (int) $r->clicks,
+            'percentage' => $total > 0 ? round($r->clicks * 100.0 / $total, 2) : 0.0,
+        ])->toArray();
     }
 
     /**
+     * Returns OS distribution with version and percentage.
+     *
+     * Uses PostgreSQL window functions when available for efficient percentage calculation.
+     * Falls back to a two-step PHP computation for SQLite (development/test environments).
+     *
      * @return array<int, array{os: string, version: ?string, clicks: int, percentage: float}>
      */
     private function getOSDistribution(int $linkId, AnalyticsFilters $filters): array
     {
-        return $this->rawQuery($linkId, $filters)
-            ->selectRaw('os, os_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
+        $driver = DB::getDriverName();
+
+        if ($driver === 'pgsql') {
+            // PostgreSQL: efficient window-function percentage calculation in one query.
+            return $this->rawQuery($linkId, $filters)
+                ->selectRaw('os, os_version, COUNT(*) as clicks, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) as percentage')
+                ->whereNotNull('os')
+                ->groupBy('os', 'os_version')
+                ->orderBy('clicks', 'desc')
+                ->limit(15)
+                ->get()
+                ->map(fn ($r) => [
+                    'os' => $r->os,
+                    'version' => $r->os_version,
+                    'clicks' => (int) $r->clicks,
+                    'percentage' => (float) $r->percentage,
+                ])
+                ->toArray();
+        }
+
+        // SQLite fallback: compute total separately, then calculate percentage in PHP.
+        $rows = $this->rawQuery($linkId, $filters)
+            ->selectRaw('os, os_version, COUNT(*) as clicks')
             ->whereNotNull('os')
             ->groupBy('os', 'os_version')
             ->orderBy('clicks', 'desc')
             ->limit(15)
-            ->get()
-            ->map(fn ($r) => [
-                'os' => $r->os,
-                'version' => $r->os_version,
-                'clicks' => (int) $r->clicks,
-                'percentage' => (float) $r->percentage,
-            ])
-            ->toArray();
+            ->get();
+
+        $total = $rows->sum('clicks');
+
+        return $rows->map(fn ($r) => [
+            'os' => $r->os,
+            'version' => $r->os_version,
+            'clicks' => (int) $r->clicks,
+            'percentage' => $total > 0 ? round($r->clicks * 100.0 / $total, 2) : 0.0,
+        ])->toArray();
     }
 
     /**
@@ -275,18 +333,22 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
     }
 
     /**
-     * Returns a breakdown of clicks grouped by parsed primary language and region.
+     * Returns a breakdown of clicks grouped by parsed primary language and region,
+     * along with a `phase_available` flag.
      *
      * Uses the pre-parsed `primary_language` and `language_region` columns (Phase 1),
      * so results only include clicks recorded after the Phase 1 migration.
+     * `phase_available` is `true` when at least 20% of total clicks have a non-null
+     * `primary_language` value.
      *
-     * @return array<int, array{language: string, region: ?string, clicks: int, percentage: float}>
+     * @return array{data: array<int, array{language: string, region: ?string, clicks: int, percentage: float}>, phase_available: bool}
      */
     private function getLanguageBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $this->baseQuery($linkId, $filters)->count();
+        $totalClicks = $this->baseQuery($linkId, $filters)->count();
+        $phaseClicks = $this->baseQuery($linkId, $filters)->whereNotNull('primary_language')->count();
 
-        return $this->rawQuery($linkId, $filters)
+        $data = $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(primary_language, 'unknown') as language, language_region, COUNT(*) as clicks")
             ->whereNotNull('primary_language')
             ->groupBy('primary_language', 'language_region')
@@ -297,24 +359,36 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
                 'language' => $r->language,
                 'region' => $r->language_region,
                 'clicks' => (int) $r->clicks,
-                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+                'percentage' => $totalClicks > 0 ? round($r->clicks / $totalClicks * 100, 2) : 0,
             ])
             ->toArray();
+
+        return [
+            'data' => $data,
+            'phase_available' => $totalClicks > 0 && ($phaseClicks / $totalClicks) > 0.20,
+        ];
     }
 
     /**
-     * Returns a breakdown of clicks by Client Hints platform (ch_platform column).
+     * Returns a breakdown of clicks by Client Hints platform (`ch_platform`) and mobile signal
+     * (`ch_is_mobile`), along with phase availability flags.
      *
-     * The ch_platform column is populated from the Sec-CH-UA-Platform header (Phase 1).
+     * The `ch_platform` column is populated from the Sec-CH-UA-Platform header (Phase 1).
      * Results only include clicks from Chromium-based browsers that send this header.
+     * `phase_available` is `true` when at least 20% of total clicks have a non-null `ch_platform`.
      *
-     * @return array<int, array{platform: string, clicks: int, percentage: float}>
+     * The `ch_mobile_breakdown` sub-key aggregates `ch_is_mobile` into three buckets:
+     * `mobile` (ch_is_mobile=1), `not_mobile` (ch_is_mobile=0), and `unknown` (NULL).
+     * Its `phase1_available` flag is `true` when mobile+not_mobile exceeds 5% of total clicks.
+     *
+     * @return array{data: array<int, array{platform: string, clicks: int, percentage: float}>, phase_available: bool, ch_mobile_breakdown: array{mobile: int, not_mobile: int, unknown: int, phase1_available: bool}}
      */
     private function getPlatformBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $this->baseQuery($linkId, $filters)->count();
+        $totalClicks = $this->baseQuery($linkId, $filters)->count();
+        $phaseClicks = $this->baseQuery($linkId, $filters)->whereNotNull('ch_platform')->count();
 
-        return $this->rawQuery($linkId, $filters)
+        $data = $this->rawQuery($linkId, $filters)
             ->selectRaw('ch_platform as platform, COUNT(*) as clicks')
             ->whereNotNull('ch_platform')
             ->groupBy('ch_platform')
@@ -324,24 +398,44 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->map(fn ($r) => [
                 'platform' => $r->platform,
                 'clicks' => (int) $r->clicks,
-                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+                'percentage' => $totalClicks > 0 ? round($r->clicks / $totalClicks * 100, 2) : 0,
             ])
             ->toArray();
+
+        $mobileCount = $this->baseQuery($linkId, $filters)->where('ch_is_mobile', 1)->count();
+        $notMobileCount = $this->baseQuery($linkId, $filters)->where('ch_is_mobile', 0)->count();
+        $unknownCount = $this->baseQuery($linkId, $filters)->whereNull('ch_is_mobile')->count();
+        $phase1AvailableMobile = $totalClicks > 0 && (($mobileCount + $notMobileCount) / $totalClicks) > 0.05;
+
+        return [
+            'data' => $data,
+            'phase_available' => $totalClicks > 0 && ($phaseClicks / $totalClicks) > 0.20,
+            'ch_mobile_breakdown' => [
+                'mobile' => $mobileCount,
+                'not_mobile' => $notMobileCount,
+                'unknown' => $unknownCount,
+                'phase1_available' => $phase1AvailableMobile,
+            ],
+        ];
     }
 
     /**
-     * Returns click distribution grouped by ISP connection type.
+     * Returns click distribution grouped by ISP connection type, along with a
+     * `phase_available` flag.
      *
      * Populated from Phase 2 ISP keyword classification. Clicks before Phase 2
      * have null connection_type and are coalesced to 'unknown'.
+     * `phase_available` is `true` when at least 20% of total clicks have a non-null
+     * `connection_type` value.
      *
-     * @return array<int, array{type: string, clicks: int, percentage: float}>
+     * @return array{data: array<int, array{type: string, clicks: int, percentage: float}>, phase_available: bool}
      */
     private function getConnectionTypeBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $this->baseQuery($linkId, $filters)->count();
+        $totalClicks = $this->baseQuery($linkId, $filters)->count();
+        $phaseClicks = $this->baseQuery($linkId, $filters)->whereNotNull('connection_type')->count();
 
-        return $this->rawQuery($linkId, $filters)
+        $data = $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(connection_type, 'unknown') as type, COUNT(*) as clicks")
             ->groupBy('connection_type')
             ->orderBy('clicks', 'desc')
@@ -349,24 +443,33 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->map(fn ($r) => [
                 'type' => $r->type,
                 'clicks' => (int) $r->clicks,
-                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+                'percentage' => $totalClicks > 0 ? round($r->clicks / $totalClicks * 100, 2) : 0,
             ])
             ->toArray();
+
+        return [
+            'data' => $data,
+            'phase_available' => $totalClicks > 0 && ($phaseClicks / $totalClicks) > 0.20,
+        ];
     }
 
     /**
-     * Returns click distribution grouped by browser rendering engine.
+     * Returns click distribution grouped by browser rendering engine, along with a
+     * `phase_available` flag.
      *
      * Derived from browser name in Phase 2. Clicks before Phase 2 have null
-     * rendering_engine and are coalesced to 'unknown'.
+     * `rendering_engine` and are coalesced to 'unknown'.
+     * `phase_available` is `true` when at least 20% of total clicks have a non-null
+     * `rendering_engine` value.
      *
-     * @return array<int, array{engine: string, clicks: int, percentage: float}>
+     * @return array{data: array<int, array{engine: string, clicks: int, percentage: float}>, phase_available: bool}
      */
     private function getRenderingEngineBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $this->baseQuery($linkId, $filters)->count();
+        $totalClicks = $this->baseQuery($linkId, $filters)->count();
+        $phaseClicks = $this->baseQuery($linkId, $filters)->whereNotNull('rendering_engine')->count();
 
-        return $this->rawQuery($linkId, $filters)
+        $data = $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(rendering_engine, 'unknown') as engine, COUNT(*) as clicks")
             ->groupBy('rendering_engine')
             ->orderBy('clicks', 'desc')
@@ -374,23 +477,32 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->map(fn ($r) => [
                 'engine' => $r->engine,
                 'clicks' => (int) $r->clicks,
-                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0,
+                'percentage' => $totalClicks > 0 ? round($r->clicks / $totalClicks * 100, 2) : 0,
             ])
             ->toArray();
+
+        return [
+            'data' => $data,
+            'phase_available' => $totalClicks > 0 && ($phaseClicks / $totalClicks) > 0.20,
+        ];
     }
 
     /**
-     * Returns click distribution grouped by navigation context.
+     * Returns click distribution grouped by navigation context, along with a
+     * `phase_available` flag.
      *
-     * navigation_context is derived from Sec-Fetch-Site + Sec-Fetch-Mode headers (Phase 1).
+     * `navigation_context` is derived from Sec-Fetch-Site + Sec-Fetch-Mode headers (Phase 1).
      * NULL entries (clicks before Phase 1) are grouped as 'unknown' only if they
-     * represent more than 1 % of total clicks.
+     * represent more than 1% of total clicks.
+     * `phase_available` is `true` when at least 20% of total clicks have a non-null
+     * `navigation_context` value.
      *
-     * @return array<int, array{context: string, clicks: int, percentage: float}>
+     * @return array{data: array<int, array{context: string, clicks: int, percentage: float}>, phase_available: bool}
      */
     private function getNavigationContextBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
-        $total = $this->baseQuery($linkId, $filters)->count();
+        $totalClicks = $this->baseQuery($linkId, $filters)->count();
+        $phaseClicks = $this->baseQuery($linkId, $filters)->whereNotNull('navigation_context')->count();
 
         $rows = $this->rawQuery($linkId, $filters)
             ->selectRaw("COALESCE(navigation_context, 'unknown') as context, COUNT(*) as clicks")
@@ -398,21 +510,26 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             ->orderBy('clicks', 'desc')
             ->get();
 
-        return $rows
-            ->filter(function ($r) use ($total) {
+        $data = $rows
+            ->filter(function ($r) use ($totalClicks) {
                 if ($r->context !== 'unknown') {
                     return true;
                 }
 
-                return $total > 0 && ($r->clicks / $total) > 0.01;
+                return $totalClicks > 0 && ($r->clicks / $totalClicks) > 0.01;
             })
             ->map(fn ($r) => [
                 'context' => $r->context,
                 'clicks' => (int) $r->clicks,
-                'percentage' => $total > 0 ? round($r->clicks / $total * 100, 2) : 0.0,
+                'percentage' => $totalClicks > 0 ? round($r->clicks / $totalClicks * 100, 2) : 0.0,
             ])
             ->values()
             ->toArray();
+
+        return [
+            'data' => $data,
+            'phase_available' => $totalClicks > 0 && ($phaseClicks / $totalClicks) > 0.20,
+        ];
     }
 
     /**
@@ -472,16 +589,20 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
     }
 
     /**
-     * Returns quality tier distribution, bot rate and average fingerprint score.
+     * Returns quality tier distribution, bot rate, average fingerprint score, and a
+     * `phase_available` flag.
      *
      * Clicks with null quality_tier (before Phase 3) are excluded from the tiers array
      * but still counted in the bot_percentage denominator.
+     * `phase_available` is `true` when at least 20% of total clicks have a non-null
+     * `quality_tier` value.
      *
-     * @return array{tiers: array, bot_clicks: int, bot_percentage: float, avg_fingerprint_score: float}
+     * @return array{tiers: array, bot_clicks: int, bot_percentage: float, avg_fingerprint_score: float, phase_available: bool}
      */
     private function getQualityBreakdown(int $linkId, AnalyticsFilters $filters): array
     {
         $total = $this->baseQuery($linkId, $filters)->count();
+        $phaseClicks = $this->baseQuery($linkId, $filters)->whereNotNull('quality_tier')->count();
 
         $tiers = $this->rawQuery($linkId, $filters)
             ->selectRaw('quality_tier, COUNT(*) as clicks')
@@ -504,6 +625,7 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'bot_clicks' => $botClicks,
             'bot_percentage' => $total > 0 ? round($botClicks / $total * 100, 2) : 0.0,
             'avg_fingerprint_score' => round((float) ($avgFingerprint ?? 0), 2),
+            'phase_available' => $total > 0 && ($phaseClicks / $total) > 0.20,
         ];
     }
 
@@ -523,6 +645,44 @@ class AudienceAnalyticsService implements \App\Contracts\Analytics\AudienceAnaly
             'clicks' => $dataSaver,
             'total' => $total,
             'percentage' => $total > 0 ? round($dataSaver / $total * 100, 2) : 0,
+        ];
+    }
+
+    /**
+     * Returns a breakdown of clicks grouped by `fetch_dest` (Sec-Fetch-Dest header, Phase 1),
+     * along with a `phase1_available` flag.
+     *
+     * `fetch_dest` identifies the type of resource being requested (document, image, script, etc.).
+     * Only clicks with a non-null `fetch_dest` are included in the data array.
+     * `phase1_available` is `true` when non-null `fetch_dest` clicks exceed 5% of total clicks,
+     * indicating Phase 1 tracking is meaningfully active for this link.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
+     * @return array{data: array<int, array{fetch_dest: string, clicks: int, percentage: float}>, phase1_available: bool}
+     */
+    private function getFetchDestBreakdown(int $linkId, AnalyticsFilters $filters): array
+    {
+        $fetchDest = $this->rawQuery($linkId, $filters)
+            ->whereNotNull('fetch_dest')
+            ->select('fetch_dest', DB::raw('COUNT(*) as clicks'))
+            ->groupBy('fetch_dest')
+            ->orderByDesc('clicks')
+            ->get();
+
+        $fetchDestTotal = $fetchDest->sum('clicks');
+        $clicksInRange = $this->baseQuery($linkId, $filters)->count();
+        $phase1Available = $fetchDestTotal > 0 && ($fetchDestTotal / max($clicksInRange, 1)) > 0.05;
+
+        $data = $fetchDest->map(fn ($r) => [
+            'fetch_dest' => $r->fetch_dest,
+            'clicks' => (int) $r->clicks,
+            'percentage' => $fetchDestTotal > 0 ? round($r->clicks * 100.0 / $fetchDestTotal, 2) : 0,
+        ])->values()->toArray();
+
+        return [
+            'data' => $data,
+            'phase1_available' => $phase1Available,
         ];
     }
 }

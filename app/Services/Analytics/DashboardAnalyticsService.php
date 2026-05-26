@@ -24,6 +24,18 @@ use Illuminate\Support\Facades\DB;
  * for several hour/DOW extractions (used in tests with SQLite :memory:).
  *
  * Side effects: read-only queries. No cache, no queue, no log calls.
+ *
+ * --- Column → chart mapping (verified against migrations) ---
+ * clicks_by_hour         → clicks.hour_of_day (int, nullable, Phase 2 enriched)
+ *                          fallback: EXTRACT(HOUR FROM clicks.created_at)
+ * clicks_by_day_of_week  → clicks.day_of_week (int 1–7, nullable, Phase 2)
+ *                          fallback: EXTRACT(DOW FROM clicks.created_at)
+ * device_breakdown       → clicks.device (varchar, nullable)
+ * top_countries          → clicks.country (varchar, nullable)
+ * utm_top_sources        → link_utms.utm_source (via JOIN clicks ↔ link_utms)
+ * viral_rank distribution→ clicks.viral_rank (varchar, nullable, Phase 2 Redis)
+ * social_iab             → clicks.navigation_context = 'in_app_webview'
+ *                          AND clicks.is_mobile = 1 (Phase 1 field)
  */
 class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAnalyticsInterface
 {
@@ -57,7 +69,6 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'total_links' => 1,
                 'active_links' => $link->is_active ? 1 : 0,
                 'unique_visitors' => $unique,
-                'success_rate' => $this->estimateSuccessRate($linkId, $filters),
                 'avg_response_time' => $this->estimateResponseTime($linkId, $filters),
                 'countries_reached' => $countries,
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
@@ -124,14 +135,13 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'total_links' => 1,
                 'active_links' => 0,
                 'unique_visitors' => 0,
-                'success_rate' => 0,
                 'avg_response_time' => 0,
                 'countries_reached' => 0,
                 'links_with_traffic' => 0,
                 'viral_rank' => ['current_rank' => 'cold', 'distribution' => []],
                 'quality' => ['organic' => 0, 'suspicious' => 0, 'likely_fraud' => 0, 'unscored' => 0, 'organic_percentage' => 0],
                 'utm_top_sources' => [],
-                'social_iab' => ['total' => 0, 'percentage' => 0.0, 'ios_pct' => 0.0, 'android_pct' => 0.0],
+                'social_iab' => ['total' => 0, 'percentage' => 0.0, 'ios_pct' => 0.0, 'android_pct' => 0.0, 'navigation_context_available' => false],
             ],
             'link_info' => null,
             'temporal_data' => [
@@ -226,29 +236,6 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         return $this->baseQuery($linkId, $filters)
             ->whereNotNull('country')->where('country', '!=', 'localhost')
             ->distinct('country')->count();
-    }
-
-    /**
-     * Estimates success rate as the percentage of clicks with response_time < 5 000 ms.
-     *
-     * Returns 100.0 when there are no clicks in the window.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return float Percentage (0–100).
-     */
-    private function estimateSuccessRate(int $linkId, AnalyticsFilters $filters): float
-    {
-        $total = $this->countClicks($linkId, $filters);
-        if ($total === 0) {
-            return 100.0;
-        }
-
-        $ok = $this->baseQuery($linkId, $filters)
-            ->whereNotNull('response_time')->where('response_time', '<', 5000)
-            ->count();
-
-        return round(($ok / $total) * 100, 2);
     }
 
     /**
@@ -689,13 +676,30 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * The percentage is relative to all clicks for the link in the filter window.
      * ios_pct and android_pct are relative to the IAB segment, not total clicks.
      *
+     * Also returns `navigation_context_available` — set to `true` when at least 20%
+     * of clicks in the filter window have a non-null navigation_context value.
+     * When this flag is false the frontend should show a Phase 1 disclaimer because
+     * old clicks were recorded before the navigation_context field was introduced.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  AnalyticsFilters  $filters  Active filter constraints.
-     * @return array{total: int, percentage: float, ios_pct: float, android_pct: float}
+     * @return array{total: int, percentage: float, ios_pct: float, android_pct: float, navigation_context_available: bool}
      */
     private function getSocialIabStats(int $linkId, AnalyticsFilters $filters): array
     {
         $allTotal = $this->countClicks($linkId, $filters);
+
+        // Determine whether Phase 1 data (navigation_context) covers enough of the window.
+        // At least 20% of clicks must have a non-null navigation_context to consider the
+        // field available; below that threshold the data is too sparse to be meaningful
+        // and the frontend should display a disclaimer.
+        $navigationContextAvailable = false;
+        if ($allTotal > 0) {
+            $withContext = $this->baseQuery($linkId, $filters)
+                ->whereNotNull('navigation_context')
+                ->count();
+            $navigationContextAvailable = ($withContext / $allTotal) >= 0.20;
+        }
 
         $iabBase = fn () => $this->baseQuery($linkId, $filters)
             ->where('navigation_context', 'in_app_webview')
@@ -704,7 +708,13 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         $total = $iabBase()->count();
 
         if ($total === 0) {
-            return ['total' => 0, 'percentage' => 0.0, 'ios_pct' => 0.0, 'android_pct' => 0.0];
+            return [
+                'total' => 0,
+                'percentage' => 0.0,
+                'ios_pct' => 0.0,
+                'android_pct' => 0.0,
+                'navigation_context_available' => $navigationContextAvailable,
+            ];
         }
 
         $iosCount = $iabBase()->where('os', 'iOS')->count();
@@ -715,6 +725,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             'percentage' => $allTotal > 0 ? round($total / $allTotal * 100, 1) : 0.0,
             'ios_pct' => round($iosCount / $total * 100, 1),
             'android_pct' => round($androidCount / $total * 100, 1),
+            'navigation_context_available' => $navigationContextAvailable,
         ];
     }
 
