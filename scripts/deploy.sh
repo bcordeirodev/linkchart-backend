@@ -103,7 +103,8 @@ docker exec linkchartapi php /var/www/artisan view:cache
 # opcache.validate_timestamps=0 means FPM never auto-invalidates cached bytecode.
 # After deploying new files we must explicitly reset so FPM recompiles from disk.
 echo "Resetting PHP-FPM OPcache..."
-echo "<?php opcache_reset(); echo 'OK';" > /var/www/public/.opcache_reset.php
+# Write the probe file INSIDE the container (not on the host filesystem).
+docker exec linkchartapi sh -c "printf '<?php opcache_reset(); echo OK;' > /var/www/public/.opcache_reset.php"
 if curl -s --max-time 5 http://localhost:8000/.opcache_reset.php | grep -q OK; then
     echo "OPcache reset OK"
 else
