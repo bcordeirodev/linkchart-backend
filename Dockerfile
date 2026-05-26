@@ -84,9 +84,13 @@ WORKDIR /var/www
 COPY --chown=www:www . /var/www
 
 # Configurar Git para permitir diretório e instalar dependências
+# --no-scripts pula post-autoload-dump (package:discover); rodamos explicitamente
+# depois para garantir que packages.php reflita apenas pacotes non-dev instalados.
 RUN git config --global --add safe.directory /var/www \
     && git config --global --add safe.directory /var/www/vendor/fakerphp/faker \
-    && composer install --optimize-autoloader --no-dev --no-scripts
+    && composer install --optimize-autoloader --no-dev --no-scripts \
+    && rm -f /var/www/bootstrap/cache/packages.php /var/www/bootstrap/cache/services.php \
+    && php /var/www/artisan package:discover --ansi
 
 # Criar diretórios necessários e configurar permissões
 RUN mkdir -p /var/www/storage/framework/cache/data \
