@@ -121,7 +121,7 @@ docker exec linkchartapi rm -f /var/www/public/.opcache_reset.php
 echo "Checking queue worker status..."
 FATAL_PROGRAMS=$(docker exec linkchartapi \
     supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status 2>/dev/null \
-    | grep FATAL | awk '{print $1}' | tr '\n' ' ')
+    | grep FATAL | awk '{print $1}' | tr '\n' ' ' || true)
 
 if [ -n "$FATAL_PROGRAMS" ]; then
     echo "  FATAL programs detected: $FATAL_PROGRAMS"
@@ -133,7 +133,7 @@ if [ -n "$FATAL_PROGRAMS" ]; then
     # Verify they are now running
     STILL_FATAL=$(docker exec linkchartapi \
         supervisorctl -c /etc/supervisor/conf.d/supervisord.conf status 2>/dev/null \
-        | grep FATAL | awk '{print $1}' | tr '\n' ' ')
+        | grep FATAL | awk '{print $1}' | tr '\n' ' ' || true)
     if [ -n "$STILL_FATAL" ]; then
         echo "WARNING: programs still in FATAL after restart: $STILL_FATAL"
         docker exec linkchartapi cat /var/www/storage/logs/worker.log 2>/dev/null | tail -30 || true
