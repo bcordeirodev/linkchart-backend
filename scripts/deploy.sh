@@ -99,12 +99,27 @@ docker exec linkchartapi php /var/www/artisan config:cache
 docker exec linkchartapi php /var/www/artisan route:cache
 docker exec linkchartapi php /var/www/artisan view:cache
 
+# ── Reset PHP-FPM OPcache ─────────────────────────────────────────────────────
+# opcache.validate_timestamps=0 means FPM never auto-invalidates cached bytecode.
+# After deploying new files we must explicitly reset so FPM recompiles from disk.
+echo "Resetting PHP-FPM OPcache..."
+echo "<?php opcache_reset(); echo 'OK';" > /var/www/public/.opcache_reset.php
+if curl -s --max-time 5 http://localhost:8000/.opcache_reset.php | grep -q OK; then
+    echo "OPcache reset OK"
+else
+    echo "OPcache reset via HTTP failed — falling back to supervisorctl reload..."
+    docker exec linkchartapi supervisorctl signal SIGUSR2 php-fpm 2>/dev/null || true
+fi
+docker exec linkchartapi rm -f /var/www/public/.opcache_reset.php
+
 # ── Health check ──────────────────────────────────────────────────────────────
-echo "Running health check..."
+# Note: /health is handled by nginx directly (return 200) — it does NOT test PHP.
+# We also check a PHP-routed endpoint to confirm FPM is actually working.
+echo "Running health check (nginx)..."
 attempt=1
 until curl -fsS --max-time 10 http://localhost:8000/health > /dev/null 2>&1; do
     if [ $attempt -ge 5 ]; then
-        echo "Health check failed after $attempt attempts"
+        echo "Nginx health check failed after $attempt attempts"
         docker logs linkchartapi --tail 30
         exit 1
     fi
@@ -112,7 +127,17 @@ until curl -fsS --max-time 10 http://localhost:8000/health > /dev/null 2>&1; do
     attempt=$((attempt + 1))
     sleep 10
 done
-echo "Health check passed (attempt $attempt)"
+echo "Nginx health check passed (attempt $attempt)"
+
+echo "Running PHP-FPM health check..."
+PHP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 http://localhost:8000/api/public/link/__health_probe_nonexistent__)
+if [ "$PHP_STATUS" = "404" ] || [ "$PHP_STATUS" = "200" ]; then
+    echo "PHP-FPM health check passed (HTTP $PHP_STATUS)"
+else
+    echo "PHP-FPM health check FAILED (HTTP $PHP_STATUS — expected 404, got 5xx)"
+    docker logs linkchartapi --tail 30
+    exit 1
+fi
 
 # ── Cleanup unused images ─────────────────────────────────────────────────────
 docker image prune -f

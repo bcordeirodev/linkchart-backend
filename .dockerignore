@@ -1,0 +1,26 @@
+.git
+.github
+vendor
+node_modules
+storage/logs
+storage/app/public
+.env
+.env.*
+!.env.example
+docker-compose.yml
+docker-compose.override.yml
+
+# Bootstrap cache: never copy host-generated cache into the image.
+# validate_timestamps=0 in opcache-prod.ini means FPM never revalidates — if a
+# stale cache file lands in the image it will be served forever until OPcache is
+# explicitly reset. Excluding this directory forces a clean slate on every build.
+bootstrap/cache/packages.php
+bootstrap/cache/services.php
+bootstrap/cache/config.php
+bootstrap/cache/routes-v7.php
+
+# Dev artefacts
+*.log
+*.cache
+tests/
+docs/
