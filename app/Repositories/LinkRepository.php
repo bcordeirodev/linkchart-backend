@@ -82,6 +82,22 @@ class LinkRepository implements LinkRepositoryInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function findPublicActiveBySlug(string $slug): ?Link
+    {
+        return Link::where('slug', $slug)
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->where(function ($q) {
+                $q->whereNull('starts_in')->orWhere('starts_in', '<=', now());
+            })
+            ->first();
+    }
+
+    /**
      * Persist a new link record and return the created Eloquent model.
      *
      * Delegates to `Link::create()` which fires the Eloquent `creating` / `created`

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Links;
 
+use App\Contracts\Repositories\LinkRepositoryInterface;
 use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreatePublicLinkDTO;
 use App\Http\Requests\CreatePublicLinkRequest;
@@ -28,12 +29,10 @@ use Illuminate\Support\Facades\DB;
  */
 class PublicLinkController extends Controller
 {
-    protected LinkServiceInterface $linkService;
-
-    public function __construct(LinkServiceInterface $linkService)
-    {
-        $this->linkService = $linkService;
-    }
+    public function __construct(
+        private readonly LinkServiceInterface $linkService,
+        private readonly LinkRepositoryInterface $linkRepository,
+    ) {}
 
     /**
      * POST /api/public/shorten
@@ -107,18 +106,7 @@ class PublicLinkController extends Controller
     public function showBySlug(string $slug): JsonResponse
     {
         try {
-            $now = now();
-            $link = \App\Models\Link::where('slug', $slug)
-                ->where('is_active', true)
-                ->where(function ($query) use ($now) {
-                    $query->whereNull('expires_at')
-                        ->orWhere('expires_at', '>', $now);
-                })
-                ->where(function ($query) use ($now) {
-                    $query->whereNull('starts_in')
-                        ->orWhere('starts_in', '<=', $now);
-                })
-                ->first();
+            $link = $this->linkRepository->findPublicActiveBySlug($slug);
 
             if (! $link) {
                 return response()->json([
