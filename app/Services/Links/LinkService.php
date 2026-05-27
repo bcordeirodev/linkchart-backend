@@ -180,7 +180,7 @@ class LinkService implements LinkServiceInterface
         // Mirrors the behaviour of createLink() for authenticated users.
         if (! empty($data['user_id'])) {
             $subdomain = \App\Models\UserSubdomain::findByUserCached($data['user_id']);
-            if ($subdomain && $subdomain->is_active) {
+            if ($subdomain && $subdomain->status === 'active') {
                 $link->short_domain = $subdomain->subdomain.'.'.config('app.domain');
                 $link->save();
             }

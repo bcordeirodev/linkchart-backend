@@ -87,6 +87,16 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        // Rate limit excedido
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException $e, $request) {
+            if ($request->isApiRequest()) {
+                return response()->json(['error' => [
+                    'code' => 'TOO_MANY_REQUESTS',
+                    'message' => 'Muitas requisições. Tente novamente em instantes.',
+                ]], 429);
+            }
+        });
+
         // Recurso não encontrado (route/model binding)
         $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, $request) {
             if ($request->isApiRequest()) {
