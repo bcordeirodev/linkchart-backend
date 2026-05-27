@@ -91,37 +91,42 @@ class PublicLinkController extends Controller
      * GET /api/public/link/{slug}
      *
      * Public-facing slug lookup. Returns basic link metadata (without click
-     * details) for an active, non-expired, already-started link. This is the
-     * live routed action — not the deleted LinkController::showBySlug variant
-     * removed in R-06.
+     * details) for an active, non-expired, already-started link. All validity
+     * checks (is_active, expires_at, starts_in) are applied at the DB level
+     * in a single query — no differentiated error messages are returned to
+     * prevent slug enumeration of expired/scheduled links.
      *
      * Middleware: none (no throttle, no auth)
      * Auth: not required
      * Owner check: no
      *
      * Response shape: { data: PublicLinkResource } (200)
-     *                 { message } (404) if not found, expired, or not yet started.
+     *                 { message } (404) if not found or filtered out.
      *                 { error, message } on server error (500)
      */
     public function showBySlug(string $slug): JsonResponse
     {
         try {
+            $now = now();
             $link = \App\Models\Link::where('slug', $slug)
                 ->where('is_active', true)
+                ->where(function ($query) use ($now) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', $now);
+                })
+                ->where(function ($query) use ($now) {
+                    $query->whereNull('starts_in')
+                        ->orWhere('starts_in', '<=', $now);
+                })
                 ->first();
 
             if (! $link) {
-                return response()->json(['message' => 'Link não encontrado ou inativo.'], 404);
-            }
-
-            // Verifica se o link não expirou
-            if ($link->expires_at && now()->isAfter($link->expires_at)) {
-                return response()->json(['message' => 'Link expirado.'], 404);
-            }
-
-            // Verifica se já pode ser usado (starts_in)
-            if ($link->starts_in && now()->isBefore($link->starts_in)) {
-                return response()->json(['message' => 'Link ainda não está disponível.'], 404);
+                return response()->json([
+                    'error' => [
+                        'code' => 'NOT_FOUND',
+                        'message' => 'Link não encontrado.',
+                    ],
+                ], 404);
             }
 
             return response()->json([
