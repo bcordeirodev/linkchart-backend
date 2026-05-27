@@ -76,14 +76,11 @@ class PublicLinkController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
-            \App\Logging\AppLogger::event('http', 'error', 'public.link.create.error', [
-                'exception' => $e->getMessage(),
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-            ]);
+            \App\Logging\AppLogger::httpServerError('api.public.shorten', $e, auth()->id());
+
             return response()->json([
                 'error' => [
-                    'code'    => 'INTERNAL_ERROR',
+                    'code' => 'INTERNAL_ERROR',
                     'message' => 'Ocorreu um erro interno. Tente novamente.',
                 ],
             ], 500);
@@ -131,14 +128,11 @@ class PublicLinkController extends Controller
                 'data' => new PublicLinkResource($link),
             ]);
         } catch (\Exception $e) {
-            \App\Logging\AppLogger::event('http', 'error', 'public.link.show.error', [
-                'exception' => $e->getMessage(),
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-            ]);
+            \App\Logging\AppLogger::httpServerError('api.public.link.show', $e, auth()->id());
+
             return response()->json([
                 'error' => [
-                    'code'    => 'INTERNAL_ERROR',
+                    'code' => 'INTERNAL_ERROR',
                     'message' => 'Ocorreu um erro interno. Tente novamente.',
                 ],
             ], 500);
@@ -278,14 +272,11 @@ class PublicLinkController extends Controller
 
             return response()->json($basicData);
         } catch (\Exception $e) {
-            \App\Logging\AppLogger::event('http', 'error', 'public.analytics.error', [
-                'exception' => $e->getMessage(),
-                'file'      => $e->getFile(),
-                'line'      => $e->getLine(),
-            ]);
+            \App\Logging\AppLogger::httpServerError('api.public.link.analytics', $e, auth()->id());
+
             return response()->json([
                 'error' => [
-                    'code'    => 'INTERNAL_ERROR',
+                    'code' => 'INTERNAL_ERROR',
                     'message' => 'Ocorreu um erro interno. Tente novamente.',
                 ],
             ], 500);
