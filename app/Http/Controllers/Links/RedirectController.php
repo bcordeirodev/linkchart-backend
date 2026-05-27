@@ -646,14 +646,21 @@ class RedirectController extends Controller
         $title = e($metadata['og_title'] ?? $metadata['title'] ?? $link->title ?? 'Redirecionando...');
         $description = e($metadata['og_description'] ?? $metadata['description'] ?? 'Aguarde...');
         $image = $metadata['og_image'] ?? null;
-        $targetUrl = e($link->original_url);
+        // $metaUrl: HTML-escaped for the <meta http-equiv="refresh"> attribute context
+        $metaUrl = htmlspecialchars($link->original_url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // $targetUrl: JSON-encoded for JS string literal — json_encode includes surrounding quotes
+        // JSON_HEX_TAG prevents </script> injection; other flags escape quotes/ampersands
+        $targetUrl = json_encode(
+            $link->original_url,
+            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
+        );
 
         $refreshDelay = $isBot ? 5 : 2;
 
         $ogType = e($metadata['og_type'] ?? 'website');
         $imageTag = $this->renderMetaImageTag($image, 'og:image', 'property');
         $twitterImageTag = $this->renderMetaImageTag($image, 'twitter:image', 'name');
-        $displayUrl = $this->truncateUrl($targetUrl, 60);
+        $displayUrl = $this->truncateUrl($metaUrl, 60);
 
         // og:image:width/height let crawlers (WhatsApp, Facebook) validate image
         // dimensions without downloading it — preview appears faster and a too-small
@@ -670,11 +677,11 @@ class RedirectController extends Controller
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="{$refreshDelay};url={$targetUrl}">
+    <meta http-equiv="refresh" content="{$refreshDelay};url={$metaUrl}">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{$ogType}">
-    <meta property="og:url" content="{$targetUrl}">
+    <meta property="og:url" content="{$metaUrl}">
     <meta property="og:title" content="{$title}">
     <meta property="og:description" content="{$description}">
     {$imageTag}
@@ -682,13 +689,13 @@ class RedirectController extends Controller
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="{$targetUrl}">
+    <meta name="twitter:url" content="{$metaUrl}">
     <meta name="twitter:title" content="{$title}">
     <meta name="twitter:description" content="{$description}">
     {$twitterImageTag}
 
     <!-- Canonical -->
-    <link rel="canonical" href="{$targetUrl}">
+    <link rel="canonical" href="{$metaUrl}">
 
     <!-- Metadados adicionais -->
     <meta property="og:site_name" content="LinkChart">
@@ -803,7 +810,7 @@ class RedirectController extends Controller
         <p style="font-size: 14px; color: #999;">
             Ou clique no botão abaixo:
         </p>
-        <a href="{$targetUrl}" class="btn">Ir Agora</a>
+        <a href="{$metaUrl}" class="btn">Ir Agora</a>
         <div class="footer">
             🔗 Powered by LinkChart
         </div>
@@ -825,12 +832,12 @@ class RedirectController extends Controller
         }, 1000);
 
         setTimeout(function() {
-            window.location.href = '{$targetUrl}';
+            window.location.href = {$targetUrl};
         }, 2000);
 
         setTimeout(function() {
             if (document.visibilityState === 'visible') {
-                window.location.replace('{$targetUrl}');
+                window.location.replace({$targetUrl});
             }
         }, 2500);
     </script>
