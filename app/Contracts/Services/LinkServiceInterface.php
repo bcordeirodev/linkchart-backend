@@ -86,19 +86,19 @@ interface LinkServiceInterface
     public function deleteLink(string $id): bool;
 
     /**
-     * Validate and persist a new public (unauthenticated) shortened link.
+     * Validate and persist a new public shortened link.
      *
-     * Forces `user_id = null` regardless of what the DTO carries. Throws
-     * `\InvalidArgumentException` if:
-     *   - `$linkDTO->isValidUrl()` returns false.
-     *   - `$linkDTO->hasValidData()` returns false (missing required fields).
-     *   - A custom slug is provided but already taken.
+     * When called for a guest request, the DTO carries `user_id = null` and the
+     * link is created anonymously. When called for an authenticated user, the DTO
+     * carries the real `user_id` and the created link will have the user's active
+     * custom subdomain applied to `short_domain` if one exists.
+     *
      * Rate-limited at the route level (`public-shorten`, 10/min per IP).
      *
-     * @param  CreatePublicLinkDTO  $linkDTO  Validated creation payload for a public link.
+     * @param  CreatePublicLinkDTO  $linkDTO  Validated creation payload.
      * @return Link The created and hydrated link model.
      *
-     * @throws \InvalidArgumentException On invalid URL, slug conflict, or bad data.
+     * @throws \InvalidArgumentException On invalid URL, missing required data, or slug conflict.
      */
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link;
 
