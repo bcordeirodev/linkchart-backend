@@ -60,7 +60,7 @@ class CreatePublicLinkRequest extends FormRequest
                 'max:100',
                 'alpha_dash',
                 'unique:links,slug',
-                'not_in:api,admin,www,mail,ftp,app,web,public,short,link,url', // Mais slugs reservados
+                'not_in:api,admin,www,mail,ftp,app,web,public,short,link,url,r,health', // Mais slugs reservados
             ],
         ];
     }
