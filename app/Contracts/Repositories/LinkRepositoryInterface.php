@@ -55,6 +55,12 @@ interface LinkRepositoryInterface
     public function findBySlug(string $slug): ?Link;
 
     /**
+     * Find an active, non-expired, already-started link by slug for public display.
+     * Returns null for any invalid state (inactive, expired, not yet started).
+     */
+    public function findPublicActiveBySlug(string $slug): ?Link;
+
+    /**
      * Persist a new link record and return the created Eloquent model.
      *
      * The caller is responsible for validating `$data` and supplying a unique
