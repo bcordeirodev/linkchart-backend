@@ -76,9 +76,16 @@ class PublicLinkController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         } catch (\Exception $e) {
+            \App\Logging\AppLogger::event('http', 'error', 'public.link.create.error', [
+                'exception' => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ]);
             return response()->json([
-                'error' => 'Erro ao criar link.',
-                'message' => $e->getMessage(),
+                'error' => [
+                    'code'    => 'INTERNAL_ERROR',
+                    'message' => 'Ocorreu um erro interno. Tente novamente.',
+                ],
             ], 500);
         }
     }
@@ -124,9 +131,16 @@ class PublicLinkController extends Controller
                 'data' => new PublicLinkResource($link),
             ]);
         } catch (\Exception $e) {
+            \App\Logging\AppLogger::event('http', 'error', 'public.link.show.error', [
+                'exception' => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ]);
             return response()->json([
-                'error' => 'Erro ao buscar link.',
-                'message' => $e->getMessage(),
+                'error' => [
+                    'code'    => 'INTERNAL_ERROR',
+                    'message' => 'Ocorreu um erro interno. Tente novamente.',
+                ],
             ], 500);
         }
     }
@@ -264,9 +278,16 @@ class PublicLinkController extends Controller
 
             return response()->json($basicData);
         } catch (\Exception $e) {
+            \App\Logging\AppLogger::event('http', 'error', 'public.analytics.error', [
+                'exception' => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ]);
             return response()->json([
-                'error' => 'Erro ao buscar analytics básicos.',
-                'message' => $e->getMessage(),
+                'error' => [
+                    'code'    => 'INTERNAL_ERROR',
+                    'message' => 'Ocorreu um erro interno. Tente novamente.',
+                ],
             ], 500);
         }
     }
