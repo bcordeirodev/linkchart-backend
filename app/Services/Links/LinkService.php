@@ -174,7 +174,19 @@ class LinkService implements LinkServiceInterface
             throw new \InvalidArgumentException('Slug personalizado já está em uso.');
         }
 
-        return $this->linkRepository->create($data);
+        $link = $this->linkRepository->create($data);
+
+        // Apply the user's custom subdomain if they have one active.
+        // Mirrors the behaviour of createLink() for authenticated users.
+        if (! empty($data['user_id'])) {
+            $subdomain = \App\Models\UserSubdomain::findByUserCached($data['user_id']);
+            if ($subdomain && $subdomain->is_active) {
+                $link->short_domain = $subdomain->subdomain.'.'.config('app.domain');
+                $link->save();
+            }
+        }
+
+        return $link;
     }
 
     /**
@@ -190,7 +202,7 @@ class LinkService implements LinkServiceInterface
     public function generateUniqueSlug(int $length = 6): string
     {
         do {
-            $slug = Str::random($length);
+            $slug = strtolower(Str::random($length));
         } while ($this->linkRepository->slugExists($slug));
 
         return $slug;
