@@ -199,6 +199,30 @@ class OnboardingDemoDataService
         ],
     ];
 
+    /** Maps country ISO code to language data for primary_language, language_region, accept_language. */
+    private array $languageByIso = [
+        'US' => ['lang' => 'en', 'region' => 'en-US', 'accept' => 'en-US,en;q=0.9'],
+        'BR' => ['lang' => 'pt', 'region' => 'pt-BR', 'accept' => 'pt-BR,pt;q=0.9,en;q=0.8'],
+        'GB' => ['lang' => 'en', 'region' => 'en-GB', 'accept' => 'en-GB,en;q=0.9'],
+        'DE' => ['lang' => 'de', 'region' => 'de-DE', 'accept' => 'de-DE,de;q=0.9,en;q=0.8'],
+        'FR' => ['lang' => 'fr', 'region' => 'fr-FR', 'accept' => 'fr-FR,fr;q=0.9,en;q=0.8'],
+        'CA' => ['lang' => 'en', 'region' => 'en-CA', 'accept' => 'en-CA,en;q=0.9,fr;q=0.8'],
+        'AU' => ['lang' => 'en', 'region' => 'en-AU', 'accept' => 'en-AU,en;q=0.9'],
+        'JP' => ['lang' => 'ja', 'region' => 'ja-JP', 'accept' => 'ja-JP,ja;q=0.9,en;q=0.8'],
+        'IN' => ['lang' => 'hi', 'region' => 'hi-IN', 'accept' => 'hi-IN,hi;q=0.9,en;q=0.8'],
+        'MX' => ['lang' => 'es', 'region' => 'es-MX', 'accept' => 'es-MX,es;q=0.9,en;q=0.8'],
+        'ES' => ['lang' => 'es', 'region' => 'es-ES', 'accept' => 'es-ES,es;q=0.9,en;q=0.8'],
+        'IT' => ['lang' => 'it', 'region' => 'it-IT', 'accept' => 'it-IT,it;q=0.9,en;q=0.8'],
+        'NL' => ['lang' => 'nl', 'region' => 'nl-NL', 'accept' => 'nl-NL,nl;q=0.9,en;q=0.8'],
+        'AR' => ['lang' => 'es', 'region' => 'es-AR', 'accept' => 'es-AR,es;q=0.9,en;q=0.8'],
+        'KR' => ['lang' => 'ko', 'region' => 'ko-KR', 'accept' => 'ko-KR,ko;q=0.9,en;q=0.8'],
+        'CN' => ['lang' => 'zh', 'region' => 'zh-CN', 'accept' => 'zh-CN,zh;q=0.9,en;q=0.8'],
+        'RU' => ['lang' => 'ru', 'region' => 'ru-RU', 'accept' => 'ru-RU,ru;q=0.9,en;q=0.8'],
+        'TR' => ['lang' => 'tr', 'region' => 'tr-TR', 'accept' => 'tr-TR,tr;q=0.9,en;q=0.8'],
+        'PL' => ['lang' => 'pl', 'region' => 'pl-PL', 'accept' => 'pl-PL,pl;q=0.9,en;q=0.8'],
+        'SE' => ['lang' => 'sv', 'region' => 'sv-SE', 'accept' => 'sv-SE,sv;q=0.9,en;q=0.8'],
+    ];
+
     /**
      * Seeds the demo link and 1247 synthetic clicks for the given user.
      *
@@ -391,5 +415,92 @@ class OnboardingDemoDataService
         }
 
         return array_key_first($weights);
+    }
+
+    /** Returns season name (northern hemisphere) for a given month number. */
+    private function getSeasonForMonth(int $month): string
+    {
+        if (in_array($month, [3, 4, 5])) {
+            return 'spring';
+        }
+        if (in_array($month, [6, 7, 8])) {
+            return 'summer';
+        }
+        if (in_array($month, [9, 10, 11])) {
+            return 'fall';
+        }
+
+        return 'winter';
+    }
+
+    /**
+     * Returns quality_tier, quality_score, and fingerprint_score.
+     * Bots always get likely_fraud tier.
+     *
+     * @return array{quality_tier: string, quality_score: int, fingerprint_score: int}
+     */
+    private function getQualityData(bool $isBot): array
+    {
+        if ($isBot) {
+            return [
+                'quality_tier'      => 'likely_fraud',
+                'quality_score'     => mt_rand(0, 29),
+                'fingerprint_score' => mt_rand(2, 3),
+            ];
+        }
+
+        $tier = $this->weightedRandom(['organic' => 85, 'suspicious' => 10, 'likely_fraud' => 5]);
+
+        return [
+            'quality_tier'      => $tier,
+            'quality_score'     => match ($tier) {
+                'organic'    => mt_rand(70, 100),
+                'suspicious' => mt_rand(30, 69),
+                default      => mt_rand(0, 29),
+            },
+            'fingerprint_score' => $this->weightedRandom([0 => 70, 1 => 20, 2 => 8, 3 => 2]),
+        ];
+    }
+
+    /** Returns a weighted random connection_type string. */
+    private function getConnectionType(): string
+    {
+        return $this->weightedRandom([
+            'residential' => 60,
+            'mobile'      => 25,
+            'datacenter'  => 10,
+            'education'   => 5,
+        ]);
+    }
+
+    /** Returns a weighted random viral_rank string. */
+    private function getViralRank(): string
+    {
+        return $this->weightedRandom([
+            'cold'     => 70,
+            'warming'  => 20,
+            'trending' => 8,
+            'viral'    => 2,
+        ]);
+    }
+
+    /** Returns a weighted random navigation_context string. */
+    private function getNavigationContext(): string
+    {
+        return $this->weightedRandom([
+            'cross-site'  => 40,
+            'none'        => 40,
+            'same-origin' => 20,
+        ]);
+    }
+
+    /** Returns a weighted random HTTP protocol string. */
+    private function getHttpProtocol(): string
+    {
+        return $this->weightedRandom([
+            'HTTP/2'   => 70,
+            'HTTP/1.1' => 25,
+            'HTTP/3'   => 5,
+        ]);
     }
 }
