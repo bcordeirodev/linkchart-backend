@@ -33,7 +33,7 @@ class OnboardingDemoDataServiceTest extends TestCase
 
         $link = Link::where('user_id', $user->id)->where('is_demo', true)->first();
         $this->assertNotNull($link);
-        $this->assertSame('📊 Demo Link — See Analytics in Action', $link->title);
+        $this->assertSame('Demo Link — See Analytics in Action', $link->title);
         $this->assertSame(1247, (int) $link->clicks);
         $this->assertDatabaseCount('clicks', 1247);
     }
