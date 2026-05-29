@@ -175,10 +175,28 @@ class OnboardingDemoDataService
     ];
 
     private array $referrers = [
-        'social' => ['https://www.facebook.com/', 'https://twitter.com/', 'https://www.instagram.com/', 'https://www.linkedin.com/', 'https://www.tiktok.com/'],
-        'search' => ['https://www.google.com/search?q=example', 'https://www.bing.com/search?q=example', 'https://duckduckgo.com/?q=example'],
-        'direct' => [null, null, null],
-        'other' => ['https://news.ycombinator.com/', 'https://www.reddit.com/', 'https://medium.com/'],
+        'social' => [
+            ['url' => 'https://www.facebook.com/',  'platform' => 'facebook'],
+            ['url' => 'https://twitter.com/',        'platform' => 'twitter'],
+            ['url' => 'https://www.instagram.com/', 'platform' => 'instagram'],
+            ['url' => 'https://www.linkedin.com/',  'platform' => 'linkedin'],
+            ['url' => 'https://www.tiktok.com/',    'platform' => 'tiktok'],
+        ],
+        'search' => [
+            ['url' => 'https://www.google.com/search?q=example', 'platform' => null],
+            ['url' => 'https://www.bing.com/search?q=example',   'platform' => null],
+            ['url' => 'https://duckduckgo.com/?q=example',       'platform' => null],
+        ],
+        'direct' => [
+            ['url' => null, 'platform' => null],
+            ['url' => null, 'platform' => null],
+            ['url' => null, 'platform' => null],
+        ],
+        'other' => [
+            ['url' => 'https://news.ycombinator.com/', 'platform' => null],
+            ['url' => 'https://www.reddit.com/',       'platform' => null],
+            ['url' => 'https://medium.com/',           'platform' => null],
+        ],
     ];
 
     /**
@@ -321,13 +339,21 @@ class OnboardingDemoDataService
         return $agents[array_rand($agents)];
     }
 
-    private function getReferer(): ?string
+    /**
+     * Returns referer URL, click_source category, and social_platform (if social).
+     *
+     * @return array{referer: string|null, click_source: string, social_platform: string|null}
+     */
+    private function getReferer(): array
     {
-        $type = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'other' => 10]);
-        $referers = $this->referrers[$type];
-        $referer = $referers[array_rand($referers)];
+        $type  = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'other' => 10]);
+        $entry = $this->referrers[$type][array_rand($this->referrers[$type])];
 
-        return $referer ?: null;
+        return [
+            'referer'         => $entry['url'],
+            'click_source'    => $type,
+            'social_platform' => $entry['platform'],
+        ];
     }
 
     private function generateRealisticIp(string $iso): string
