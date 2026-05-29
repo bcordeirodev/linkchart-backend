@@ -286,6 +286,7 @@ class OnboardingDemoDataService
             $isBot    = $device === 'bot';
             $isMobile = $device === 'mobile';
             $isTablet = $device === 'tablet';
+            $dow      = (int) $clickAt->format('N');
 
             $batch[] = [
                 // Core
@@ -320,12 +321,12 @@ class OnboardingDemoDataService
                 'ch_is_mobile'     => $isMobile ? 1 : 0,
                 // Temporal
                 'hour_of_day'       => $clickAt->hour,
-                'day_of_week'       => (int) $clickAt->format('N'),
+                'day_of_week'       => $dow,
                 'day_of_month'      => $clickAt->day,
                 'month'             => $clickAt->month,
                 'year'              => $clickAt->year,
                 'local_time'        => $clickAt->format('Y-m-d H:i:s'),
-                'is_weekend'        => in_array($clickAt->dayOfWeek, [0, 6]) ? 1 : 0,
+                'is_weekend'        => in_array($dow, [6, 7]) ? 1 : 0,
                 'is_business_hours' => ($clickAt->hour >= 9 && $clickAt->hour <= 17) ? 1 : 0,
                 'season'            => $this->getSeasonForMonth($clickAt->month),
                 // Traffic source
