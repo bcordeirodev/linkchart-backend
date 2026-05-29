@@ -271,31 +271,89 @@ class OnboardingDemoDataService
     {
         $batch = [];
         $start = Carbon::now()->subDays(self::DAYS_BACK);
-        $end = Carbon::now();
+        $end   = Carbon::now();
 
         for ($i = 0; $i < self::TOTAL_CLICKS; $i++) {
-            $country = $this->selectCountryByWeight();
+            $country  = $this->selectCountryByWeight();
             $cityData = $this->getCityData($country['iso']);
-            $device = $this->selectDeviceByWeight();
-            $clickAt = $this->generateRandomDate($start, $end);
+            $device   = $this->selectDeviceByWeight();
+            $clickAt  = $this->generateRandomDate($start, $end);
+            $uaInfo   = $this->getUserAgent($device);
+            $refData  = $this->getReferer();
+            $langData = $this->languageByIso[$country['iso']]
+                ?? ['lang' => 'en', 'region' => 'en-US', 'accept' => 'en-US,en;q=0.9'];
+            $quality  = $this->getQualityData($device === 'bot');
+            $isBot    = $device === 'bot';
+            $isMobile = $device === 'mobile';
+            $isTablet = $device === 'tablet';
 
             $batch[] = [
-                'link_id' => $linkId,
-                'ip' => $this->generateRealisticIp($country['iso']),
-                'user_agent' => $this->getUserAgent($device),
-                'referer' => $this->getReferer(),
-                'country' => $country['name'],
-                'iso_code' => $country['iso'],
-                'state' => $cityData['state'],
-                'state_name' => $cityData['state_name'],
-                'city' => $cityData['city'],
+                // Core
+                'link_id'    => $linkId,
+                'ip'         => $this->generateRealisticIp($country['iso']),
+                'user_agent' => $uaInfo['ua'],
+                'referer'    => $refData['referer'],
+                // Geographic
+                'country'     => $country['name'],
+                'iso_code'    => $country['iso'],
+                'state'       => $cityData['state'],
+                'state_name'  => $cityData['state_name'],
+                'city'        => $cityData['city'],
                 'postal_code' => $cityData['postal'],
-                'latitude' => $cityData['lat'],
-                'longitude' => $cityData['lng'],
-                'timezone' => $country['timezone'],
-                'continent' => $country['continent'],
-                'currency' => $country['currency'],
-                'device' => $device,
+                'latitude'    => $cityData['lat'],
+                'longitude'   => $cityData['lng'],
+                'timezone'    => $country['timezone'],
+                'continent'   => $country['continent'],
+                'currency'    => $country['currency'],
+                // Device
+                'device'           => $device,
+                'browser'          => $uaInfo['browser'],
+                'browser_version'  => $uaInfo['browser_version'],
+                'os'               => $uaInfo['os'],
+                'os_version'       => $uaInfo['os_version'],
+                'is_mobile'        => $isMobile ? 1 : 0,
+                'is_tablet'        => $isTablet ? 1 : 0,
+                'is_desktop'       => (! $isMobile && ! $isTablet && ! $isBot) ? 1 : 0,
+                'is_bot'           => $isBot ? 1 : 0,
+                'rendering_engine' => $uaInfo['rendering_engine'],
+                'ch_platform'      => $uaInfo['ch_platform'],
+                'ch_is_mobile'     => $isMobile ? 1 : 0,
+                // Temporal
+                'hour_of_day'       => $clickAt->hour,
+                'day_of_week'       => $clickAt->dayOfWeek,
+                'day_of_month'      => $clickAt->day,
+                'month'             => $clickAt->month,
+                'year'              => $clickAt->year,
+                'local_time'        => $clickAt->format('H:i:s'),
+                'is_weekend'        => in_array($clickAt->dayOfWeek, [0, 6]) ? 1 : 0,
+                'is_business_hours' => ($clickAt->hour >= 9 && $clickAt->hour <= 17 && ! in_array($clickAt->dayOfWeek, [0, 6])) ? 1 : 0,
+                'season'            => $this->getSeasonForMonth($clickAt->month),
+                // Traffic source
+                'click_source'    => $refData['click_source'],
+                'social_platform' => $refData['social_platform'],
+                // Quality
+                'quality_tier'      => $quality['quality_tier'],
+                'quality_score'     => $quality['quality_score'],
+                'fingerprint_score' => $quality['fingerprint_score'],
+                // Behavior
+                'is_return_visitor'        => mt_rand(0, 3) === 0 ? 1 : 0,
+                'session_clicks'           => $this->weightedRandom([1 => 75, 2 => 18, 3 => 7]),
+                'is_data_saver'            => mt_rand(0, 19) === 0 ? 1 : 0,
+                'seconds_since_last_click' => mt_rand(1, 3600),
+                // Context
+                'navigation_context' => $this->getNavigationContext(),
+                'fetch_dest'         => mt_rand(0, 9) === 0 ? 'empty' : 'document',
+                'http_protocol'      => $this->getHttpProtocol(),
+                'connection_type'    => $this->getConnectionType(),
+                'viral_rank'         => $this->getViralRank(),
+                'is_holiday'         => 0,
+                // Language
+                'primary_language' => $langData['lang'],
+                'language_region'  => $langData['region'],
+                'accept_language'  => $langData['accept'],
+                // Performance
+                'response_time' => round(mt_rand(50000, 300000) / 1000, 3),
+                // Timestamps
                 'created_at' => $clickAt,
                 'updated_at' => $clickAt,
             ];
