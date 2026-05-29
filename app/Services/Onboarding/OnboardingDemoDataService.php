@@ -15,13 +15,13 @@ use Illuminate\Support\Str;
  * → OnboardingDemoDataService::run($user).
  *
  * The demo link is idempotent — run() is a no-op if the user already has an
- * is_demo=true link. It creates exactly one link and inserts TOTAL_CLICKS (1200)
+ * is_demo=true link. It creates exactly one link and inserts TOTAL_CLICKS (1247)
  * clicks in batches of BATCH_SIZE (500) using Click::insert() for performance.
  *
  * Side effects:
  *   - Writes one row to links (is_demo=true).
- *   - Writes 1200 rows to clicks via bulk insert.
- *   - Updates links.clicks = 1200 after insert completes.
+ *   - Writes 1247 rows to clicks via bulk insert.
+ *   - Updates links.clicks = 1247 after insert completes.
  *   - Does NOT dispatch ProcessLinkClickJob — clicks are inserted directly
  *     with pre-populated geographic and device fields, bypassing enrichment.
  */
@@ -122,7 +122,7 @@ class OnboardingDemoDataService
     ];
 
     /**
-     * Seeds the demo link and 1200 synthetic clicks for the given user.
+     * Seeds the demo link and 1247 synthetic clicks for the given user.
      *
      * Idempotent: returns immediately if the user already has an is_demo link.
      * Creates the link, bulk-inserts clicks in batches of 500, then updates
