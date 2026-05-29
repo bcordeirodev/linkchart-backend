@@ -94,82 +94,82 @@ class OnboardingDemoDataService
     private array $userAgents = [
         'mobile' => [
             [
-                'ua'               => 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-                'browser'          => 'Safari',   'browser_version' => '15.0',
-                'os'               => 'iOS',       'os_version'      => '15.0',
-                'rendering_engine' => 'webkit',    'ch_platform'     => 'iOS',
+                'ua' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+                'browser' => 'Safari',   'browser_version' => '15.0',
+                'os' => 'iOS',       'os_version' => '15.0',
+                'rendering_engine' => 'webkit',    'ch_platform' => 'iOS',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36',
-                'browser'          => 'Chrome',    'browser_version' => '91.0',
-                'os'               => 'Android',   'os_version'      => '11',
-                'rendering_engine' => 'blink',     'ch_platform'     => 'Android',
+                'ua' => 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36',
+                'browser' => 'Chrome',    'browser_version' => '91.0',
+                'os' => 'Android',   'os_version' => '11',
+                'rendering_engine' => 'blink',     'ch_platform' => 'Android',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
-                'browser'          => 'Chrome',    'browser_version' => '90.0',
-                'os'               => 'Android',   'os_version'      => '10',
-                'rendering_engine' => 'blink',     'ch_platform'     => 'Android',
+                'ua' => 'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+                'browser' => 'Chrome',    'browser_version' => '90.0',
+                'os' => 'Android',   'os_version' => '10',
+                'rendering_engine' => 'blink',     'ch_platform' => 'Android',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
-                'browser'          => 'Safari',    'browser_version' => '14.1',
-                'os'               => 'iOS',       'os_version'      => '14.6',
-                'rendering_engine' => 'webkit',    'ch_platform'     => 'iOS',
+                'ua' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+                'browser' => 'Safari',    'browser_version' => '14.1',
+                'os' => 'iOS',       'os_version' => '14.6',
+                'rendering_engine' => 'webkit',    'ch_platform' => 'iOS',
             ],
         ],
         'desktop' => [
             [
-                'ua'               => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'browser'          => 'Chrome',    'browser_version' => '91.0',
-                'os'               => 'Windows',   'os_version'      => '10',
-                'rendering_engine' => 'blink',     'ch_platform'     => 'Windows',
+                'ua' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'browser' => 'Chrome',    'browser_version' => '91.0',
+                'os' => 'Windows',   'os_version' => '10',
+                'rendering_engine' => 'blink',     'ch_platform' => 'Windows',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
-                'browser'          => 'Chrome',    'browser_version' => '91.0',
-                'os'               => 'macOS',     'os_version'      => '10.15',
-                'rendering_engine' => 'blink',     'ch_platform'     => 'macOS',
+                'ua' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+                'browser' => 'Chrome',    'browser_version' => '91.0',
+                'os' => 'macOS',     'os_version' => '10.15',
+                'rendering_engine' => 'blink',     'ch_platform' => 'macOS',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-                'browser'          => 'Firefox',   'browser_version' => '89.0',
-                'os'               => 'Windows',   'os_version'      => '10',
-                'rendering_engine' => 'gecko',     'ch_platform'     => 'Windows',
+                'ua' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+                'browser' => 'Firefox',   'browser_version' => '89.0',
+                'os' => 'Windows',   'os_version' => '10',
+                'rendering_engine' => 'gecko',     'ch_platform' => 'Windows',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-                'browser'          => 'Safari',    'browser_version' => '14.1',
-                'os'               => 'macOS',     'os_version'      => '10.15',
-                'rendering_engine' => 'webkit',    'ch_platform'     => 'macOS',
+                'ua' => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+                'browser' => 'Safari',    'browser_version' => '14.1',
+                'os' => 'macOS',     'os_version' => '10.15',
+                'rendering_engine' => 'webkit',    'ch_platform' => 'macOS',
             ],
         ],
         'tablet' => [
             [
-                'ua'               => 'Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
-                'browser'          => 'Safari',    'browser_version' => '14.1',
-                'os'               => 'iPadOS',    'os_version'      => '14.6',
-                'rendering_engine' => 'webkit',    'ch_platform'     => 'iOS',
+                'ua' => 'Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+                'browser' => 'Safari',    'browser_version' => '14.1',
+                'os' => 'iPadOS',    'os_version' => '14.6',
+                'rendering_engine' => 'webkit',    'ch_platform' => 'iOS',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (Linux; Android 11; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Safari/537.36',
-                'browser'          => 'Chrome',    'browser_version' => '91.0',
-                'os'               => 'Android',   'os_version'      => '11',
-                'rendering_engine' => 'blink',     'ch_platform'     => 'Android',
+                'ua' => 'Mozilla/5.0 (Linux; Android 11; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Safari/537.36',
+                'browser' => 'Chrome',    'browser_version' => '91.0',
+                'os' => 'Android',   'os_version' => '11',
+                'rendering_engine' => 'blink',     'ch_platform' => 'Android',
             ],
         ],
         'bot' => [
             [
-                'ua'               => 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'browser'          => 'Googlebot', 'browser_version' => '2.1',
-                'os'               => 'Linux',     'os_version'      => '',
-                'rendering_engine' => 'unknown',   'ch_platform'     => '',
+                'ua' => 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'browser' => 'Googlebot', 'browser_version' => '2.1',
+                'os' => 'Linux',     'os_version' => '',
+                'rendering_engine' => 'unknown',   'ch_platform' => '',
             ],
             [
-                'ua'               => 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
-                'browser'          => 'Bingbot',   'browser_version' => '2.0',
-                'os'               => 'Linux',     'os_version'      => '',
-                'rendering_engine' => 'unknown',   'ch_platform'     => '',
+                'ua' => 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+                'browser' => 'Bingbot',   'browser_version' => '2.0',
+                'os' => 'Linux',     'os_version' => '',
+                'rendering_engine' => 'unknown',   'ch_platform' => '',
             ],
         ],
     ];
@@ -271,87 +271,87 @@ class OnboardingDemoDataService
     {
         $batch = [];
         $start = Carbon::now()->subDays(self::DAYS_BACK);
-        $end   = Carbon::now();
+        $end = Carbon::now();
 
         for ($i = 0; $i < self::TOTAL_CLICKS; $i++) {
-            $country  = $this->selectCountryByWeight();
+            $country = $this->selectCountryByWeight();
             $cityData = $this->getCityData($country['iso']);
-            $device   = $this->selectDeviceByWeight();
-            $clickAt  = $this->generateRandomDate($start, $end);
-            $uaInfo   = $this->getUserAgent($device);
-            $refData  = $this->getReferer();
+            $device = $this->selectDeviceByWeight();
+            $clickAt = $this->generateRandomDate($start, $end);
+            $uaInfo = $this->getUserAgent($device);
+            $refData = $this->getReferer();
             $langData = $this->languageByIso[$country['iso']]
                 ?? ['lang' => 'en', 'region' => 'en-US', 'accept' => 'en-US,en;q=0.9'];
-            $quality  = $this->getQualityData($device === 'bot');
-            $isBot    = $device === 'bot';
+            $quality = $this->getQualityData($device === 'bot');
+            $isBot = $device === 'bot';
             $isMobile = $device === 'mobile';
             $isTablet = $device === 'tablet';
-            $dow      = (int) $clickAt->format('N');
+            $dow = (int) $clickAt->format('N');
 
             $batch[] = [
                 // Core
-                'link_id'    => $linkId,
-                'ip'         => $this->generateRealisticIp($country['iso']),
+                'link_id' => $linkId,
+                'ip' => $this->generateRealisticIp($country['iso']),
                 'user_agent' => $uaInfo['ua'],
-                'referer'    => $refData['referer'],
+                'referer' => $refData['referer'],
                 // Geographic
-                'country'     => $country['name'],
-                'iso_code'    => $country['iso'],
-                'state'       => $cityData['state'],
-                'state_name'  => $cityData['state_name'],
-                'city'        => $cityData['city'],
+                'country' => $country['name'],
+                'iso_code' => $country['iso'],
+                'state' => $cityData['state'],
+                'state_name' => $cityData['state_name'],
+                'city' => $cityData['city'],
                 'postal_code' => $cityData['postal'],
-                'latitude'    => $cityData['lat'],
-                'longitude'   => $cityData['lng'],
-                'timezone'    => $country['timezone'],
-                'continent'   => $country['continent'],
-                'currency'    => $country['currency'],
+                'latitude' => $cityData['lat'],
+                'longitude' => $cityData['lng'],
+                'timezone' => $country['timezone'],
+                'continent' => $country['continent'],
+                'currency' => $country['currency'],
                 // Device
-                'device'           => $device,
-                'browser'          => $uaInfo['browser'],
-                'browser_version'  => $uaInfo['browser_version'],
-                'os'               => $uaInfo['os'],
-                'os_version'       => $uaInfo['os_version'],
-                'is_mobile'        => $isMobile ? 1 : 0,
-                'is_tablet'        => $isTablet ? 1 : 0,
-                'is_desktop'       => (! $isMobile && ! $isTablet && ! $isBot) ? 1 : 0,
-                'is_bot'           => $isBot ? 1 : 0,
+                'device' => $device,
+                'browser' => $uaInfo['browser'],
+                'browser_version' => $uaInfo['browser_version'],
+                'os' => $uaInfo['os'],
+                'os_version' => $uaInfo['os_version'],
+                'is_mobile' => $isMobile ? 1 : 0,
+                'is_tablet' => $isTablet ? 1 : 0,
+                'is_desktop' => (! $isMobile && ! $isTablet && ! $isBot) ? 1 : 0,
+                'is_bot' => $isBot ? 1 : 0,
                 'rendering_engine' => $uaInfo['rendering_engine'],
-                'ch_platform'      => $uaInfo['ch_platform'],
-                'ch_is_mobile'     => $isMobile ? 1 : 0,
+                'ch_platform' => $uaInfo['ch_platform'],
+                'ch_is_mobile' => $isMobile ? 1 : 0,
                 // Temporal
-                'hour_of_day'       => $clickAt->hour,
-                'day_of_week'       => $dow,
-                'day_of_month'      => $clickAt->day,
-                'month'             => $clickAt->month,
-                'year'              => $clickAt->year,
-                'local_time'        => $clickAt->format('Y-m-d H:i:s'),
-                'is_weekend'        => in_array($dow, [6, 7]) ? 1 : 0,
+                'hour_of_day' => $clickAt->hour,
+                'day_of_week' => $dow,
+                'day_of_month' => $clickAt->day,
+                'month' => $clickAt->month,
+                'year' => $clickAt->year,
+                'local_time' => $clickAt->format('Y-m-d H:i:s'),
+                'is_weekend' => in_array($dow, [6, 7]) ? 1 : 0,
                 'is_business_hours' => ($clickAt->hour >= 9 && $clickAt->hour <= 17) ? 1 : 0,
-                'season'            => $this->getSeasonForMonth($clickAt->month),
+                'season' => $this->getSeasonForMonth($clickAt->month),
                 // Traffic source
-                'click_source'    => $refData['click_source'],
+                'click_source' => $refData['click_source'],
                 'social_platform' => $refData['social_platform'],
                 // Quality
-                'quality_tier'      => $quality['quality_tier'],
-                'quality_score'     => $quality['quality_score'],
+                'quality_tier' => $quality['quality_tier'],
+                'quality_score' => $quality['quality_score'],
                 'fingerprint_score' => $quality['fingerprint_score'],
                 // Behavior
-                'is_return_visitor'        => mt_rand(0, 3) === 0 ? 1 : 0,
-                'session_clicks'           => $this->weightedRandom([1 => 75, 2 => 18, 3 => 7]),
-                'is_data_saver'            => mt_rand(0, 19) === 0 ? 1 : 0,
+                'is_return_visitor' => mt_rand(0, 3) === 0 ? 1 : 0,
+                'session_clicks' => $this->weightedRandom([1 => 75, 2 => 18, 3 => 7]),
+                'is_data_saver' => mt_rand(0, 19) === 0 ? 1 : 0,
                 'seconds_since_last_click' => mt_rand(1, 3600),
                 // Context
                 'navigation_context' => $this->getNavigationContext(),
-                'fetch_dest'         => mt_rand(0, 9) === 0 ? 'empty' : 'document',
-                'http_protocol'      => $this->getHttpProtocol(),
-                'connection_type'    => $this->getConnectionType(),
-                'viral_rank'         => $this->getViralRank(),
-                'is_holiday'         => 0,
+                'fetch_dest' => mt_rand(0, 9) === 0 ? 'empty' : 'document',
+                'http_protocol' => $this->getHttpProtocol(),
+                'connection_type' => $this->getConnectionType(),
+                'viral_rank' => $this->getViralRank(),
+                'is_holiday' => 0,
                 // Language
                 'primary_language' => $langData['lang'],
-                'language_region'  => $langData['region'],
-                'accept_language'  => $langData['accept'],
+                'language_region' => $langData['region'],
+                'accept_language' => $langData['accept'],
                 // Performance
                 'response_time' => round(mt_rand(50000, 300000) / 1000, 3),
                 // Timestamps
@@ -435,12 +435,12 @@ class OnboardingDemoDataService
      */
     private function getReferer(): array
     {
-        $type  = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'referral' => 10]);
+        $type = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'referral' => 10]);
         $entry = $this->referrers[$type][array_rand($this->referrers[$type])];
 
         return [
-            'referer'         => $entry['url'],
-            'click_source'    => $type,
+            'referer' => $entry['url'],
+            'click_source' => $type,
             'social_platform' => $entry['platform'],
         ];
     }
@@ -508,8 +508,8 @@ class OnboardingDemoDataService
     {
         if ($isBot) {
             return [
-                'quality_tier'      => 'likely_fraud',
-                'quality_score'     => mt_rand(0, 29),
+                'quality_tier' => 'likely_fraud',
+                'quality_score' => mt_rand(0, 29),
                 'fingerprint_score' => mt_rand(2, 3),
             ];
         }
@@ -517,11 +517,11 @@ class OnboardingDemoDataService
         $tier = $this->weightedRandom(['organic' => 85, 'suspicious' => 10, 'likely_fraud' => 5]);
 
         return [
-            'quality_tier'      => $tier,
-            'quality_score'     => match ($tier) {
-                'organic'    => mt_rand(70, 100),
+            'quality_tier' => $tier,
+            'quality_score' => match ($tier) {
+                'organic' => mt_rand(70, 100),
                 'suspicious' => mt_rand(30, 69),
-                default      => mt_rand(0, 29),
+                default => mt_rand(0, 29),
             },
             'fingerprint_score' => $this->weightedRandom([0 => 70, 1 => 20, 2 => 8, 3 => 2]),
         ];
@@ -532,9 +532,9 @@ class OnboardingDemoDataService
     {
         return $this->weightedRandom([
             'residential' => 60,
-            'mobile'      => 25,
-            'datacenter'  => 10,
-            'education'   => 5,
+            'mobile' => 25,
+            'datacenter' => 10,
+            'education' => 5,
         ]);
     }
 
@@ -542,10 +542,10 @@ class OnboardingDemoDataService
     private function getViralRank(): string
     {
         return $this->weightedRandom([
-            'cold'     => 70,
-            'warming'  => 20,
+            'cold' => 70,
+            'warming' => 20,
             'trending' => 8,
-            'viral'    => 2,
+            'viral' => 2,
         ]);
     }
 
@@ -553,8 +553,8 @@ class OnboardingDemoDataService
     private function getNavigationContext(): string
     {
         return $this->weightedRandom([
-            'cross-site'  => 40,
-            'none'        => 40,
+            'cross-site' => 40,
+            'none' => 40,
             'same-origin' => 20,
         ]);
     }
@@ -563,9 +563,9 @@ class OnboardingDemoDataService
     private function getHttpProtocol(): string
     {
         return $this->weightedRandom([
-            'HTTP/2'   => 70,
+            'HTTP/2' => 70,
             'HTTP/1.1' => 25,
-            'HTTP/3'   => 5,
+            'HTTP/3' => 5,
         ]);
     }
 }
