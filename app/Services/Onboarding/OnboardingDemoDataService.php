@@ -93,24 +93,84 @@ class OnboardingDemoDataService
 
     private array $userAgents = [
         'mobile' => [
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-            'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36',
-            'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+            [
+                'ua'               => 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+                'browser'          => 'Safari',   'browser_version' => '15.0',
+                'os'               => 'iOS',       'os_version'      => '15.0',
+                'rendering_engine' => 'webkit',    'ch_platform'     => 'iOS',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36',
+                'browser'          => 'Chrome',    'browser_version' => '91.0',
+                'os'               => 'Android',   'os_version'      => '11',
+                'rendering_engine' => 'blink',     'ch_platform'     => 'Android',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (Linux; Android 10; Pixel 4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+                'browser'          => 'Chrome',    'browser_version' => '90.0',
+                'os'               => 'Android',   'os_version'      => '10',
+                'rendering_engine' => 'blink',     'ch_platform'     => 'Android',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+                'browser'          => 'Safari',    'browser_version' => '14.1',
+                'os'               => 'iOS',       'os_version'      => '14.6',
+                'rendering_engine' => 'webkit',    'ch_platform'     => 'iOS',
+            ],
         ],
         'desktop' => [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+            [
+                'ua'               => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'browser'          => 'Chrome',    'browser_version' => '91.0',
+                'os'               => 'Windows',   'os_version'      => '10',
+                'rendering_engine' => 'blink',     'ch_platform'     => 'Windows',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
+                'browser'          => 'Chrome',    'browser_version' => '91.0',
+                'os'               => 'macOS',     'os_version'      => '10.15',
+                'rendering_engine' => 'blink',     'ch_platform'     => 'macOS',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+                'browser'          => 'Firefox',   'browser_version' => '89.0',
+                'os'               => 'Windows',   'os_version'      => '10',
+                'rendering_engine' => 'gecko',     'ch_platform'     => 'Windows',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
+                'browser'          => 'Safari',    'browser_version' => '14.1',
+                'os'               => 'macOS',     'os_version'      => '10.15',
+                'rendering_engine' => 'webkit',    'ch_platform'     => 'macOS',
+            ],
         ],
         'tablet' => [
-            'Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
-            'Mozilla/5.0 (Linux; Android 11; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Safari/537.36',
+            [
+                'ua'               => 'Mozilla/5.0 (iPad; CPU OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1',
+                'browser'          => 'Safari',    'browser_version' => '14.1',
+                'os'               => 'iPadOS',    'os_version'      => '14.6',
+                'rendering_engine' => 'webkit',    'ch_platform'     => 'iOS',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (Linux; Android 11; SM-T870) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Safari/537.36',
+                'browser'          => 'Chrome',    'browser_version' => '91.0',
+                'os'               => 'Android',   'os_version'      => '11',
+                'rendering_engine' => 'blink',     'ch_platform'     => 'Android',
+            ],
         ],
         'bot' => [
-            'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-            'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+            [
+                'ua'               => 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'browser'          => 'Googlebot', 'browser_version' => '2.1',
+                'os'               => 'Linux',     'os_version'      => '',
+                'rendering_engine' => 'unknown',   'ch_platform'     => '',
+            ],
+            [
+                'ua'               => 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+                'browser'          => 'Bingbot',   'browser_version' => '2.0',
+                'os'               => 'Linux',     'os_version'      => '',
+                'rendering_engine' => 'unknown',   'ch_platform'     => '',
+            ],
         ],
     ];
 
@@ -254,7 +314,7 @@ class OnboardingDemoDataService
         return $this->weightedRandom(['mobile' => 60, 'desktop' => 35, 'tablet' => 4, 'bot' => 1]);
     }
 
-    private function getUserAgent(string $device): string
+    private function getUserAgent(string $device): array
     {
         $agents = $this->userAgents[$device] ?? $this->userAgents['desktop'];
 
