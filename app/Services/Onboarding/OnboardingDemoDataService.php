@@ -192,7 +192,7 @@ class OnboardingDemoDataService
             ['url' => null, 'platform' => null],
             ['url' => null, 'platform' => null],
         ],
-        'other' => [
+        'referral' => [
             ['url' => 'https://news.ycombinator.com/', 'platform' => null],
             ['url' => 'https://www.reddit.com/',       'platform' => null],
             ['url' => 'https://medium.com/',           'platform' => null],
@@ -320,13 +320,13 @@ class OnboardingDemoDataService
                 'ch_is_mobile'     => $isMobile ? 1 : 0,
                 // Temporal
                 'hour_of_day'       => $clickAt->hour,
-                'day_of_week'       => $clickAt->dayOfWeek,
+                'day_of_week'       => (int) $clickAt->format('N'),
                 'day_of_month'      => $clickAt->day,
                 'month'             => $clickAt->month,
                 'year'              => $clickAt->year,
-                'local_time'        => $clickAt->format('H:i:s'),
+                'local_time'        => $clickAt->format('Y-m-d H:i:s'),
                 'is_weekend'        => in_array($clickAt->dayOfWeek, [0, 6]) ? 1 : 0,
-                'is_business_hours' => ($clickAt->hour >= 9 && $clickAt->hour <= 17 && ! in_array($clickAt->dayOfWeek, [0, 6])) ? 1 : 0,
+                'is_business_hours' => ($clickAt->hour >= 9 && $clickAt->hour <= 17) ? 1 : 0,
                 'season'            => $this->getSeasonForMonth($clickAt->month),
                 // Traffic source
                 'click_source'    => $refData['click_source'],
@@ -414,6 +414,12 @@ class OnboardingDemoDataService
         return $this->weightedRandom(['mobile' => 60, 'desktop' => 35, 'tablet' => 4, 'bot' => 1]);
     }
 
+    /**
+     * Returns the full UA metadata array for the given device type.
+     *
+     * @param  string  $device  One of: mobile, desktop, tablet, bot.
+     * @return array{ua: string, browser: string, browser_version: string, os: string, os_version: string, rendering_engine: string, ch_platform: string}
+     */
     private function getUserAgent(string $device): array
     {
         $agents = $this->userAgents[$device] ?? $this->userAgents['desktop'];
@@ -428,7 +434,7 @@ class OnboardingDemoDataService
      */
     private function getReferer(): array
     {
-        $type  = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'other' => 10]);
+        $type  = $this->weightedRandom(['direct' => 40, 'social' => 30, 'search' => 20, 'referral' => 10]);
         $entry = $this->referrers[$type][array_rand($this->referrers[$type])];
 
         return [
