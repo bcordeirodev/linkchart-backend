@@ -60,6 +60,8 @@ class OnboardingDemoDataServiceTest extends TestCase
         $click = Click::first();
         $this->assertNotNull($click->hour_of_day);
         $this->assertNotNull($click->day_of_week);
+        $this->assertGreaterThanOrEqual(1, (int) $click->day_of_week);
+        $this->assertLessThanOrEqual(7, (int) $click->day_of_week);
         $this->assertNotNull($click->season);
         $this->assertContains($click->season, ['spring', 'summer', 'fall', 'winter']);
         $this->assertNotNull($click->local_time);
@@ -88,7 +90,7 @@ class OnboardingDemoDataServiceTest extends TestCase
         $click = Click::whereNotNull('referer')->first();
         $this->assertNotNull($click);
         $this->assertNotNull($click->click_source);
-        $this->assertContains($click->click_source, ['direct', 'social', 'search', 'other']);
+        $this->assertContains($click->click_source, ['direct', 'social', 'search', 'referral']);
     }
 
     /** @test */
