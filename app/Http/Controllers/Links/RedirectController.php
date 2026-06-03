@@ -72,6 +72,17 @@ class RedirectController extends Controller
      */
     private const METADATA_FETCH_UA_FALLBACK = 'Twitterbot/1.0';
 
+    /**
+     * Generic browser User-Agent used as a last-resort fallback.
+     *
+     * Platforms that block known social-crawler UAs (facebookexternalhit,
+     * Twitterbot) but do not perform source-IP verification against published
+     * crawler IP ranges will serve a full HTML response to this UA.
+     * Paired with complete browser Accept/Accept-Language headers to pass
+     * basic bot-detection heuristics that inspect header completeness.
+     */
+    private const METADATA_FETCH_UA_BROWSER = 'Mozilla/5.0 (compatible; LinkPreview/1.0; +https://linkchar.com.br)';
+
     private const BOT_USER_AGENT_PATTERNS = [
         'WhatsApp',
         'Telegram',
@@ -114,6 +125,8 @@ class RedirectController extends Controller
      * Response shape:
      *   Human visitor: 302 redirect to original_url with no-cache headers
      *   Bot / ?preview=1: 200 HTML with OG meta-tags (Content-Type: text/html)
+     *   Bot + all OG fetches failed: 302 redirect to original_url so the bot's
+     *     own verified IP fetches OG data directly from the destination
      *   Not found / expired / click-limit: 404 HTML error page
      *
      * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response
@@ -178,6 +191,19 @@ class RedirectController extends Controller
             }
 
             $metadata = $this->fetchOriginalMetadata($link->original_url);
+
+            // When all OG fetch strategies failed (e.g. Cloudflare IP-verifies
+            // known crawler UAs and blocks VPS IPs), redirect the bot to the
+            // original URL so its own verified IP fetches OG data directly.
+            if ($isBot && ! empty($metadata['_fetch_failed'])) {
+                AppLogger::redirectStarted($slug, $link->id, ['reason' => 'og_fetch_failed_bot_passthrough']);
+
+                return redirect()->away($link->original_url, 302)->withHeaders([
+                    'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                    'Pragma' => 'no-cache',
+                    'Expires' => '0',
+                ]);
+            }
 
             return $this->renderRedirectPage($link, $metadata, $isBot);
         } catch (\Exception $e) {
@@ -259,8 +285,15 @@ class RedirectController extends Controller
      *      Triggered only when the primary fetch returns no og:image. Amazon and
      *      some other e-commerce platforms block facebookexternalhit (Meta is a
      *      competing shopping platform) but serve full OG data to Twitterbot.
+     *   4. Browser fallback: {@see METADATA_FETCH_UA_BROWSER} (generic browser UA).
+     *      Triggered when both crawler UAs return non-2xx. Platforms that block
+     *      known bot UAs without IP-range verification will serve a full page here.
+     *      When ALL three strategies fail, the returned array includes the marker
+     *      `_fetch_failed => true` so the caller can choose to redirect bots to
+     *      the original URL (letting the bot's own verified IP fetch OG data
+     *      directly, bypassing Cloudflare IP verification).
      *
-     * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}
+     * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string,_fetch_failed?:bool}
      */
     private function fetchOriginalMetadata(string $url): array
     {
@@ -300,6 +333,10 @@ class RedirectController extends Controller
 
                     return $fallback;
                 }
+                // Promote fallback result if it has more data than the primary.
+                if ($fallback !== null && $metadata === null) {
+                    $metadata = $fallback;
+                }
             }
 
             if ($metadata !== null) {
@@ -308,7 +345,30 @@ class RedirectController extends Controller
                 return $metadata;
             }
 
-            return $this->getDefaultMetadata($url);
+            // Both crawler UAs returned non-2xx (e.g. Cloudflare blocks VPS IPs
+            // that impersonate facebookexternalhit/Twitterbot without a matching
+            // source IP). Try a generic browser UA — some WAF configs allow it.
+            $browserMeta = $this->doHtmlFetch(
+                $url,
+                self::METADATA_FETCH_UA_BROWSER,
+                [
+                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language' => 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                ]
+            );
+            if ($browserMeta !== null) {
+                AppLogger::ogFetchSucceeded($url, 'html_browser_ua');
+
+                return $browserMeta;
+            }
+
+            // All three strategies failed — mark the result so the caller can
+            // decide to pass the bot through directly to the original URL.
+            $failed = $this->getDefaultMetadata($url);
+            $failed['_fetch_failed'] = true;
+            AppLogger::event('redirect', 'warning', 'og.fetch_all_attempts_failed', ['url' => $url]);
+
+            return $failed;
         });
     }
 
@@ -321,14 +381,16 @@ class RedirectController extends Controller
      * Returns the parsed metadata array on HTTP 2xx, or null on non-2xx response
      * or on any exception (network error, TLS failure, timeout, etc.).
      *
+     * @param  array<string,string>  $extraHeaders  Additional HTTP headers merged after User-Agent.
      * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}|null
      */
-    private function doHtmlFetch(string $url, string $userAgent): ?array
+    private function doHtmlFetch(string $url, string $userAgent, array $extraHeaders = []): ?array
     {
         try {
-            $response = Http::withHeaders([
-                'User-Agent' => $userAgent,
-            ])
+            $response = Http::withHeaders(array_merge(
+                ['User-Agent' => $userAgent],
+                $extraHeaders,
+            ))
                 ->connectTimeout(3)
                 ->timeout(5)
                 ->retry(2, 200)
@@ -449,6 +511,7 @@ class RedirectController extends Controller
             'igshid',
             '_ga',
             'ref', 'ref_src', 'ref_url',
+            'lis',   // OLX internal listing-source tracking param
         ];
 
         foreach ($trackingParams as $param) {
