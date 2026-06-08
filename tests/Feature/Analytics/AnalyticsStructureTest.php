@@ -142,4 +142,32 @@ class AnalyticsStructureTest extends TestCase
         $this->assertArrayHasKey('device_breakdown', $orch->getLinkAudienceAnalytics($link->id));
         $this->assertArrayHasKey('insights', $orch->getLinkInsightsAnalytics($link->id));
     }
+
+    public function test_dashboard_summary_includes_avg_daily_clicks(): void
+    {
+        $link = $this->makeLink(['created_at' => now()->subDays(10)]);
+        // 20 cliques em 10 dias => média 2.0/dia
+        Click::factory()->count(20)->create([
+            'link_id' => $link->id,
+            'created_at' => now()->subDays(5),
+        ]);
+
+        $summary = app(DashboardAnalyticsService::class)
+            ->getLinkDashboardAnalytics($link->id)['summary'];
+
+        $this->assertArrayHasKey('avg_daily_clicks', $summary);
+        $this->assertSame(2.0, $summary['avg_daily_clicks']);
+    }
+
+    public function test_avg_daily_clicks_never_divides_by_zero(): void
+    {
+        $link = $this->makeLink(['created_at' => now()]); // criado hoje
+        Click::factory()->count(3)->create(['link_id' => $link->id, 'created_at' => now()]);
+
+        $summary = app(DashboardAnalyticsService::class)
+            ->getLinkDashboardAnalytics($link->id)['summary'];
+
+        // janela mínima de 1 dia => 3 cliques / 1 = 3.0 (nunca divisão por zero)
+        $this->assertSame(3.0, $summary['avg_daily_clicks']);
+    }
 }

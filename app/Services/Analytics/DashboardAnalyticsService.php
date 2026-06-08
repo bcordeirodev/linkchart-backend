@@ -48,7 +48,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      *
      * @param  int  $linkId  Link primary key.
      * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @return array<string, mixed> Keyed: summary, link_info, temporal_data, geographic_data, audience_data.
+     * @return array<string, mixed> Keyed: summary (includes avg_daily_clicks), link_info, temporal_data, geographic_data, audience_data.
      */
     public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
@@ -62,6 +62,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         $totalClicks = $this->countClicks($linkId, $filters);
         $unique = $this->countUnique($linkId, $filters);
         $countries = $this->countCountries($linkId, $filters);
+        $avgDaily = $this->avgDailyClicks($link, $filters, $totalClicks);
 
         return [
             'summary' => [
@@ -69,6 +70,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'total_links' => 1,
                 'active_links' => $link->is_active ? 1 : 0,
                 'unique_visitors' => $unique,
+                'avg_daily_clicks' => $avgDaily,
                 'avg_response_time' => $this->estimateResponseTime($linkId, $filters),
                 'countries_reached' => $countries,
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
@@ -222,6 +224,27 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
     private function countUnique(int $linkId, AnalyticsFilters $filters): int
     {
         return $this->baseQuery($linkId, $filters)->distinct('ip')->count();
+    }
+
+    /**
+     * Average clicks per day over the active window.
+     *
+     * Window = the filter date range when set, otherwise from the link's
+     * creation date until now. Floored at 1 day to avoid division by zero
+     * and to keep brand-new links from reporting an inflated daily average.
+     *
+     * @param  Link  $link  The link being analysed.
+     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @param  int  $totalClicks  Pre-computed total click count for the window.
+     * @return float Clicks per day, rounded to one decimal.
+     */
+    private function avgDailyClicks(Link $link, AnalyticsFilters $filters, int $totalClicks): float
+    {
+        $start = $filters->dateFrom ?? $link->created_at;
+        $end = $filters->dateTo ?? now();
+        $days = max(1, (int) $start->diffInDays($end));
+
+        return round($totalClicks / $days, 1);
     }
 
     /**
