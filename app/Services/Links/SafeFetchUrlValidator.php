@@ -13,14 +13,21 @@ namespace App\Services\Links;
  *      addresses (::ffff:a.b.c.d) are decoded and their embedded IPv4 is
  *      checked, since filter_var treats the mapped form as public even when
  *      the inner address is loopback or RFC-1918.
- *   5. DNS rebinding mitigation: the hostname's A AND AAAA records are
+ *   5. Non-standard numeric IPv4 shorthands (decimal/hex/octal and short
+ *      dotted forms like 127.1 or 0x7f000001) that filter_var does not accept
+ *      but HTTP clients resolve to real addresses. Canonicalised here with an
+ *      inet_aton-equivalent parser and checked against private/reserved ranges.
+ *      This is done deterministically rather than delegated to the system
+ *      resolver, whose handling of these forms is environment-specific.
+ *   6. DNS rebinding mitigation: the hostname's A AND AAAA records are
  *      resolved and the URL is rejected if ANY address is private/reserved.
  *      Resolution failure is allowed through — the subsequent HTTP fetch
  *      fails on its own, and rejecting would break flaky-DNS hosts.
- *   6. System-resolver backstop via gethostbyname: catches integer/hex/octal
- *      IP forms (e.g. http://2130706433/) that DNS queries return nothing for
- *      but the HTTP client's resolver happily normalises, plus /etc/hosts
- *      entries invisible to dns_get_record.
+ *
+ * Out of scope: /etc/hosts entries that shadow a public hostname to an
+ * internal IP — that requires host compromise, and catching it reliably
+ * would reintroduce the environment-specific resolver dependency this
+ * validator deliberately avoids.
  *
  * Trailing dots in the host are stripped before any check so that
  * "localhost." is treated identically to "localhost".
@@ -73,7 +80,16 @@ class SafeFetchUrlValidator
             return $this->isPublicIp($hostRaw);
         }
 
-        // Layer 5: DNS rebinding mitigation — resolve A and AAAA records and
+        // Layer 5: non-standard numeric IPv4 shorthands (decimal/hex/octal and
+        // short dotted forms) that filter_var rejects but HTTP clients resolve
+        // to real addresses (e.g. http://2130706433/, http://0x7f000001/,
+        // http://127.1/). Canonicalise deterministically and check the result.
+        $numericIp = $this->parseNumericIpv4($host);
+        if ($numericIp !== null) {
+            return $this->isPublicIp($numericIp);
+        }
+
+        // Layer 6: DNS rebinding mitigation — resolve A and AAAA records and
         // reject if any resolved address falls in a private/reserved range.
         foreach ($this->resolveAddresses($host) as $ip) {
             if (! $this->isPublicIp($ip)) {
@@ -81,16 +97,69 @@ class SafeFetchUrlValidator
             }
         }
 
-        // Layer 6 — system-resolver backstop: catches integer/hex/octal IP
-        // literal forms (e.g. http://2130706433/) that dns_get_record returns
-        // nothing for but which glibc's inet_aton / the HTTP client normalises
-        // to a real address, plus /etc/hosts entries invisible to DNS queries.
-        $resolved = gethostbyname($host);
-        if ($resolved !== $host && ! $this->isPublicIp($resolved)) {
-            return false;
+        return true;
+    }
+
+    /**
+     * Canonicalise a non-standard numeric IPv4 host into dotted-quad form,
+     * replicating inet_aton semantics (the parsing HTTP clients use), or null
+     * when the host is not a purely numeric IPv4 shorthand (i.e. it is a real
+     * hostname that should go through DNS resolution).
+     *
+     * Accepts 1–4 dot-separated parts, each decimal, octal (leading 0) or hex
+     * (0x prefix). With fewer than 4 parts the final part fills the remaining
+     * low-order bytes (so "127.1" → 127.0.0.1 and "2130706433" → 127.0.0.1).
+     *
+     * @param  string  $host  The URL host component (already lowercased, brackets/trailing dot stripped).
+     */
+    protected function parseNumericIpv4(string $host): ?string
+    {
+        $parts = explode('.', $host);
+        $count = count($parts);
+
+        if ($count < 1 || $count > 4) {
+            return null;
         }
 
-        return true;
+        $values = [];
+
+        foreach ($parts as $part) {
+            if ($part === '') {
+                return null;
+            }
+
+            if (preg_match('/^0[x][0-9a-f]+$/', $part)) {
+                $value = hexdec($part);
+            } elseif (preg_match('/^0[0-7]+$/', $part)) {
+                $value = octdec($part);
+            } elseif (preg_match('/^(?:0|[1-9][0-9]*)$/', $part)) {
+                $value = (int) $part;
+            } else {
+                // Contains characters that make this a hostname, not a numeric
+                // IP shorthand — defer to DNS resolution.
+                return null;
+            }
+
+            $values[] = (int) $value;
+        }
+
+        // Per-part maximums per inet_aton: the final part absorbs all remaining
+        // low-order bytes; every preceding part is a single byte.
+        $lastMax = (2 ** (8 * (4 - $count + 1))) - 1;
+
+        foreach ($values as $index => $value) {
+            $max = $index === $count - 1 ? $lastMax : 0xFF;
+            if ($value < 0 || $value > $max) {
+                return null;
+            }
+        }
+
+        $address = $values[$count - 1];
+        for ($i = 0; $i < $count - 1; $i++) {
+            $address |= $values[$i] << (8 * (3 - $i));
+        }
+
+        return long2ip($address);
     }
 
     /**

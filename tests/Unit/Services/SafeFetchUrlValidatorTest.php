@@ -80,13 +80,23 @@ class SafeFetchUrlValidatorTest extends TestCase
         $this->assertTrue($this->validatorResolvingTo([])->isSafe('https://does-not-resolve.example/x'));
     }
 
-    /** Integer/hex/octal IP literal forms must be rejected (resolver backstop). */
+    /** Integer/hex/octal IP literal forms must be rejected (deterministic parse). */
     public function test_rejects_integer_form_ip_literals(): void
     {
         $v = new SafeFetchUrlValidator;
         $this->assertFalse($v->isSafe('http://2130706433/'));
         $this->assertFalse($v->isSafe('http://0x7f000001/'));
         $this->assertFalse($v->isSafe('http://017700000001/'));
+        // Short dotted forms that HTTP clients expand to 127.0.0.1.
+        $this->assertFalse($v->isSafe('http://127.1/'));
+        $this->assertFalse($v->isSafe('http://0x7f.0.0.1/'));
+    }
+
+    /** Numeric shorthands that expand to a public address are allowed through. */
+    public function test_accepts_numeric_form_public_ip(): void
+    {
+        // 134744072 decimal = 8.8.8.8 — a public address, must pass.
+        $this->assertTrue((new SafeFetchUrlValidator)->isSafe('http://134744072/'));
     }
 
     /** IPv4-mapped IPv6 literals embedding private addresses are rejected. */
