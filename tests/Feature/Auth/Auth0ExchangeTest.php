@@ -175,6 +175,7 @@ class Auth0ExchangeTest extends TestCase
         ]);
 
         $response->assertStatus(422);
+        $response->assertJsonPath('error.code', 'auth0_userinfo_incomplete');
         $this->assertNull($victim->fresh()->auth0_sub);
         $this->assertDatabaseMissing('users', ['auth0_sub' => 'facebook|attacker-1']);
     }
@@ -203,5 +204,46 @@ class Auth0ExchangeTest extends TestCase
         $response->assertStatus(422);
         $response->assertJsonPath('error.code', 'auth0_email_unverified');
         $this->assertNull($victim->fresh()->auth0_sub);
+    }
+
+    /** String "false" from non-normalizing Auth0 connections must fail closed. */
+    public function test_rejects_string_false_email_verified(): void
+    {
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'samlp|attacker-2',
+                'email' => 'someone@example.com',
+                'email_verified' => 'false',
+                'name' => 'Someone',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-token',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('error.code', 'auth0_email_unverified');
+        $this->assertDatabaseMissing('users', ['auth0_sub' => 'samlp|attacker-2']);
+    }
+
+    /** Absent email_verified key (with email present) must fail closed. */
+    public function test_rejects_missing_email_verified_key(): void
+    {
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'oidc|no-verified-claim',
+                'email' => 'noclaim@example.com',
+                'name' => 'No Claim',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-token',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('error.code', 'auth0_email_unverified');
+        $this->assertDatabaseMissing('users', ['auth0_sub' => 'oidc|no-verified-claim']);
     }
 }
