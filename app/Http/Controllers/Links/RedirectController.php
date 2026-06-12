@@ -215,7 +215,8 @@ class RedirectController extends Controller
 
     /**
      * Enqueue ProcessLinkClickJob with the full tracking payload (resolved IP,
-     * UA, referer, UTM, Sec-Fetch metadata, client hints). Returns immediately.
+     * UA, referer, UTM, Sec-Fetch metadata, client hints, server-generated
+     * dedup_key). Returns immediately.
      *
      * The denormalised links.clicks counter is incremented later by
      * LinkTrackingService::registrarCliqueFromPayload running inside the job,
@@ -231,6 +232,8 @@ class RedirectController extends Controller
         try {
             $payload = [
                 'request_id' => RequestContext::current()?->requestId,
+                // Server-generated, never client-influenced — used only for retry dedup.
+                'dedup_key' => 'clk_'.bin2hex(random_bytes(8)),
                 'ip' => $this->linkTrackingService->resolveRealUserIP($request),
                 'user_agent' => $request->userAgent(),
                 'referer' => $request->header('referer'),

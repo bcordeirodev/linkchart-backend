@@ -26,7 +26,8 @@ use Throwable;
  *     `LinkTrackingService::registrarCliqueFromPayload()`; also increments
  *     `links.clicks` via a direct `DB::table->increment()` inside that service
  *     (no model events, keeping the Link cache stable).
- *   - Cache: none written by this job directly.
+ *   - Cache: writes click:processed:{dedup_key} (TTL 1h) after successful
+ *     persistence — the retry-dedup marker.
  *   - Queue: no further jobs are dispatched.
  *   - Log channels: `tracking` (click details), `jobs` (lifecycle — started /
  *     succeeded / failed), via `AppLogger::jobStarted`, `AppLogger::jobSucceeded`,
@@ -51,13 +52,17 @@ use Throwable;
  *     table. No explicit `failed()` callback is defined; the `jobs` channel
  *     already has a record from the last `jobFailed` log.
  *
- * Idempotency: YES (best-effort, request-id based).
+ * Idempotency: YES (best-effort, dedup_key based).
  *   Before persisting, `alreadyProcessed()` checks a cache marker keyed by the
- *   payload's request_id; after a successful insert, `markProcessed()` sets it
- *   (TTL 1h). A retry of the same click is skipped and logged as
- *   `job.duplicate_skipped` on the `jobs` channel. When Redis is unavailable
- *   or the payload has no request_id, behavior degrades to the old
- *   at-least-once semantics (duplicates possible, under-counting avoided).
+ *   payload's dedup_key (server-generated in RedirectController); after a
+ *   successful insert, `markProcessed()` sets it (TTL 1h). A retry of the same
+ *   click is skipped and logged as `job.duplicate_skipped` on the `jobs`
+ *   channel. When Redis is unavailable or the payload has neither dedup_key nor
+ *   request_id, behavior degrades to the old at-least-once semantics
+ *   (duplicates possible, under-counting avoided).
+ *   A failure between the click insert and the marker write (e.g. worker
+ *   timeout) still re-runs the whole persistence on retry — duplicates remain
+ *   possible in that narrow window; accepted for analytics data.
  *
  * @see \App\Services\Links\LinkTrackingService::registrarCliqueFromPayload()
  * @see \App\Logging\Context\HasLogContext
@@ -98,6 +103,7 @@ class ProcessLinkClickJob implements ShouldQueue
                 AppLogger::event('jobs', 'info', 'job.duplicate_skipped', [
                     'job' => static::class,
                     'link_id' => $this->linkId,
+                    'attempt' => $this->attempts(),
                 ]);
                 AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
 
@@ -122,15 +128,18 @@ class ProcessLinkClickJob implements ShouldQueue
     }
 
     /**
-     * Cache key used to deduplicate retries of the same click event, derived
-     * from the request_id captured at redirect time. Null when the payload has
-     * no request_id (dedup disabled for that event).
+     * Cache key used to deduplicate retries of the same click event. Prefers
+     * the server-generated dedup_key from the redirect payload; falls back to
+     * request_id for payloads queued before dedup_key existed. The inbound
+     * X-Request-Id header is client-influenced, so it must never be the
+     * primary dedup source (a constant header would suppress real clicks).
+     * Null when neither is present (dedup disabled for that event).
      */
     private function dedupCacheKey(): ?string
     {
-        $requestId = $this->payload['request_id'] ?? null;
+        $key = $this->payload['dedup_key'] ?? $this->payload['request_id'] ?? null;
 
-        return $requestId ? 'click:processed:'.$requestId : null;
+        return $key ? 'click:processed:'.$key : null;
     }
 
     /**
