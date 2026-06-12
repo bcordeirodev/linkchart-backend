@@ -16,6 +16,11 @@ use Illuminate\Console\Command;
  *
  * Scheduled daily in bootstrap/app.php; window configured by
  * tracking.ip_retention_days (env TRACKING_IP_RETENTION_DAYS, default 90).
+ *
+ * Analytics impact: unique-visitor metrics use DISTINCT(ip), so rows older
+ * than the retention window merge per /24 (IPv4) or /48 (IPv6) after the
+ * sweep — all-time unique counts and retention insights become approximate
+ * for pre-window data. Accepted LGPD trade-off.
  */
 class AnonymizeOldClickIps extends Command
 {
