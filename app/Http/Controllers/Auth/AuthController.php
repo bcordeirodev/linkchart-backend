@@ -679,15 +679,14 @@ class AuthController extends Controller
      * a standard tymon/jwt-auth JWT. Response shape: `{ data: { token, user } }`
      * — matches the NormalizeApiResponse envelope pattern.
      *
-     * `email_hint` and `name_hint` are optional client-supplied fallbacks.
-     * Auth0's /userinfo endpoint only returns claims matching the access-token
-     * scopes; for Facebook/social logins the `email` scope may be absent from
-     * the access token even though Auth0 received the email from the provider.
-     * When /userinfo omits `email`, we fall back to the hint, which originates
-     * from the Auth0 session's ID-token claims on the frontend (trustworthy).
+     * The email used for account lookup and linking must come from Auth0
+     * /userinfo AND be verified (`email_verified: true`). Client-supplied
+     * email hints are never trusted — a forged hint could link an attacker's
+     * Auth0 identity to any existing account (account takeover). An optional
+     * `name_hint` is still accepted as a display-name fallback.
      *
      * @param  \Illuminate\Http\Request  $request
-     *                                             Body: { access_token: string, email_hint?: string, name_hint?: string }
+     *                                             Body: { access_token: string, name_hint?: string }
      *
      * @route POST /api/auth/auth0-exchange   throttle:auth0-exchange
      *
@@ -697,7 +696,6 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'access_token' => 'required|string',
-            'email_hint' => 'nullable|email|max:255',
             'name_hint' => 'nullable|string|max:255',
         ]);
 
@@ -717,18 +715,28 @@ class AuthController extends Controller
 
             $info = $userInfoResponse->json();
             $sub = $info['sub'] ?? null;
-            // Fall back to the client hint when /userinfo omits email — this
-            // happens for Facebook logins when the access token lacks the
-            // `email` scope (Auth0 tenant default may not include it).
-            $email = $info['email'] ?? $validated['email_hint'] ?? null;
+            // SECURITY: the email used for account lookup/linking must come from
+            // Auth0 /userinfo and be verified. Client-supplied hints are never
+            // trusted — a forged email_hint would allow linking an attacker's
+            // Auth0 identity to any existing account (account takeover).
+            $email = $info['email'] ?? null;
             $name = $info['name'] ?? $validated['name_hint'] ?? $email;
-            $emailVerified = $info['email_verified'] ?? false;
+            $emailVerified = (bool) ($info['email_verified'] ?? false);
 
             if (! $sub || ! $email) {
                 return response()->json([
                     'error' => [
                         'code' => 'auth0_userinfo_incomplete',
                         'message' => 'Auth0 token does not include a valid email address.',
+                    ],
+                ], 422);
+            }
+
+            if (! $emailVerified) {
+                return response()->json([
+                    'error' => [
+                        'code' => 'auth0_email_unverified',
+                        'message' => 'Auth0 email is not verified.',
                     ],
                 ], 422);
             }

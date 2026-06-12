@@ -152,4 +152,56 @@ class Auth0ExchangeTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    /** email_hint must never be used to look up or link accounts (account-takeover vector). */
+    public function test_ignores_email_hint_when_userinfo_has_no_email(): void
+    {
+        $victim = User::factory()->create([
+            'email' => 'victim@example.com',
+            'auth0_sub' => null,
+        ]);
+
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'facebook|attacker-1',
+                // no email key at all
+                'name' => 'Attacker',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'attacker-token',
+            'email_hint' => 'victim@example.com',
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertNull($victim->fresh()->auth0_sub);
+        $this->assertDatabaseMissing('users', ['auth0_sub' => 'facebook|attacker-1']);
+    }
+
+    /** Unverified emails from /userinfo must not link or create accounts. */
+    public function test_rejects_unverified_email_from_userinfo(): void
+    {
+        $victim = User::factory()->create([
+            'email' => 'victim2@example.com',
+            'auth0_sub' => null,
+        ]);
+
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'auth0|db-attacker',
+                'email' => 'victim2@example.com',
+                'email_verified' => false,
+                'name' => 'Attacker',
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'attacker-token',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('error.code', 'auth0_email_unverified');
+        $this->assertNull($victim->fresh()->auth0_sub);
+    }
 }
