@@ -85,6 +85,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $fingerprint_score Phase 3: Count of detected header inconsistencies (0–3); default 0.
  * @property string|null $response_time Redirect response time in milliseconds (decimal 8,3).
  * @property string|null $accept_language Raw Accept-Language header (up to 100 chars).
+ * @property bool $ip_anonymized True once the IP has been masked by clicks:anonymize-ips (LGPD).
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\Link             $link   Parent link (belongsTo Link).
@@ -93,6 +94,10 @@ use Illuminate\Database\Eloquent\Model;
 class Click extends Model
 {
     use HasFactory;
+
+    protected $casts = [
+        'ip_anonymized' => 'boolean',
+    ];
 
     protected $fillable = [
         'link_id',
@@ -159,6 +164,8 @@ class Click extends Model
         // Campos de performance
         'response_time',
         'accept_language',
+        // LGPD retention
+        'ip_anonymized',
     ];
 
     /**

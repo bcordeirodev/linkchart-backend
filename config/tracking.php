@@ -19,4 +19,10 @@ return [
         'trending' => env('VIRAL_THRESHOLD_TRENDING', 20),
         'warming' => env('VIRAL_THRESHOLD_WARMING', 100),
     ],
+
+    /*
+     | Days before click IPs are anonymized by clicks:anonymize-ips (LGPD).
+     | Recent IPs stay intact for antifraud (quality score, session analysis).
+     */
+    'ip_retention_days' => env('TRACKING_IP_RETENTION_DAYS', 90),
 ];
