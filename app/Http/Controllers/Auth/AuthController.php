@@ -721,7 +721,7 @@ class AuthController extends Controller
             // Auth0 identity to any existing account (account takeover).
             $email = $info['email'] ?? null;
             $name = $info['name'] ?? $validated['name_hint'] ?? $email;
-            $emailVerified = (bool) ($info['email_verified'] ?? false);
+            $emailVerified = filter_var($info['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             if (! $sub || ! $email) {
                 return response()->json([
