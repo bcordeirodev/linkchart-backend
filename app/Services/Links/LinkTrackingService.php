@@ -74,6 +74,13 @@ class LinkTrackingService
     ];
 
     /**
+     * Lazily-opened GeoLite2-ASN reader; null until first use or when the DB file
+     * is absent. Typed as mixed because geoip2/geoip2 is an optional dependency —
+     * the class may not exist in environments that have not installed it.
+     */
+    private mixed $asnReader = null;
+
+    /**
      * @param  ClickVelocityService  $clickVelocityService  Constructor-injected (R-12); tracks click
      *                                                      velocity via Redis sliding windows and falls
      *                                                      back gracefully when Redis is unavailable.
@@ -657,20 +664,64 @@ class LinkTrackingService
     }
 
     /**
+     * Resolve the autonomous-system organization name for an IP using the
+     * optional GeoLite2-ASN database. Returns null when the database file is
+     * not configured/present, the geoip2/geoip2 package is not installed, the IP
+     * is not found, or the reader fails — callers then fall back to keyword/CIDR
+     * classification.
+     *
+     * @param  string  $ip  Click IP address to look up.
+     * @return string|null AS organization string (e.g. "DigitalOcean, LLC"), or null.
+     */
+    protected function lookupAsnOrganization(string $ip): ?string
+    {
+        $path = config('tracking.asn_database_path');
+
+        if (! $path || ! is_file($path)) {
+            return null;
+        }
+
+        // geoip2/geoip2 is an optional dependency; guard against environments
+        // where it has not been installed via composer.
+        if (! class_exists(\GeoIp2\Database\Reader::class)) {
+            return null;
+        }
+
+        try {
+            $this->asnReader ??= new \GeoIp2\Database\Reader($path);
+
+            return $this->asnReader->asn($ip)->autonomousSystemOrganization;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * Classifies the connection type into a named category.
      *
-     * Primary path: keyword matching against the ISP string returned by GeoIP.
+     * Resolution order:
+     *   1. ISP string from GeoIP City (direct keyword match).
+     *   2. AS organization from GeoLite2-ASN database (when present and geoip2/geoip2
+     *      is installed) — feeds the same keyword classifier as step 1.
+     *   3. DATACENTER_CIDR_PREFIXES prefix match against the click IP.
+     *   4. Private/loopback ranges → 'residential'.
+     *   5. No match → 'unknown'.
      *
-     * Fallback (when ISP is null, e.g. GeoLite2-City without ASN data): checks
-     * the IP against DATACENTER_CIDR_PREFIXES. Private/loopback ranges are treated
-     * as 'residential' (internal networks). If no prefix matches, returns 'unknown'.
+     * Graceful degradation: if the GeoLite2-ASN.mmdb file is absent or the
+     * geoip2/geoip2 package is not installed, steps 2 is skipped and behavior
+     * is identical to the legacy implementation.
      *
      * @param  string|null  $isp  ISP name from GeoIP lookup, or null
-     * @param  string|null  $ip  Click IP address, used for the prefix-match fallback
+     * @param  string|null  $ip  Click IP address, used for ASN lookup and prefix-match fallback
      * @return string One of: datacenter, mobile, education, residential, unknown
      */
     private function classifyConnectionType(?string $isp, ?string $ip = null): string
     {
+        // Prefer the real AS organization when GeoIP City lacks ISP data.
+        if (! $isp && $ip) {
+            $isp = $this->lookupAsnOrganization($ip);
+        }
+
         if ($isp) {
             $lower = strtolower($isp);
 

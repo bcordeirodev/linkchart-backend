@@ -25,4 +25,11 @@ return [
      | Recent IPs stay intact for antifraud (quality score, session analysis).
      */
     'ip_retention_days' => env('TRACKING_IP_RETENTION_DAYS', 90),
+
+    /*
+     | Optional GeoLite2-ASN database for connection_type classification.
+     | When the file is absent, classification falls back to ISP keyword
+     | matching + datacenter CIDR prefixes (legacy behavior).
+     */
+    'asn_database_path' => env('TRACKING_ASN_DB', storage_path('app/geoip/GeoLite2-ASN.mmdb')),
 ];
