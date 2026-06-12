@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\AnonymizeOldClickIps;
 use App\Models\Click;
 use App\Models\Link;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -63,5 +64,16 @@ class AnonymizeOldClickIpsTest extends TestCase
         $this->artisan('clicks:anonymize-ips', ['--days' => 5])->assertSuccessful();
 
         $this->assertSame('8.8.8.0', $click->fresh()->ip);
+    }
+
+    /** Compressed/special IPv6 forms must mask to valid canonical addresses. */
+    public function test_mask_ip_handles_compressed_and_special_forms(): void
+    {
+        $this->assertSame('2804:14d::', AnonymizeOldClickIps::maskIp('2804:14d::1'));
+        $this->assertSame('::', AnonymizeOldClickIps::maskIp('::ffff:1.2.3.4'));
+        $this->assertSame('::', AnonymizeOldClickIps::maskIp('::1'));
+        $this->assertSame('0.0.0.0', AnonymizeOldClickIps::maskIp('not-an-ip'));
+        $this->assertSame('0.0.0.0', AnonymizeOldClickIps::maskIp(null));
+        $this->assertSame('187.10.55.0', AnonymizeOldClickIps::maskIp('187.10.55.42'));
     }
 }
