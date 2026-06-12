@@ -60,29 +60,26 @@ class AnonymizeOldClickIps extends Command
     }
 
     /**
-     * Mask an IP for anonymization: zero the last IPv4 octet, or truncate an
-     * IPv6 address to its /48 prefix. Unparseable values collapse to 0.0.0.0.
+     * Mask an IP for anonymization: zero the last IPv4 octet, or zero
+     * everything past the /48 prefix for IPv6. Works on the packed binary
+     * form, so compressed IPv6 (the canonical form PostgreSQL returns from
+     * inet columns) always yields a valid canonical address. Unparseable
+     * values collapse to 0.0.0.0.
      */
     public static function maskIp(?string $ip): string
     {
-        if (! $ip) {
+        $packed = $ip ? @inet_pton($ip) : false;
+
+        if ($packed === false) {
             return '0.0.0.0';
         }
 
-        if (str_contains($ip, ':')) {
-            $parts = explode(':', $ip);
+        if (strlen($packed) === 4) {
+            $packed[3] = "\x00";
 
-            return implode(':', array_slice($parts, 0, 3)).'::';
+            return inet_ntop($packed);
         }
 
-        $parts = explode('.', $ip);
-
-        if (count($parts) === 4) {
-            $parts[3] = '0';
-
-            return implode('.', $parts);
-        }
-
-        return '0.0.0.0';
+        return inet_ntop(substr($packed, 0, 6).str_repeat("\x00", 10));
     }
 }
