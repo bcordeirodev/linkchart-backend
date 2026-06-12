@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Analytics;
 
 use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
-use App\Contracts\Analytics\TemporalAnalyticsInterface;
 use App\DTOs\Analytics\AnalyticsFilters;
 use App\Http\Controllers\BaseController;
 use Illuminate\Http\JsonResponse;
@@ -14,9 +13,10 @@ use Illuminate\Support\Facades\DB;
  * Analytics controller for per-link advanced analytics endpoints.
  *
  * Extends BaseController to inherit findOwnedLink, linkNotFound, and serverError.
- * Depends on LinkAnalyticsOrchestratorInterface (injected, resolved from the
- * concrete LinkAnalyticsOrchestrator since R-13) and TemporalAnalyticsInterface
- * for the merged temporal endpoint.
+ * Depends solely on LinkAnalyticsOrchestratorInterface (injected, resolved from the
+ * concrete LinkAnalyticsOrchestrator since R-13). Advanced temporal analytics are
+ * routed through the orchestrator (getAdvancedTemporalAnalytics) so they benefit
+ * from the same 60s cache as every other payload.
  *
  * Routes (all under api.auth:api + verified middleware, prefix /api/analytics/link/{linkId}):
  *   GET /api/analytics/link/{linkId}/dashboard     → getLinkDashboardData
@@ -37,7 +37,6 @@ class AnalyticsController extends BaseController
 {
     public function __construct(
         private LinkAnalyticsOrchestratorInterface $analyticsService,
-        private TemporalAnalyticsInterface $temporalService
     ) {}
 
     /**
@@ -182,7 +181,7 @@ class AnalyticsController extends BaseController
             $baseData = $this->analyticsService->getLinkTemporalAnalytics($linkId, $filters, $segment);
 
             // 2. Buscar dados avançados (weekly_trends, monthly_trends, peak_analysis, timezone_analysis)
-            $advancedData = $this->temporalService->getAdvancedTemporalAnalytics($linkId, $filters, $segment);
+            $advancedData = $this->analyticsService->getAdvancedTemporalAnalytics($linkId, $filters, $segment);
 
             // 3. Enriquecer timezone analysis com percentuais
             $enrichedTimezones = $this->enrichTimezoneAnalysis($advancedData['timezone_analysis'] ?? []);

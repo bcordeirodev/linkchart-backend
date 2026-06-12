@@ -106,7 +106,7 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      */
     public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? ''],
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey()],
             fn () => $this->dashboard->getLinkDashboardAnalytics($linkId, $filters));
     }
 
@@ -125,7 +125,7 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
         ?string $continent = null,
         int $minClicks = 0
     ): array {
-        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? '', (string) $continent, (string) $minClicks],
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey(), (string) $continent, (string) $minClicks],
             fn () => $this->geographic->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks));
     }
 
@@ -142,7 +142,7 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
         ?AnalyticsFilters $filters = null,
         string $segment = 'all'
     ): array {
-        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? '', $segment],
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey(), $segment],
             fn () => $this->temporal->getLinkTemporalAnalytics($linkId, $filters, $segment));
     }
 
@@ -155,7 +155,7 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      */
     public function getLinkAudienceAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? ''],
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey()],
             fn () => $this->audience->getLinkAudienceAnalytics($linkId, $filters));
     }
 
@@ -168,15 +168,33 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      */
     public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? ''],
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey()],
             fn () => $this->insights->getLinkInsightsAnalytics($linkId, $filters));
+    }
+
+    /**
+     * Delegates to TemporalAnalyticsService::getAdvancedTemporalAnalytics with
+     * the standard 60s cache.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state, null = no filter.
+     * @param  string  $segment  'all'|'weekday'|'weekend'|'business'.
+     * @return array<string, mixed>
+     */
+    public function getAdvancedTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
+    {
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey(), $segment],
+            fn () => $this->temporal->getAdvancedTemporalAnalytics($linkId, $filters, $segment));
     }
 
     /**
      * Memoize an analytics payload in the cache for CACHE_TTL_SECONDS.
      *
-     * Key shape: analytics:{linkId}:{method}:{md5 of extra params}. Falls back
-     * to executing the callback directly when the cache backend is unavailable.
+     * Key shape: analytics:{linkId}:{method}:{md5 of extra params}. Three outcomes:
+     *   1. Cache hit — returns cached value without calling producer.
+     *   2. Cache write fails after producer succeeds — serves the computed result without caching.
+     *   3. Producer itself throws — propagates the exception without re-running it.
+     *   4. Cache read fails before producer runs — degrades to uncached execution.
      *
      * @param  string  $method  Calling method name (__FUNCTION__).
      * @param  int  $linkId  Link primary key.
@@ -188,9 +206,32 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
     {
         $key = sprintf('analytics:%d:%s:%s', $linkId, $method, md5(implode('|', $extra)));
 
+        $started = false;
+        $finished = false;
+        $result = [];
+
+        $producer = function () use (&$started, &$finished, &$result, $callback) {
+            $started = true;
+            $result = $callback();
+            $finished = true;
+
+            return $result;
+        };
+
         try {
-            return Cache::remember($key, self::CACHE_TTL_SECONDS, $callback);
-        } catch (\Throwable) {
+            return Cache::remember($key, self::CACHE_TTL_SECONDS, $producer);
+        } catch (\Throwable $e) {
+            if ($finished) {
+                // Compute succeeded but the cache write failed — serve the result.
+                return $result;
+            }
+
+            if ($started) {
+                // The producer itself threw — propagate, never re-run it.
+                throw $e;
+            }
+
+            // Cache read failed before producing — degrade to uncached.
             return $callback();
         }
     }
