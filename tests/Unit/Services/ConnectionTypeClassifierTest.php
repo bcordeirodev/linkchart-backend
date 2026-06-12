@@ -103,4 +103,17 @@ class ConnectionTypeClassifierTest extends TestCase
 
         $this->assertSame('datacenter', $this->classify($service, 'Amazon Technologies', '177.10.1.1'));
     }
+
+    /**
+     * Residential fiber ISPs whose org names contain datacenter keywords
+     * (e.g. AS16591 "GOOGLE-FIBER") classify as residential, protecting real
+     * users from the quality score's datacenter deduction.
+     */
+    public function test_fiber_isps_classify_as_residential(): void
+    {
+        $service = $this->serviceWithAsnOrg('GOOGLE-FIBER');
+
+        $this->assertSame('residential', $this->classify($service, null, '136.32.10.1'));
+        $this->assertSame('residential', $this->classify($service, 'Monkeybrains Fiber', null));
+    }
 }

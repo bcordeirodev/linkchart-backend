@@ -708,7 +708,7 @@ class LinkTrackingService
      *   5. No match → 'unknown'.
      *
      * Graceful degradation: if the GeoLite2-ASN.mmdb file is absent or the
-     * geoip2/geoip2 package is not installed, steps 2 is skipped and behavior
+     * geoip2/geoip2 package is not installed, step 2 is skipped and behavior
      * is identical to the legacy implementation.
      *
      * @param  string|null  $isp  ISP name from GeoIP lookup, or null
@@ -724,6 +724,13 @@ class LinkTrackingService
 
         if ($isp) {
             $lower = strtolower($isp);
+
+            // Residential fiber ISPs whose org names contain datacenter keywords
+            // (e.g. AS16591 "GOOGLE-FIBER") must not be penalized as datacenter
+            // traffic by the quality score.
+            if (str_contains($lower, 'fiber')) {
+                return 'residential';
+            }
 
             $datacenter = ['amazon', 'google', 'digitalocean', 'hetzner', 'ovh', 'vultr',
                 'linode', 'azure', 'cloudflare', 'akamai', 'fastly', 'microsoft'];
