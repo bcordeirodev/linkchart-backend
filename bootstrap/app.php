@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->job(new \App\Jobs\LinkHealthCheckJob)->hourly()->withoutOverlapping();
+        $schedule->command('clicks:anonymize-ips')->dailyAt('04:10')->withoutOverlapping();
     })
     ->withRouting(
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
