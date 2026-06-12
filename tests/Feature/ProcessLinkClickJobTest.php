@@ -184,4 +184,41 @@ class ProcessLinkClickJobTest extends TestCase
         $this->assertNotNull($spy->capturedContext);
         $this->assertStringStartsWith('job_', $spy->capturedContext->requestId);
     }
+
+    /** A retried job (same request_id) must not insert a second click row. */
+    public function test_job_with_same_request_id_inserts_only_one_click(): void
+    {
+        $link = $this->makeLink();
+        $payload = [
+            'request_id' => 'req_dedup_test_1',
+            'ip' => '8.8.8.8',
+            'user_agent' => 'Mozilla/5.0',
+            'referer' => null,
+            'accept_language' => 'en-US,en;q=0.9',
+            'query_params' => [],
+        ];
+
+        (new ProcessLinkClickJob($link->id, $payload))->handle(app(\App\Services\Links\LinkTrackingService::class));
+        (new ProcessLinkClickJob($link->id, $payload))->handle(app(\App\Services\Links\LinkTrackingService::class));
+
+        $this->assertSame(1, Click::where('link_id', $link->id)->count());
+    }
+
+    /** Distinct request_ids are distinct clicks (no false dedup). */
+    public function test_jobs_with_distinct_request_ids_insert_two_clicks(): void
+    {
+        $link = $this->makeLink();
+        $base = [
+            'ip' => '8.8.8.8',
+            'user_agent' => 'Mozilla/5.0',
+            'referer' => null,
+            'accept_language' => 'en-US,en;q=0.9',
+            'query_params' => [],
+        ];
+
+        (new ProcessLinkClickJob($link->id, $base + ['request_id' => 'req_a']))->handle(app(\App\Services\Links\LinkTrackingService::class));
+        (new ProcessLinkClickJob($link->id, $base + ['request_id' => 'req_b']))->handle(app(\App\Services\Links\LinkTrackingService::class));
+
+        $this->assertSame(2, Click::where('link_id', $link->id)->count());
+    }
 }
