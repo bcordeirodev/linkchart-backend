@@ -79,4 +79,34 @@ class SafeFetchUrlValidatorTest extends TestCase
     {
         $this->assertTrue($this->validatorResolvingTo([])->isSafe('https://does-not-resolve.example/x'));
     }
+
+    /** Integer/hex/octal IP literal forms must be rejected (resolver backstop). */
+    public function test_rejects_integer_form_ip_literals(): void
+    {
+        $v = new SafeFetchUrlValidator;
+        $this->assertFalse($v->isSafe('http://2130706433/'));
+        $this->assertFalse($v->isSafe('http://0x7f000001/'));
+        $this->assertFalse($v->isSafe('http://017700000001/'));
+    }
+
+    /** IPv4-mapped IPv6 literals embedding private addresses are rejected. */
+    public function test_rejects_ipv4_mapped_ipv6_literals(): void
+    {
+        $v = $this->validatorResolvingTo([]);
+        $this->assertFalse($v->isSafe('http://[::ffff:127.0.0.1]/x'));
+        $this->assertFalse($v->isSafe('http://[::ffff:169.254.169.254]/x'));
+    }
+
+    /** A mapped-private address among AAAA results is rejected. */
+    public function test_rejects_mapped_private_in_resolved_addresses(): void
+    {
+        $v = $this->validatorResolvingTo(['::ffff:10.0.0.1']);
+        $this->assertFalse($v->isSafe('http://sneaky.example.com/x'));
+    }
+
+    /** Trailing-dot hosts are normalised before all checks. */
+    public function test_rejects_localhost_with_trailing_dot(): void
+    {
+        $this->assertFalse($this->validatorResolvingTo([])->isSafe('http://localhost./x'));
+    }
 }
