@@ -8,6 +8,7 @@ use App\Logging\AppLogger;
 use App\Logging\Context\RequestContext;
 use App\Models\Link;
 use App\Services\Links\LinkTrackingService;
+use App\Services\Links\SafeFetchUrlValidator;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
@@ -554,76 +555,14 @@ class RedirectController extends Controller
     }
 
     /**
-     * SSRF protection: reject non-HTTP schemes, internal hostnames, private/
-     * reserved literal IPs (IPv4 and IPv6), and hostnames that resolve to a
-     * private IP at the time of the check (DNS rebinding mitigation).
-     *
-     * Checks performed:
-     *   1. Scheme must be http or https.
-     *   2. Hardcoded loopback aliases (localhost, 0.0.0.0).
-     *   3. *.local / *.internal / *.localhost TLD suffixes.
-     *   4. Literal IPv4 in private/reserved ranges (10/8, 172.16/12, 192.168/16,
-     *      169.254/16, 127/8).
-     *   5. Literal IPv6 in loopback (::1) or private ranges (fc00::/7, fd00::/8,
-     *      and IPv4-mapped equivalents like ::ffff:127.0.0.1).
-     *   6. DNS resolution: hostname is resolved to an IPv4 address and the
-     *      resolved IP is checked against private/reserved ranges. This prevents
-     *      DNS rebinding attacks where a hostname passes the string checks but
-     *      resolves to an internal IP at request time.
-     *      Note: gethostbyname() covers IPv4 only; IPv6-only hosts are not
-     *      checked via DNS here — mitigated by rejecting unknown IPv6 literals
-     *      in check 5.
+     * SSRF protection for the OG metadata fetch. Delegates to
+     * {@see \App\Services\Links\SafeFetchUrlValidator}, which validates the
+     * scheme, internal hostnames, private literal IPs, and resolves A+AAAA
+     * records to mitigate DNS rebinding.
      */
     private function isSafeFetchUrl(string $url): bool
     {
-        $parsed = parse_url($url);
-
-        if (! $parsed || ! isset($parsed['scheme'], $parsed['host'])) {
-            return false;
-        }
-
-        $scheme = strtolower($parsed['scheme']);
-        if (! in_array($scheme, ['http', 'https'], true)) {
-            return false;
-        }
-
-        $host = strtolower($parsed['host']);
-
-        // 1. Hardcoded loopback aliases.
-        if (in_array($host, ['localhost', 'localhost.localdomain', '0.0.0.0'], true)) {
-            return false;
-        }
-
-        // 2. Internal TLD suffixes.
-        if (preg_match('/\.(local|internal|localhost)$/', $host)) {
-            return false;
-        }
-
-        // 3. Literal IPv4 in private/reserved ranges.
-        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            return (bool) filter_var($host, FILTER_VALIDATE_IP,
-                FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-        }
-
-        // 4. Literal IPv6 (parse_url strips brackets — host is raw IPv6 string).
-        if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            return (bool) filter_var($host, FILTER_VALIDATE_IP,
-                FILTER_FLAG_IPV6 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-        }
-
-        // 5. DNS rebinding mitigation: resolve the hostname to an IPv4 address
-        //    and reject if it falls in a private/reserved range.
-        //    gethostbyname() returns the input unchanged on resolution failure,
-        //    so the !== check correctly skips validation when DNS lookup fails.
-        $resolvedIp = gethostbyname($host);
-        if ($resolvedIp !== $host) {
-            if (! filter_var($resolvedIp, FILTER_VALIDATE_IP,
-                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                return false;
-            }
-        }
-
-        return true;
+        return app(SafeFetchUrlValidator::class)->isSafe($url);
     }
 
     private function parseMetaTags(string $html, string $url): array
