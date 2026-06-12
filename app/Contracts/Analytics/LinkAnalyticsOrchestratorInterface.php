@@ -132,4 +132,16 @@ interface LinkAnalyticsOrchestratorInterface
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If `$linkId` does not exist.
      */
     public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array;
+
+    /**
+     * Advanced temporal analytics (weekly/monthly trends, peak analysis,
+     * timezone analysis, heatmap, daily timeline, device by period), cached
+     * like the other orchestrator payloads.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Filter state, null = no filter.
+     * @param  string  $segment  'all'|'weekday'|'weekend'|'business'.
+     * @return array<string, mixed>
+     */
+    public function getAdvancedTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array;
 }
