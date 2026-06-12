@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
@@ -50,18 +51,13 @@ use Throwable;
  *     table. No explicit `failed()` callback is defined; the `jobs` channel
  *     already has a record from the last `jobFailed` log.
  *
- * Idempotency: NO.
- *   Each retry inserts a new row in `clicks`, producing duplicate click records
- *   for the same user action. This is a known, accepted trade-off: under-counting
- *   is considered more harmful than occasional over-counting, and adding a
- *   deduplication key (e.g. a unique constraint on `request_id`) would require
- *   a schema migration that does not currently exist. If strict deduplication is
- *   ever required, a `request_id` column on `clicks` with a unique index is the
- *   recommended path.
- *
- * Forward reference: the docblock on `RedirectController::dispatchTracking()`
- * (line 116) does not describe the idempotency concern — that is tracked for
- * Task 3.7.
+ * Idempotency: YES (best-effort, request-id based).
+ *   Before persisting, `alreadyProcessed()` checks a cache marker keyed by the
+ *   payload's request_id; after a successful insert, `markProcessed()` sets it
+ *   (TTL 1h). A retry of the same click is skipped and logged as
+ *   `job.duplicate_skipped` on the `jobs` channel. When Redis is unavailable
+ *   or the payload has no request_id, behavior degrades to the old
+ *   at-least-once semantics (duplicates possible, under-counting avoided).
  *
  * @see \App\Services\Links\LinkTrackingService::registrarCliqueFromPayload()
  * @see \App\Logging\Context\HasLogContext
@@ -87,7 +83,9 @@ class ProcessLinkClickJob implements ShouldQueue
     /**
      * Run the tracking service inside a request context populated from
      * $payload['request_id'] so every log line carries the same id as the
-     * originating HTTP redirect.
+     * originating HTTP redirect. A best-effort dedup guard (via Cache) skips
+     * processing when this request_id was already persisted by an earlier
+     * attempt, preventing duplicate `clicks` rows on retry.
      */
     public function handle(LinkTrackingService $trackingService): void
     {
@@ -96,7 +94,18 @@ class ProcessLinkClickJob implements ShouldQueue
         AppLogger::jobStarted(static::class, ['link_id' => $this->linkId]);
 
         try {
+            if ($this->alreadyProcessed()) {
+                AppLogger::event('jobs', 'info', 'job.duplicate_skipped', [
+                    'job' => static::class,
+                    'link_id' => $this->linkId,
+                ]);
+                AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
+
+                return;
+            }
+
             $trackingService->registrarCliqueFromPayload($this->linkId, $this->payload);
+            $this->markProcessed();
             AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
         } catch (Throwable $e) {
             AppLogger::jobFailed(static::class, $e, $this->attempts());
@@ -110,5 +119,57 @@ class ProcessLinkClickJob implements ShouldQueue
     protected function logContextRequestId(): ?string
     {
         return $this->payload['request_id'] ?? null;
+    }
+
+    /**
+     * Cache key used to deduplicate retries of the same click event, derived
+     * from the request_id captured at redirect time. Null when the payload has
+     * no request_id (dedup disabled for that event).
+     */
+    private function dedupCacheKey(): ?string
+    {
+        $requestId = $this->payload['request_id'] ?? null;
+
+        return $requestId ? 'click:processed:'.$requestId : null;
+    }
+
+    /**
+     * Whether this click event was already fully persisted by a previous
+     * attempt. Degrades to false (process normally) when the cache backend is
+     * unavailable — over-counting on retry is the accepted fallback.
+     */
+    private function alreadyProcessed(): bool
+    {
+        $key = $this->dedupCacheKey();
+
+        if (! $key) {
+            return false;
+        }
+
+        try {
+            return Cache::has($key);
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * Mark this click event as persisted so a retry of the same request_id is
+     * skipped. The 1-hour TTL comfortably covers the retry window (3 tries,
+     * 10s backoff). Cache failures are swallowed: the marker is best-effort.
+     */
+    private function markProcessed(): void
+    {
+        $key = $this->dedupCacheKey();
+
+        if (! $key) {
+            return;
+        }
+
+        try {
+            Cache::put($key, 1, now()->addHour());
+        } catch (Throwable) {
+            // Cache unavailable — accept potential duplicate on retry.
+        }
     }
 }
