@@ -30,5 +30,7 @@
         <env name="SESSION_DRIVER" value="array" force="true"/>
         <env name="JWT_SECRET" value="test-secret-not-for-production-use-only" force="true"/>
         <env name="AUTH0_DOMAIN" value="test.auth0.test" force="true"/>
+        <!-- Vazio = LinkSafetyService fail-open; testes nunca chamam a API real do Google -->
+        <env name="GOOGLE_SAFE_BROWSING_KEY" value="" force="true"/>
     </php>
 </phpunit>
