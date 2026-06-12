@@ -305,9 +305,11 @@ class LinkController extends BaseController
             $page = (int) max($request->input('page', 1), 1);
             $search = trim((string) $request->input('search', ''));
 
+            // NOTE: 'ip' is intentionally absent — the visitor IP is personal
+            // data (LGPD) and is neither returned nor sortable/searchable.
             $allowedSorts = [
                 'created_at', 'country', 'city', 'state', 'device',
-                'browser', 'os', 'ip', 'referer',
+                'browser', 'os', 'referer',
             ];
             $sortBy = in_array($request->input('sort_by'), $allowedSorts, true)
                 ? $request->input('sort_by')
@@ -345,7 +347,6 @@ class LinkController extends BaseController
                         ->orWhere('device', 'ilike', $needle)
                         ->orWhere('browser', 'ilike', $needle)
                         ->orWhere('os', 'ilike', $needle)
-                        ->orWhere('ip', 'ilike', $needle)
                         ->orWhere('referer', 'ilike', $needle);
                 });
             }
@@ -359,13 +360,17 @@ class LinkController extends BaseController
                 $refererHost = null;
                 if ($referer && $referer !== '-' && $referer !== '') {
                     $refererHost = parse_url($referer, PHP_URL_HOST) ?: null;
+                    // LGPD: drop query string/fragment, which can carry PII
+                    // (tokens, emails, names) leaked from the referring page.
+                    $referer = $this->stripUrlSensitiveParts($referer);
                 }
 
+                // NOTE: the visitor IP is deliberately omitted — it is personal
+                // data (LGPD) and is not consumed by the clicks tab UI.
                 return [
                     'id' => $click->id,
                     'created_at' => $click->created_at?->toIso8601String(),
                     'local_time' => $click->local_time,
-                    'ip' => $click->ip,
                     'country' => $click->country,
                     'iso_code' => $click->iso_code,
                     'state' => $click->state,
@@ -420,5 +425,20 @@ class LinkController extends BaseController
         } catch (\Exception $e) {
             return $this->serverError('Erro ao listar cliques.', $e);
         }
+    }
+
+    /**
+     * Remove the query string and fragment from a URL, keeping scheme/host/path.
+     *
+     * Used to sanitise the click `referer` before exposing it in the API:
+     * referer query strings often carry PII (auth tokens, emails, names) that
+     * must not leak to the link owner under the LGPD.
+     *
+     * @param  string  $url  Raw referer URL.
+     * @return string The URL truncated at the first '?' or '#'.
+     */
+    private function stripUrlSensitiveParts(string $url): string
+    {
+        return preg_split('/[?#]/', $url, 2)[0];
     }
 }
