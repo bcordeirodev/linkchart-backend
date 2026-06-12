@@ -60,4 +60,17 @@ readonly class AnalyticsFilters
             ->when($this->dateTo, fn ($q) => $q->where('created_at', '<=', $this->dateTo))
             ->when($this->excludeBots, fn ($q) => $q->where('is_bot', false));
     }
+
+    /**
+     * Stable string representation of the filter state, used as a cache-key
+     * component by the analytics orchestrator.
+     */
+    public function cacheKey(): string
+    {
+        return implode('|', [
+            $this->excludeBots ? '1' : '0',
+            $this->dateFrom?->toDateTimeString() ?? '',
+            $this->dateTo?->toDateTimeString() ?? '',
+        ]);
+    }
 }

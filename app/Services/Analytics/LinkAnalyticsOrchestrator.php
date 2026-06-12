@@ -11,6 +11,7 @@ use App\Contracts\Analytics\TemporalAnalyticsInterface;
 use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Thin orchestrator that fans out analytics requests to specialized services.
@@ -34,6 +35,9 @@ use App\Models\Link;
  */
 class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
 {
+    /** Seconds an analytics payload stays cached. Staleness up to this window is acceptable. */
+    private const CACHE_TTL_SECONDS = 60;
+
     public function __construct(
         private readonly DashboardAnalyticsInterface $dashboard,
         private readonly GeographicAnalyticsInterface $geographic,
@@ -54,6 +58,12 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
     public function getComprehensiveLinkAnalytics(int $linkId): array
+    {
+        return $this->remember(__FUNCTION__, $linkId, [], fn () => $this->computeComprehensiveLinkAnalytics($linkId));
+    }
+
+    /** Uncached producer for getComprehensiveLinkAnalytics. */
+    private function computeComprehensiveLinkAnalytics(int $linkId): array
     {
         $link = Link::findOrFail($linkId);
 
@@ -96,7 +106,8 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      */
     public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->dashboard->getLinkDashboardAnalytics($linkId, $filters);
+        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? ''],
+            fn () => $this->dashboard->getLinkDashboardAnalytics($linkId, $filters));
     }
 
     /**
@@ -114,7 +125,8 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
         ?string $continent = null,
         int $minClicks = 0
     ): array {
-        return $this->geographic->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks);
+        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? '', (string) $continent, (string) $minClicks],
+            fn () => $this->geographic->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks));
     }
 
     /**
@@ -130,7 +142,8 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
         ?AnalyticsFilters $filters = null,
         string $segment = 'all'
     ): array {
-        return $this->temporal->getLinkTemporalAnalytics($linkId, $filters, $segment);
+        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? '', $segment],
+            fn () => $this->temporal->getLinkTemporalAnalytics($linkId, $filters, $segment));
     }
 
     /**
@@ -142,7 +155,8 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      */
     public function getLinkAudienceAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->audience->getLinkAudienceAnalytics($linkId, $filters);
+        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? ''],
+            fn () => $this->audience->getLinkAudienceAnalytics($linkId, $filters));
     }
 
     /**
@@ -154,7 +168,31 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
      */
     public function getLinkInsightsAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
-        return $this->insights->getLinkInsightsAnalytics($linkId, $filters);
+        return $this->remember(__FUNCTION__, $linkId, [$filters?->cacheKey() ?? ''],
+            fn () => $this->insights->getLinkInsightsAnalytics($linkId, $filters));
+    }
+
+    /**
+     * Memoize an analytics payload in the cache for CACHE_TTL_SECONDS.
+     *
+     * Key shape: analytics:{linkId}:{method}:{md5 of extra params}. Falls back
+     * to executing the callback directly when the cache backend is unavailable.
+     *
+     * @param  string  $method  Calling method name (__FUNCTION__).
+     * @param  int  $linkId  Link primary key.
+     * @param  array<int, string>  $extra  Filter/param strings that shape the payload.
+     * @param  \Closure(): array<string, mixed>  $callback  Producer executed on cache miss.
+     * @return array<string, mixed>
+     */
+    private function remember(string $method, int $linkId, array $extra, \Closure $callback): array
+    {
+        $key = sprintf('analytics:%d:%s:%s', $linkId, $method, md5(implode('|', $extra)));
+
+        try {
+            return Cache::remember($key, self::CACHE_TTL_SECONDS, $callback);
+        } catch (\Throwable) {
+            return $callback();
+        }
     }
 
     private function linkInfo(Link $link): array
