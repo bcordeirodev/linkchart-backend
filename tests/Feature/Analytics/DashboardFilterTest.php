@@ -72,4 +72,43 @@ class DashboardFilterTest extends TestCase
         $response->assertOk();
         $this->assertEquals(3, $response->json('data.summary.total_clicks'));
     }
+
+    /**
+     * clicks_variation_pct compares the current window against the equally-sized
+     * window immediately before it: 3 clicks in February vs 2 in the prior
+     * 28-day window is a +50% change.
+     */
+    public function test_clicks_variation_pct_compares_to_previous_window(): void
+    {
+        // Previous window [2026-01-04, 2026-02-01): 2 clicks.
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-01-10 12:00:00']);
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-01-15 12:00:00']);
+        // Current window [2026-02-01, 2026-03-01]: 3 clicks.
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-02-10 12:00:00']);
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-02-15 12:00:00']);
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-02-20 12:00:00']);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/dashboard?date_from=2026-02-01&date_to=2026-03-01");
+
+        $response->assertOk();
+        $this->assertEquals(3, $response->json('data.summary.total_clicks'));
+        $this->assertEquals(50.0, $response->json('data.summary.clicks_variation_pct'));
+    }
+
+    /**
+     * clicks_variation_pct is null when the prior window has no clicks — there is
+     * no baseline to compare against, so the frontend omits the variation pill.
+     */
+    public function test_clicks_variation_pct_is_null_without_prior_window(): void
+    {
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-02-10 12:00:00']);
+        Click::factory()->create(['link_id' => $this->link->id, 'created_at' => '2026-02-15 12:00:00']);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/dashboard?date_from=2026-02-01&date_to=2026-03-01");
+
+        $response->assertOk();
+        $this->assertNull($response->json('data.summary.clicks_variation_pct'));
+    }
 }

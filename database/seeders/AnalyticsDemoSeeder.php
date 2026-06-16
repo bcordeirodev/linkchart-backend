@@ -19,6 +19,14 @@ use Illuminate\Support\Facades\DB;
  */
 class AnalyticsDemoSeeder extends Seeder
 {
+    /**
+     * Pool of already-issued IPs per ISO country code, used to model returning
+     * visitors so the demo produces a realistic unique < total ratio.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $ipPool = [];
+
     /** @var array<int, array{name: string, iso: string, currency: string, timezone: string, continent: string}> */
     private array $countries = [
         ['name' => 'Brazil',         'iso' => 'BR', 'currency' => 'BRL', 'timezone' => 'America/Sao_Paulo',   'continent' => 'SA'],
@@ -311,7 +319,16 @@ class AnalyticsDemoSeeder extends Seeder
             'GB' => '86.1.',   'DE' => '85.25.',
         ];
         $ipPrefix = $ipRanges[$iso] ?? '192.168.';
-        $ip = $ipPrefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
+        // ~25% of clicks are returning visitors: reuse an IP already seen for
+        // this country so the demo has a realistic unique < total ratio. The
+        // rest are new IPs added to the pool.
+        $pool = $this->ipPool[$iso] ?? [];
+        if ($pool !== [] && mt_rand(1, 100) <= 25) {
+            $ip = $pool[array_rand($pool)];
+        } else {
+            $ip = $ipPrefix.mt_rand(1, 254).'.'.mt_rand(1, 254);
+            $this->ipPool[$iso][] = $ip;
+        }
 
         return [
             'link_id' => $linkId,
