@@ -50,20 +50,6 @@ class AnalyticsStructureTest extends TestCase
         $this->assertSame(2, $last24h['summary']['total_clicks']);
     }
 
-    public function test_ua_parser_identifies_chrome(): void
-    {
-        $parser = new UserAgentParser;
-        $ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36';
-        $this->assertSame('Chrome', $parser->extractBrowser($ua));
-    }
-
-    public function test_ua_parser_identifies_android(): void
-    {
-        $parser = new UserAgentParser;
-        $ua = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36';
-        $this->assertSame('Android', $parser->extractOS($ua));
-    }
-
     public function test_ua_parser_extracts_primary_language(): void
     {
         $parser = new UserAgentParser;

@@ -304,15 +304,6 @@ final class AppLogger
             ['job' => $jobClass, 'attempt' => $attempt] + self::throwableContext($e));
     }
 
-    public static function jobRetrying(string $jobClass, int $attempt, int $maxAttempts): void
-    {
-        self::write('jobs', 'warning', self::JOB_RETRYING, [
-            'job' => $jobClass,
-            'attempt' => $attempt,
-            'max_attempts' => $maxAttempts,
-        ]);
-    }
-
     // ============================================================
     // AUTH (channel: auth — email/ip kept raw)
     // ============================================================
@@ -379,24 +370,6 @@ final class AppLogger
     // HTTP (channel: http)
     // ============================================================
 
-    public static function httpSlowRequest(string $route, int $durationMs, int $status): void
-    {
-        self::write('http', 'warning', self::HTTP_SLOW_REQUEST, [
-            'route' => $route,
-            'duration_ms' => $durationMs,
-            'status' => $status,
-        ]);
-    }
-
-    public static function httpClientError(string $route, int $status, ?int $userId): void
-    {
-        self::write('http', 'warning', self::HTTP_CLIENT_ERROR, [
-            'route' => $route,
-            'status' => $status,
-            'user_id' => $userId,
-        ]);
-    }
-
     public static function httpServerError(string $route, Throwable $e, ?int $userId): void
     {
         self::write('http', 'error', self::HTTP_SERVER_ERROR,
@@ -406,19 +379,6 @@ final class AppLogger
     // ============================================================
     // AUDIT (channel: audit — email/ip kept raw)
     // ============================================================
-
-    /**
-     * @param  array<string,mixed>  $diff
-     */
-    public static function auditLinkChange(int $linkId, int $userId, string $action, array $diff): void
-    {
-        self::write('audit', 'info', self::AUDIT_LINK_CHANGE, [
-            'link_id' => $linkId,
-            'user_id' => $userId,
-            'action' => $action,
-            'diff' => $diff,
-        ]);
-    }
 
     /**
      * @param  array<string,mixed>  $context
@@ -449,62 +409,8 @@ final class AppLogger
     }
 
     // ============================================================
-    // LINKS (channel: app)
-    // ============================================================
-
-    public static function linkCreated(int $linkId, int $userId): void
-    {
-        self::write('app', 'info', self::LINK_CREATED, ['link_id' => $linkId, 'user_id' => $userId]);
-    }
-
-    /** @param  array<string,mixed>  $diff */
-    public static function linkUpdated(int $linkId, int $userId, array $diff): void
-    {
-        self::write('app', 'info', self::LINK_UPDATED, [
-            'link_id' => $linkId,
-            'user_id' => $userId,
-            'diff' => $diff,
-        ]);
-    }
-
-    public static function linkDeleted(int $linkId, int $userId): void
-    {
-        self::write('app', 'info', self::LINK_DELETED, ['link_id' => $linkId, 'user_id' => $userId]);
-    }
-
-    public static function linkClickLimitReached(int $linkId): void
-    {
-        self::write('app', 'warning', self::LINK_CLICK_LIMIT_REACHED, ['link_id' => $linkId]);
-    }
-
-    // ============================================================
     // ANALYTICS (channel: app)
     // ============================================================
-
-    public static function analyticsRequested(string $endpoint, int $linkId, int $userId): void
-    {
-        self::write('app', 'info', self::ANALYTICS_REQUESTED, [
-            'endpoint' => $endpoint,
-            'link_id' => $linkId,
-            'user_id' => $userId,
-        ]);
-    }
-
-    public static function analyticsCacheMiss(string $endpoint, int $linkId): void
-    {
-        self::write('app', 'info', self::ANALYTICS_CACHE_MISS, [
-            'endpoint' => $endpoint,
-            'link_id' => $linkId,
-        ]);
-    }
-
-    public static function analyticsSlowAggregation(string $endpoint, int $durationMs): void
-    {
-        self::write('app', 'warning', self::ANALYTICS_SLOW_AGGREGATION, [
-            'endpoint' => $endpoint,
-            'duration_ms' => $durationMs,
-        ]);
-    }
 
     public static function analyticsError(Throwable $e, array $ctx = []): void
     {
