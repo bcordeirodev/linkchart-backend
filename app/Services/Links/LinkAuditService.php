@@ -118,40 +118,4 @@ class LinkAuditService
             ]);
         }
     }
-
-    /**
-     * Returns the audit history for a specific link, scoped to the requesting user.
-     *
-     * Results include the associated user relationship and are ordered newest-first.
-     *
-     * @param  int  $linkId  Link primary key.
-     * @param  int  $userId  Restricts results to entries created by this user.
-     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\LinkAudit>
-     */
-    public function getLinkHistory(int $linkId, int $userId): \Illuminate\Database\Eloquent\Collection
-    {
-        return LinkAudit::where('link_id', $linkId)
-            ->where('user_id', $userId)
-            ->with('user')
-            ->orderBy('created_at', 'desc')
-            ->get();
-    }
-
-    /**
-     * Returns the audit history for all links owned by a user.
-     *
-     * Includes associated link and user relationships, ordered newest-first.
-     *
-     * @param  int  $userId  User whose audit entries to retrieve.
-     * @param  int  $limit  Maximum number of entries to return (default 50).
-     * @return \Illuminate\Database\Eloquent\Collection<int, \App\Models\LinkAudit>
-     */
-    public function getUserHistory(int $userId, int $limit = 50): \Illuminate\Database\Eloquent\Collection
-    {
-        return LinkAudit::where('user_id', $userId)
-            ->with(['link', 'user'])
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get();
-    }
 }

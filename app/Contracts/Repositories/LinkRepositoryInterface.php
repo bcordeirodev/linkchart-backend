@@ -42,19 +42,6 @@ interface LinkRepositoryInterface
     public function findByIdAndUser(string $id, int $userId): ?Link;
 
     /**
-     * Return an active link matching the given slug, or null if absent or inactive.
-     *
-     * The `slug` column carries a unique index. An additional `is_active = true`
-     * filter ensures deactivated links are never served. For the hot redirect path,
-     * prefer `Link::findActiveBySlugCached()` which wraps this lookup in a
-     * 10-minute cache.
-     *
-     * @param  string  $slug  The short URL slug to look up.
-     * @return Link|null The matching active link, or null.
-     */
-    public function findBySlug(string $slug): ?Link;
-
-    /**
      * Find an active, non-expired, already-started link by slug for public display.
      * Returns null for any invalid state (inactive, expired, not yet started).
      */
