@@ -48,7 +48,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      *
      * @param  int  $linkId  Link primary key.
      * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @return array<string, mixed> Keyed: summary (includes avg_daily_clicks), link_info, temporal_data, geographic_data, audience_data.
+     * @return array<string, mixed> Keyed: summary (includes avg_daily_clicks and clicks_variation_pct), link_info, temporal_data, geographic_data, audience_data.
      */
     public function getLinkDashboardAnalytics(int $linkId, ?AnalyticsFilters $filters = null): array
     {
@@ -71,6 +71,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
                 'active_links' => $link->is_active ? 1 : 0,
                 'unique_visitors' => $unique,
                 'avg_daily_clicks' => $avgDaily,
+                'clicks_variation_pct' => $this->clicksVariationPct($link, $filters, $totalClicks),
                 'avg_response_time' => $this->estimateResponseTime($linkId, $filters),
                 'countries_reached' => $countries,
                 'links_with_traffic' => $totalClicks > 0 ? 1 : 0,
@@ -245,6 +246,41 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         $days = max(1, (int) $start->diffInDays($end));
 
         return round($totalClicks / $days, 1);
+    }
+
+    /**
+     * Percentage change in clicks between the current window and the equivalent
+     * window immediately before it.
+     *
+     * The current window is `[start, end]` (filter date range, or since the
+     * link's creation when unfiltered). The comparison window is the same length
+     * directly before `start`. Returns null when the prior window has zero
+     * clicks — there is no meaningful baseline to compare against, so the
+     * frontend renders the hero KPI without a variation pill.
+     *
+     * @param  Link  $link  The link being analysed.
+     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @param  int  $totalClicks  Pre-computed total click count for the current window.
+     * @return float|null Signed percentage change (one decimal), or null when not comparable.
+     */
+    private function clicksVariationPct(Link $link, AnalyticsFilters $filters, int $totalClicks): ?float
+    {
+        $start = $filters->dateFrom ?? $link->created_at;
+        $end = $filters->dateTo ?? now();
+        $windowSeconds = max(1, (int) $start->diffInSeconds($end));
+        $previousStart = $start->copy()->subSeconds($windowSeconds);
+
+        $previousClicks = Click::where('link_id', $link->id)
+            ->where('created_at', '>=', $previousStart)
+            ->where('created_at', '<', $start)
+            ->when($filters->excludeBots, fn ($q) => $q->where('is_bot', false))
+            ->count();
+
+        if ($previousClicks === 0) {
+            return null;
+        }
+
+        return round((($totalClicks - $previousClicks) / $previousClicks) * 100, 1);
     }
 
     /**
