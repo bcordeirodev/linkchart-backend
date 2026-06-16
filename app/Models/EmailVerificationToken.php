@@ -135,15 +135,6 @@ class EmailVerificationToken extends Model
     }
 
     /**
-     * Returns true when the token has not been used and has not yet expired.
-     */
-    public function isValid(): bool
-    {
-        return ! $this->used &&
-               $this->expires_at->isFuture();
-    }
-
-    /**
      * Mark this token as consumed; persists immediately (sets used = true, used_at = now()).
      */
     public function markAsUsed(): void

@@ -23,7 +23,7 @@ use Illuminate\Database\Eloquent\Collection;
  *   outside this repository.
  * The `slug` column carries a unique index from the original
  * `2025_04_20_032909_create_links_table.php` migration — supports
- * {@see self::findBySlug()} and {@see self::slugExists()}.
+ * {@see self::findPublicActiveBySlug()} and {@see self::slugExists()}.
  */
 class LinkRepository implements LinkRepositoryInterface
 {
@@ -59,25 +59,6 @@ class LinkRepository implements LinkRepositoryInterface
     {
         return Link::where('id', $id)
             ->where('user_id', $userId)
-            ->first();
-    }
-
-    /**
-     * Return an active link matching the given slug, or null if not found or inactive.
-     *
-     * The `slug` column is unique-indexed (from `2025_04_20_032909_create_links_table.php`),
-     * so this query is always a single-row lookup. The additional `is_active = true` filter
-     * is evaluated in-database to prevent serving deactivated links. For the hot redirect
-     * path, prefer {@see \App\Models\Link::findActiveBySlugCached()} which wraps this
-     * lookup in a 10-minute cache to avoid repeated DB hits under load.
-     *
-     * @param  string  $slug  The short URL slug to look up.
-     * @return Link|null The matching active link, or null if absent or inactive.
-     */
-    public function findBySlug(string $slug): ?Link
-    {
-        return Link::where('slug', $slug)
-            ->where('is_active', true)
             ->first();
     }
 

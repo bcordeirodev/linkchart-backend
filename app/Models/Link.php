@@ -144,21 +144,6 @@ class Link extends Model
     }
 
     /**
-     * Returns the number of clicks remaining before the limit is hit.
-     *
-     * Returns null when no click_limit is set (unlimited link).
-     * Returns 0 when the limit has already been reached (never negative).
-     */
-    public function getRemainingClicks(): ?int
-    {
-        if ($this->click_limit === null) {
-            return null; // Ilimitado
-        }
-
-        return max(0, $this->click_limit - $this->clicks);
-    }
-
-    /**
      * Returns the full public short URL for this link.
      *
      * When short_domain is set (link was created after user activated a subdomain),
