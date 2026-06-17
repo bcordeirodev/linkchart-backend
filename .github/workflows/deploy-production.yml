@@ -99,6 +99,7 @@ jobs:
           script: |
             chmod +x ${{ env.PROJECT_PATH }}/scripts/deploy.sh
             SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY }}" \
+            GOOGLE_SAFE_BROWSING_KEY="${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}" \
             FORCE_REBUILD="${{ inputs.force_rebuild || 'false' }}" \
             ${{ env.PROJECT_PATH }}/scripts/deploy.sh
 

@@ -19,6 +19,16 @@ if [ -n "${SENDGRID_API_KEY:-}" ]; then
     echo "SendGrid key injected into .env.production"
 fi
 
+# ── Google Safe Browsing injection ────────────────────────────────────────────
+# Server-side URL safety check (LinkSafetyService). Passed from GitHub Secrets
+# and upserted here so the server's persisted .env.production always carries the
+# current (rotated) key. Overwrites any stale/leaked value already on disk.
+if [ -n "${GOOGLE_SAFE_BROWSING_KEY:-}" ]; then
+    sed -i '/^GOOGLE_SAFE_BROWSING_KEY=/d' .env.production
+    printf 'GOOGLE_SAFE_BROWSING_KEY=%s\n' "$GOOGLE_SAFE_BROWSING_KEY" >> .env.production
+    echo "Safe Browsing key injected into .env.production"
+fi
+
 # ── Auth0 injection ───────────────────────────────────────────────────────────
 # AUTH0_DOMAIN is not secret but .env.production is excluded from rsync, so
 # the server copy can fall behind. Ensure it is always current.
