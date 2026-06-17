@@ -5,7 +5,7 @@ namespace App\Services\Analytics;
 use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
-use Illuminate\Support\Facades\DB;
+use App\Services\Analytics\Support\SqlDateExpr;
 
 /**
  * Computes temporal analytics (hourly/daily patterns, weekends, business hours,
@@ -126,11 +126,6 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         ];
     }
 
-    private function isSqlite(): bool
-    {
-        return DB::connection()->getDriverName() === 'sqlite';
-    }
-
     /**
      * Aggregate click counts grouped by hour of day (0–23).
      *
@@ -146,9 +141,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     private function getClicksByHour(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         $filters ??= new AnalyticsFilters;
-        $expr = $this->isSqlite()
-            ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
-            : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
+        $expr = SqlDateExpr::hourOfDay();
 
         $rows = $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw("{$expr} as hour, count(*) as clicks")
@@ -177,9 +170,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     private function getClicksByDayOfWeek(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         $filters ??= new AnalyticsFilters;
-        $expr = $this->isSqlite()
-            ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
-            : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
+        $expr = SqlDateExpr::dayOfWeek();
 
         $rows = $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw("{$expr} as dow, count(*) as clicks")
@@ -208,9 +199,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
 
     private function getWeekendVsWeekday(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $expr = $this->isSqlite()
-            ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
-            : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
+        $expr = SqlDateExpr::dayOfWeek();
 
         $rows = $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw("({$expr}) as dow, count(*) as clicks, count(distinct ip) as unique_visitors")
@@ -230,9 +219,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
 
     private function getBusinessHoursAnalysis(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $expr = $this->isSqlite()
-            ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
-            : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
+        $expr = SqlDateExpr::hourOfDay();
 
         $rows = $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw("{$expr} as h, count(*) as clicks")

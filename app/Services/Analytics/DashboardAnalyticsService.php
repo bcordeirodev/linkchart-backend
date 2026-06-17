@@ -5,6 +5,7 @@ namespace App\Services\Analytics;
 use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
+use App\Services\Analytics\Support\SqlDateExpr;
 use App\Services\Analytics\Support\UserAgentParser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -325,10 +326,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      */
     private function getClicksByHour(int $linkId, AnalyticsFilters $filters): array
     {
-        $sqlite = DB::connection()->getDriverName() === 'sqlite';
-        $hourExpr = $sqlite
-            ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
-            : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
+        $hourExpr = SqlDateExpr::hourOfDay();
 
         $rows = $this->baseQuery($linkId, $filters)
             ->selectRaw("{$hourExpr} as hour, count(*) as clicks")
@@ -359,10 +357,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      */
     private function getClicksByDayOfWeek(int $linkId, AnalyticsFilters $filters): array
     {
-        $sqlite = DB::connection()->getDriverName() === 'sqlite';
-        $dowExpr = $sqlite
-            ? "COALESCE(day_of_week, CASE CAST(strftime('%w', created_at) AS INTEGER) WHEN 0 THEN 7 ELSE CAST(strftime('%w', created_at) AS INTEGER) END)"
-            : 'COALESCE(day_of_week, CASE WHEN EXTRACT(DOW FROM created_at)::int = 0 THEN 7 ELSE EXTRACT(DOW FROM created_at)::int END)';
+        $dowExpr = SqlDateExpr::dayOfWeek();
 
         $rows = $this->baseQuery($linkId, $filters)
             ->selectRaw("{$dowExpr} as day, count(*) as clicks")

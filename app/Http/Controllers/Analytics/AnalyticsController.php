@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Analytics;
 use App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface;
 use App\DTOs\Analytics\AnalyticsFilters;
 use App\Http\Controllers\BaseController;
+use App\Services\Analytics\Support\SqlDateExpr;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Analytics controller for per-link advanced analytics endpoints.
@@ -362,8 +362,7 @@ class AnalyticsController extends BaseController
                 : '0%';
 
             // clicks_over_time: last 30 days, one row per day — SQL DATE aggregation
-            $isSqlite = DB::connection()->getDriverName() === 'sqlite';
-            $dateExpr = $isSqlite ? "strftime('%Y-%m-%d', created_at)" : "TO_CHAR(created_at, 'YYYY-MM-DD')";
+            $dateExpr = SqlDateExpr::date();
 
             $clicksRaw = $base()
                 ->where('created_at', '>=', now()->utc()->subDays(29)->startOfDay())

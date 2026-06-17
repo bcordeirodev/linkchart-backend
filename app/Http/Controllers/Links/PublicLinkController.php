@@ -7,6 +7,7 @@ use App\Contracts\Services\LinkServiceInterface;
 use App\DTOs\CreatePublicLinkDTO;
 use App\Http\Requests\CreatePublicLinkRequest;
 use App\Http\Resources\PublicLinkResource;
+use App\Services\Analytics\Support\SqlDateExpr;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
@@ -213,9 +214,7 @@ class PublicLinkController extends Controller
                     ->map(fn ($item) => ['device' => ucfirst($item->device), 'clicks' => (int) $item->clicks]);
 
                 // Cliques por hora do dia (últimos 7 dias) — usa coluna pré-computada quando disponível
-                $hourExpr = DB::connection()->getDriverName() === 'sqlite'
-                    ? DB::raw("COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER)) as hour")
-                    : DB::raw('COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int) as hour');
+                $hourExpr = DB::raw(SqlDateExpr::hourOfDay().' as hour');
 
                 $clicksByHour = \App\Models\Click::where('link_id', $link->id)
                     ->where('created_at', '>=', now()->subDays(7))
