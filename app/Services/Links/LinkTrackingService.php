@@ -831,9 +831,17 @@ class LinkTrackingService
             $date = new \DateTime($clickedAt->format('Y-m-d'));
             $isHoliday = $holidays->isHoliday($date);
 
+            $holidayName = null;
+            if ($isHoliday) {
+                foreach ($holidays->on($date) as $holiday) {
+                    $holidayName = $holiday->getName();
+                    break;
+                }
+            }
+
             return [
                 'is_holiday' => $isHoliday,
-                'holiday_name' => $isHoliday ? ($holidays->whatObservance($date)?->getName() ?? null) : null,
+                'holiday_name' => $holidayName,
             ];
         } catch (\Throwable) {
             return ['is_holiday' => null, 'holiday_name' => null];

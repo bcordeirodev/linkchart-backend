@@ -170,16 +170,20 @@ class Click extends Model
 
     /**
      * The shortened link this click belongs to (belongsTo Link).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Link, $this>
      */
-    public function link()
+    public function link(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Link::class);
     }
 
     /**
      * UTM parameter record associated with this click (hasOne LinkUtm).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne<\App\Models\LinkUtm, $this>
      */
-    public function utm()
+    public function utm(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(LinkUtm::class);
     }

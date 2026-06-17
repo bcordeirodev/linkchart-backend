@@ -1,13 +1,19 @@
 parameters:
 	ignoreErrors:
 		-
+			message: '#^Unsafe usage of new static\(\)\.$#'
+			identifier: new.static
+			count: 1
+			path: app/DTOs/Analytics/AnalyticsFilters.php
+
+		-
 			message: '#^Access to an undefined property App\\Models\\Click\:\:\$clicks\.$#'
 			identifier: property.notFound
 			count: 2
 			path: app/Http/Controllers/Analytics/AnalyticsController.php
 
 		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Click\>::map\(\) contains unresolvable type\.$#'
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Models\\Click\>\:\:map\(\) contains unresolvable type\.$#'
 			identifier: argument.unresolvableType
 			count: 2
 			path: app/Http/Controllers/Analytics/AnalyticsController.php
@@ -25,16 +31,16 @@ parameters:
 			path: app/Http/Controllers/Auth/AuthController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Click\:\:\$utm\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/Links/LinkController.php
+			message: '#^Ternary operator condition is always true\.$#'
+			identifier: ternary.alwaysTrue
+			count: 1
+			path: app/Http/Controllers/Auth/AuthController.php
 
 		-
-			message: '#^Relation ''utm'' is not found in App\\Models\\Click model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
-			path: app/Http/Controllers/Links/LinkController.php
+			message: '#^Using nullsafe method call on non\-nullable type Illuminate\\Http\\Request\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Http/Controllers/BaseController.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Click\:\:\$clicks\.$#'
@@ -49,34 +55,16 @@ parameters:
 			path: app/Http/Controllers/Links/PublicLinkController.php
 
 		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Http/Controllers/Links/RedirectController.php
-
-		-
 			message: '#^Return type \(void\) of method App\\Http\\Middleware\\ApiAuthenticate\:\:unauthenticated\(\) should be compatible with return type \(never\) of method Illuminate\\Auth\\Middleware\\Authenticate\:\:unauthenticated\(\)$#'
 			identifier: method.childReturnType
 			count: 1
 			path: app/Http/Middleware/ApiAuthenticate.php
 
 		-
-			message: '#^Cannot call method toISOString\(\) on string\.$#'
-			identifier: method.nonObject
+			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$clicks\.$#'
+			identifier: property.notFound
 			count: 1
-			path: app/Http/Middleware/EnsureEmailIsVerified.php
-
-		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 1
-			path: app/Http/Middleware/MetricsCollector.php
-
-		-
-			message: '#^Negated boolean expression is always true\.$#'
-			identifier: booleanNot.alwaysTrue
-			count: 1
-			path: app/Http/Middleware/MetricsCollector.php
+			path: app/Http/Resources/LinkResource.php
 
 		-
 			message: '#^Access to an undefined property App\\Http\\Resources\\LinkResource\:\:\$created_at\.$#'
@@ -175,12 +163,6 @@ parameters:
 			path: app/Http/Resources/LinkResource.php
 
 		-
-			message: '#^Call to an undefined method App\\Http\\Resources\\LinkResource\:\:clicks\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Resources/LinkResource.php
-
-		-
 			message: '#^Call to an undefined method App\\Http\\Resources\\LinkResource\:\:getShortedUrl\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -247,19 +229,331 @@ parameters:
 			path: app/Http/Resources/PublicLinkResource.php
 
 		-
+			message: '#^Call to an undefined method Psr\\Log\\LoggerInterface\:\:getHandlers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Logging/Taps/ChannelTap.php
+
+		-
+			message: '#^Call to an undefined method Psr\\Log\\LoggerInterface\:\:pushProcessor\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: app/Logging/Taps/ChannelTap.php
+
+		-
+			message: '#^Call to an undefined method Psr\\Log\\LoggerInterface\:\:getHandlers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Logging/Taps/SampleRateTap.php
+
+		-
+			message: '#^Call to an undefined method Psr\\Log\\LoggerInterface\:\:setHandlers\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Logging/Taps/SampleRateTap.php
+
+		-
 			message: '#^Return type \(void\) of method App\\Models\\User\:\:markEmailAsVerified\(\) should be compatible with return type \(bool\) of method Illuminate\\Foundation\\Auth\\User\:\:markEmailAsVerified\(\)$#'
 			identifier: method.childReturnType
 			count: 1
 			path: app/Models/User.php
 
 		-
-			message: '#^Constant App\\Services\\Analytics\\MetricsService\:\:CACHE_KEYS is unused\.$#'
-			identifier: classConstant.unused
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$accept_language\.$#'
+			identifier: property.notFound
 			count: 1
-			path: app/Services/Analytics/MetricsService.php
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$avg_response_time\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$browser\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$browser_version\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$city\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$clicks\.$#'
+			identifier: property.notFound
+			count: 15
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$continent\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$country\.$#'
+			identifier: property.notFound
+			count: 4
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$currency\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$device\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$hour_of_day\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$iso_code\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_click\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$latitude\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$longitude\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$max_response_time\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$min_response_time\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$os\.$#'
+			identifier: property.notFound
+			count: 3
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$os_version\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$percentage\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$rank\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$state\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$state_name\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$timezone\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$total_clicks\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$unique_visitors\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 13
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>clicks" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Services/Analytics/DashboardAnalyticsService.php
+
+		-
+			message: '#^Called ''count'' on Laravel collection, but could have been retrieved as a query\.$#'
+			identifier: larastan.noUnnecessaryCollectionCall
+			count: 1
+			path: app/Services/Analytics/GeographicAnalyticsService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>postal_code" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Analytics/GeographicAnalyticsService.php
+
+		-
+			message: '#^Called ''count'' on Laravel collection, but could have been retrieved as a query\.$#'
+			identifier: larastan.noUnnecessaryCollectionCall
+			count: 1
+			path: app/Services/Analytics/Insights/Generators/SecurityInsightGenerator.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\InsightsAnalyticsService\:\:getTrafficSourceAnalysis\(\) should return array\{sources\: array, channels\: array, top_source\: array\|null, source_diversity\: int, total_clicks\: int, recommendations\: array\<int, array\{type\: string, message_key\: string, priority\: string\}\>\} but returns array\{sources\: array\{\}, top_source\: null, source_diversity\: 0, channels\: array\{\}, recommendations\: array\{\}\}\.$#'
+			identifier: return.type
+			count: 1
+			path: app/Services/Analytics/InsightsAnalyticsService.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>clicks" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Analytics/MetricsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$avg_response_time\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$click_count\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$clicks\.$#'
+			identifier: property.notFound
+			count: 8
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$count\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$date\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$holiday_name\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$hour_of_day\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$season\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$unique_visitors\.$#'
+			identifier: property.notFound
+			count: 2
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\Analytics\\TemporalAnalyticsService\:\:getDeviceByPeriod\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<array\{period\: ''afternoon''\|''dawn''\|''evening''\|''morning'', desktop\: 0, mobile\: 0, tablet\: 0\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
+			identifier: argument.unresolvableType
+			count: 4
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>clicks" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>count" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Services/Analytics/TemporalAnalyticsService.php
+
+		-
+			message: '#^Method App\\Services\\EmailService\:\:getSendGridTestEmailTemplate\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Services/EmailService.php
+
+		-
+			message: '#^Variable \$email on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: app/Services/EmailVerificationService.php
+
+		-
+			message: '#^Static method Redis\:\:pipeline\(\) invoked with 1 parameter, 0 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: app/Services/Links/ClickVelocityService.php
