@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    PostgreSQL test configuration.
+
+    The default phpunit.xml runs against SQLite :memory: for speed, but the
+    analytics layer emits driver-specific SQL (EXTRACT/TO_CHAR/DATE_PART on
+    Postgres vs strftime on SQLite — see App\Services\Analytics\Support\SqlDateExpr).
+    That production branch was never exercised by CI. This config runs the suite
+    against a real PostgreSQL server so the Postgres SQL is verified.
+
+    SAFETY: DB_DATABASE is forced to `link_chart_test` so RefreshDatabase can
+    never wipe the local dev database (`link_chart`). DB_HOST/PORT/USERNAME/PASSWORD
+    are intentionally NOT set here so they are inherited from the real environment
+    (the app container sets DB_HOST=database etc.; CI sets them in the job env).
+
+    Local run:  docker compose exec -T app ./vendor/bin/phpunit -c phpunit.pgsql.xml
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_KEY" value="base64:6Te5B+hW2AgrwEQi9uaO4f72snjcV1X6mVzmVrE+xKQ=" force="true"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file" force="true"/>
+        <env name="BCRYPT_ROUNDS" value="4" force="true"/>
+        <env name="CACHE_STORE" value="array" force="true"/>
+        <!-- Real PostgreSQL; DB_DATABASE forced to the throwaway test DB. -->
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_DATABASE" value="link_chart_test" force="true"/>
+        <env name="MAIL_MAILER" value="array" force="true"/>
+        <env name="QUEUE_CONNECTION" value="sync" force="true"/>
+        <env name="SESSION_DRIVER" value="array" force="true"/>
+        <env name="JWT_SECRET" value="test-secret-not-for-production-use-only" force="true"/>
+        <env name="AUTH0_DOMAIN" value="test.auth0.test" force="true"/>
+        <!-- Vazio = LinkSafetyService fail-open; testes nunca chamam a API real do Google -->
+        <env name="GOOGLE_SAFE_BROWSING_KEY" value="" force="true"/>
+    </php>
+</phpunit>

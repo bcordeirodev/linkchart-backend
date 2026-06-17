@@ -48,3 +48,64 @@ jobs:
 
       - name: 🎨 Check code style (Pint)
         run: ./vendor/bin/pint --test
+
+  tests-postgres:
+    name: Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Runs the full suite against a real PostgreSQL server. The `validate` job
+    # uses SQLite for speed, but the analytics layer emits driver-specific SQL
+    # (see App\Services\Analytics\Support\SqlDateExpr) whose Postgres branch — the
+    # one that runs in production — was previously never exercised by CI.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: link_chart_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: "123456"
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      APP_ENV: testing
+      APP_KEY: "base64:6Te5B+hW2AgrwEQi9uaO4f72snjcV1X6mVzmVrE+xKQ="
+      APP_DEBUG: "true"
+      # DB_CONNECTION and DB_DATABASE are forced by phpunit.pgsql.xml
+      # (DB_DATABASE=link_chart_test); host/credentials are read from here.
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_USERNAME: postgres
+      DB_PASSWORD: "123456"
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      JWT_SECRET: test-secret-ci-not-for-production-use-only
+
+    steps:
+      - name: 📦 Checkout
+        uses: actions/checkout@v6
+
+      - name: 🐘 Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, xml, zip, pdo_pgsql, pgsql, redis, bcmath
+          coverage: none
+
+      - name: 📥 Install Composer dependencies
+        uses: ramsey/composer-install@v3
+        with:
+          composer-options: "--prefer-dist --no-progress"
+
+      - name: 🧹 Clear config cache before tests
+        run: php artisan config:clear
+
+      - name: ✅ Run tests against PostgreSQL
+        run: ./vendor/bin/phpunit -c phpunit.pgsql.xml

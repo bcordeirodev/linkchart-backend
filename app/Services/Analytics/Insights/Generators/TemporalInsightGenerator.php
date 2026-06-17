@@ -3,6 +3,7 @@
 namespace App\Services\Analytics\Insights\Generators;
 
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
+use App\Services\Analytics\Support\SqlDateExpr;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,10 +27,7 @@ class TemporalInsightGenerator implements InsightGeneratorInterface
      */
     public function generate(int $linkId, int $totalClicks): ?array
     {
-        $sqlite = DB::connection()->getDriverName() === 'sqlite';
-        $expr = $sqlite
-            ? "COALESCE(hour_of_day, CAST(strftime('%H', created_at) AS INTEGER))"
-            : 'COALESCE(hour_of_day, EXTRACT(HOUR FROM created_at)::int)';
+        $expr = SqlDateExpr::hourOfDay();
 
         $peak = DB::table('clicks')
             ->selectRaw("{$expr} as hour, COUNT(*) as clicks")
