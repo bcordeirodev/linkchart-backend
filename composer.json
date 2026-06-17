@@ -21,6 +21,7 @@
         "tymon/jwt-auth": "dev-chore/laravel-12"
     },
     "require-dev": {
+        "dedoc/scramble": "^0.13.28",
         "fakerphp/faker": "^1.23",
         "larastan/larastan": "^3.9",
         "laravel/pail": "^1.2.2",
