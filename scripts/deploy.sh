@@ -24,8 +24,13 @@ fi
 # and upserted here so the server's persisted .env.production always carries the
 # current (rotated) key. Overwrites any stale/leaked value already on disk.
 if [ -n "${GOOGLE_SAFE_BROWSING_KEY:-}" ]; then
+    # Strip any stray whitespace/newlines from the secret. A pasted trailing
+    # space/newline produces a malformed dotenv line ("unexpected whitespace")
+    # that makes Laravel reject the ENTIRE .env file. API keys have no
+    # whitespace, so removing all of it is safe.
+    SAFE_BROWSING_KEY_CLEAN=$(printf '%s' "$GOOGLE_SAFE_BROWSING_KEY" | tr -d '[:space:]')
     sed -i '/^GOOGLE_SAFE_BROWSING_KEY=/d' .env.production
-    printf 'GOOGLE_SAFE_BROWSING_KEY=%s\n' "$GOOGLE_SAFE_BROWSING_KEY" >> .env.production
+    printf 'GOOGLE_SAFE_BROWSING_KEY=%s\n' "$SAFE_BROWSING_KEY_CLEAN" >> .env.production
     echo "Safe Browsing key injected into .env.production"
 fi
 
