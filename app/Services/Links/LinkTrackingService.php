@@ -6,6 +6,7 @@ use App\Logging\AppLogger;
 use App\Models\Click;
 use App\Models\Link;
 use App\Models\LinkUtm;
+use App\Support\ClientIpResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Jenssegers\Agent\Agent;
@@ -84,9 +85,13 @@ class LinkTrackingService
      * @param  ClickVelocityService  $clickVelocityService  Constructor-injected (R-12); tracks click
      *                                                      velocity via Redis sliding windows and falls
      *                                                      back gracefully when Redis is unavailable.
+     * @param  ClientIpResolver  $clientIpResolver  Shared client-IP resolver (single source of truth for
+     *                                              proxy/CDN header precedence). Defaults to a fresh instance
+     *                                              so the unit tests that build this service by hand keep working.
      */
     public function __construct(
         private readonly ClickVelocityService $clickVelocityService,
+        private readonly ClientIpResolver $clientIpResolver = new ClientIpResolver,
     ) {}
 
     /**
@@ -224,42 +229,20 @@ class LinkTrackingService
      * In production, private/reserved ranges are excluded via FILTER_FLAG_NO_PRIV_RANGE
      * | FILTER_FLAG_NO_RES_RANGE — this prevents internal proxy IPs from being stored.
      *
+     * Delegates the actual precedence/validation logic to the shared ClientIpResolver
+     * (single source of truth, also used by RedirectMetricsCollector).
+     *
      * @param  Request  $request  The current HTTP request.
      * @return string A valid IP address string.
      */
     public function resolveRealUserIP(Request $request): string
     {
-        if ($realIP = $request->query('real_ip')) {
-            $cleanIP = trim($realIP);
-            if ($this->isValidIP($cleanIP)) {
-                return $cleanIP;
-            }
-        }
-
-        if ($realIP = $request->header('X-Real-IP')) {
-            $cleanIP = trim($realIP);
-            if ($this->isValidIP($cleanIP)) {
-                return $cleanIP;
-            }
-        }
-
-        if ($forwardedFor = $request->header('X-Forwarded-For')) {
-            $ips = array_map('trim', explode(',', $forwardedFor));
-            $clientIP = $ips[0];
-
-            if ($this->isValidIP($clientIP)) {
-                return $clientIP;
-            }
-        }
-
-        if ($cfIP = $request->header('CF-Connecting-IP')) {
-            $cleanIP = trim($cfIP);
-            if ($this->isValidIP($cleanIP)) {
-                return $cleanIP;
-            }
-        }
-
-        return $request->ip() ?: '127.0.0.1';
+        return $this->clientIpResolver->resolve([
+            ClientIpResolver::SOURCE_QUERY_PARAM => $request->query('real_ip'),
+            ClientIpResolver::SOURCE_X_REAL_IP => $request->header('X-Real-IP'),
+            ClientIpResolver::SOURCE_X_FORWARDED_FOR => $request->header('X-Forwarded-For'),
+            ClientIpResolver::SOURCE_CF_CONNECTING_IP => $request->header('CF-Connecting-IP'),
+        ], $request->ip() ?: '127.0.0.1');
     }
 
     private function extractUtm(array $queryParams, ?string $referer): array
@@ -613,19 +596,6 @@ class LinkTrackingService
         }
 
         return ['primary_language' => $lang, 'language_region' => $region];
-    }
-
-    private function isValidIP(string $ip): bool
-    {
-        if (! filter_var($ip, FILTER_VALIDATE_IP)) {
-            return false;
-        }
-
-        if (config('app.env') === 'production') {
-            return (bool) filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-        }
-
-        return true;
     }
 
     /**
