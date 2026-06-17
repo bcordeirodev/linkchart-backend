@@ -117,7 +117,9 @@ class SafeFetchUrlValidator
         $parts = explode('.', $host);
         $count = count($parts);
 
-        if ($count < 1 || $count > 4) {
+        // explode() always returns at least one element, so only the upper
+        // bound needs guarding: more than 4 parts is not IPv4 shorthand.
+        if ($count > 4) {
             return null;
         }
 

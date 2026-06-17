@@ -358,7 +358,7 @@ class LinkController extends BaseController
             $items = collect($paginator->items())->map(function ($click) {
                 $referer = $click->referer;
                 $refererHost = null;
-                if ($referer && $referer !== '-' && $referer !== '') {
+                if ($referer && $referer !== '-') {
                     $refererHost = parse_url($referer, PHP_URL_HOST) ?: null;
                     // LGPD: drop query string/fragment, which can carry PII
                     // (tokens, emails, names) leaked from the referring page.
@@ -369,7 +369,7 @@ class LinkController extends BaseController
                 // data (LGPD) and is not consumed by the clicks tab UI.
                 return [
                     'id' => $click->id,
-                    'created_at' => $click->created_at?->toIso8601String(),
+                    'created_at' => $click->created_at->toIso8601String(),
                     'local_time' => $click->local_time,
                     'country' => $click->country,
                     'iso_code' => $click->iso_code,
