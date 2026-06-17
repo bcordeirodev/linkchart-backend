@@ -32,9 +32,11 @@ use Jenssegers\Agent\Agent;
  *
  * Side effects:
  *   - Reads: links (to confirm link exists), clicks (return visitor check)
- *   - Writes: clicks (Click::create), link_utms (LinkUtm::create if UTM present)
+ *   - Writes: clicks (insertOrIgnore keyed on the UNIQUE dedup_key — durable
+ *     retry idempotency), link_utms (LinkUtm::create if UTM present)
  *   - Increment: DB::table('links')->where('id', $link->id)->increment('clicks')
- *     (raw query bypasses model observers, keeping the Link cache stable)
+ *     ONLY when a new clicks row was actually inserted (a dedup_key collision is
+ *     a no-op); raw query bypasses model observers, keeping the Link cache stable
  *   - Logs: tracking channel via AppLogger::trackingClickRegistered on success;
  *     AppLogger::trackingLinkNotFound, geoip*, userAgent*, behavior* on error paths
  *
@@ -109,10 +111,13 @@ class LinkTrackingService
      *
      * The denormalized click counter is incremented via a direct DB query
      * (DB::table('links')->where('id', ...)->increment('clicks')) to avoid
-     * firing model observers and invalidating the Link slug cache.
+     * firing model observers and invalidating the Link slug cache. The insert
+     * is idempotent under retry via the UNIQUE clicks.dedup_key constraint: a
+     * collision is silently ignored and the counter is NOT incremented again.
      *
      * @param  int  $linkId  Primary key of the link being clicked.
      * @param  array{
+     *     dedup_key?: ?string,
      *     ip?: string,
      *     user_agent?: ?string,
      *     referer?: ?string,
@@ -171,7 +176,10 @@ class LinkTrackingService
         $allFields = array_merge($deviceData, $behaviorData, $navigationData, $velocityData, $connectionData, $performanceData);
         $qualityData = $this->calculateQualityScore($allFields);
 
-        $click = Click::create(array_merge([
+        $dedupKey = $payload['dedup_key'] ?? null;
+
+        $attributes = array_merge([
+            'dedup_key' => $dedupKey,
             'link_id' => $link->id,
             'ip' => $ip,
             'user_agent' => $userAgent,
@@ -191,7 +199,23 @@ class LinkTrackingService
         ], $deviceData, $temporalData, $behaviorData, $performanceData,
             $navigationData, $languageData,
             $velocityData, $holidayData, $seasonData, $connectionData, $engineData,
-            $qualityData));
+            $qualityData);
+
+        $click = $this->insertClickIdempotently($attributes);
+
+        // A null return means the dedup_key collided with an already-persisted
+        // row (a retry of the same click). The DB unique constraint is the
+        // durable source of truth here, so we must NOT count the click again
+        // and must NOT create a duplicate UTM row — even if the Cache fast-path
+        // was unavailable. The job treats this as a successful no-op.
+        if ($click === null) {
+            AppLogger::event('tracking', 'info', 'tracking.duplicate_ignored', [
+                'link_id' => $link->id,
+                'dedup_key' => $dedupKey,
+            ]);
+
+            return;
+        }
 
         DB::table('links')->where('id', $link->id)->increment('clicks');
 
@@ -211,6 +235,62 @@ class LinkTrackingService
             'referer' => $referer,
             'utm_data' => $utm,
         ]);
+    }
+
+    /**
+     * Inserts a click row, treating a dedup_key collision as a no-op.
+     *
+     * This is the durable idempotency guarantee for click persistence. The
+     * insert is performed via the query builder's insertOrIgnore() so a UNIQUE
+     * constraint violation on dedup_key (a retry of the same click) is silently
+     * ignored at the database level instead of throwing — this holds even when
+     * the Cache fast-path is completely unavailable.
+     *
+     * Behavior:
+     *   - New row inserted → returns the freshly persisted Click model so the
+     *     caller can increment the counter and attach UTM data.
+     *   - Row already existed (insertOrIgnore affected 0 rows) → returns null;
+     *     the caller skips the counter increment and UTM creation.
+     *   - dedup_key is null (legacy/edge events) → NULLs are distinct in both
+     *     PostgreSQL and SQLite unique indexes, so the row always inserts,
+     *     preserving the previous at-least-once semantics.
+     *
+     * Timestamps are set explicitly because insertOrIgnore() bypasses Eloquent
+     * (no model events, no automatic created_at/updated_at), matching the
+     * existing direct-query convention used for the links.clicks counter.
+     *
+     * @param  array<string, mixed>  $attributes  Fully built click row (must include dedup_key + link_id).
+     * @return \App\Models\Click|null The inserted Click, or null when a duplicate was ignored.
+     */
+    private function insertClickIdempotently(array $attributes): ?Click
+    {
+        $now = now();
+        $row = array_merge($attributes, [
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+
+        $inserted = Click::query()->insertOrIgnore($row) > 0;
+
+        if (! $inserted) {
+            return null;
+        }
+
+        // Re-read the row we just inserted. For events carrying a dedup_key we
+        // can locate it by that UNIQUE key; otherwise (null dedup_key) fall back
+        // to the most recent row for this link/IP — that row was just created by
+        // this call, since insertOrIgnore reported a new insert.
+        $query = Click::query();
+
+        if (! empty($attributes['dedup_key'])) {
+            $query->where('dedup_key', $attributes['dedup_key']);
+        } else {
+            $query->where('link_id', $attributes['link_id'])
+                ->where('ip', $attributes['ip'] ?? null)
+                ->orderByDesc('id');
+        }
+
+        return $query->first();
     }
 
     /**

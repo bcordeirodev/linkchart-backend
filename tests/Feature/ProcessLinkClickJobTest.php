@@ -6,6 +6,7 @@ use App\Jobs\ProcessLinkClickJob;
 use App\Models\Click;
 use App\Models\LinkUtm;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Tests\Concerns\CreatesTestLinks;
@@ -203,6 +204,34 @@ class ProcessLinkClickJobTest extends TestCase
 
         $this->assertSame(1, Click::where('link_id', $link->id)->count());
         $this->assertSame(1, (int) $link->fresh()->clicks);
+    }
+
+    /**
+     * Durable dedup: even with the Cache flushed between attempts (simulating a
+     * cache outage / the worker-timeout-between-insert-and-marker gap), the
+     * UNIQUE clicks.dedup_key constraint guarantees exactly one row and a single
+     * links.clicks increment. This is the core regression test for the gap that
+     * the cache-only dedup left open.
+     */
+    public function test_same_dedup_key_is_idempotent_even_when_cache_is_flushed(): void
+    {
+        $link = $this->makeLink(['clicks' => 0]);
+        $payload = $this->payload(['dedup_key' => 'clk_durable_outage_1']);
+
+        // First attempt persists the click and (optionally) the cache marker.
+        (new ProcessLinkClickJob($link->id, $payload))
+            ->handle(app(\App\Services\Links\LinkTrackingService::class));
+
+        // Simulate the cache outage / lost marker between attempts: wipe the
+        // cache so the fast-path cannot short-circuit the retry. The DB unique
+        // constraint must still make the second handle() a no-op.
+        Cache::flush();
+
+        (new ProcessLinkClickJob($link->id, $payload))
+            ->handle(app(\App\Services\Links\LinkTrackingService::class));
+
+        $this->assertSame(1, Click::where('link_id', $link->id)->count(), 'exactly one click row');
+        $this->assertSame(1, (int) $link->fresh()->clicks, 'links.clicks incremented exactly once');
     }
 
     /** Distinct dedup_keys are distinct clicks (no false dedup). */
