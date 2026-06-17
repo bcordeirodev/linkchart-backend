@@ -40,6 +40,17 @@ class AppServiceProvider extends ServiceProvider
             return $this->expectsJson() || $this->is('api/*');
         });
 
+        // Let the JWT guard read the token from the httpOnly `auth_token` cookie
+        // (set by auth0Exchange) in addition to the Authorization header. This
+        // lets browser (SPA) clients authenticate without a JS-readable token
+        // — the canonical XSS-safe pattern — while native/API clients keep
+        // using the Bearer header. `false`: the cookie holds a raw JWT, not a
+        // Laravel-encrypted value (api routes don't run EncryptCookies).
+        $this->app['tymon.jwt.parser']->addParser(
+            (new \Tymon\JWTAuth\Http\Parser\Cookies(false))
+                ->setKey(\App\Http\Controllers\Auth\AuthController::AUTH_COOKIE)
+        );
+
         // 5 tentativas/min por email (ou IP quando email ausente) para evitar
         // brute-force em login/reset e abuso de reenvio de verificação.
         RateLimiter::for('login', function (Request $request) {

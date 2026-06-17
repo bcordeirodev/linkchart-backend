@@ -36,6 +36,12 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  */
 class AuthController extends Controller
 {
+    /**
+     * Name of the httpOnly cookie carrying the backend JWT for browser clients.
+     * Read by the tymon Cookies parser registered in AppServiceProvider.
+     */
+    public const AUTH_COOKIE = 'auth_token';
+
     private EmailVerificationService $emailVerificationService;
 
     public function __construct(EmailVerificationService $emailVerificationService)
@@ -202,14 +208,57 @@ class AuthController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Logout realizado com sucesso',
-            ]);
+            ])->withCookie($this->forgetAuthCookie());
 
         } catch (\Exception $e) {
+            // Still clear the auth cookie on the client so a stale (invalidated)
+            // token isn't replayed after a failed server-side invalidation.
             return response()->json([
                 'error' => 'Server Error',
                 'message' => 'Erro ao fazer logout',
-            ], 500);
+            ], 500)->withCookie($this->forgetAuthCookie());
         }
+    }
+
+    /**
+     * Builds the httpOnly cookie that carries the backend JWT for browser
+     * clients.
+     *
+     * The cookie is read back by {@see \App\Http\Middleware\InjectBearerFromCookie}
+     * and promoted to an `Authorization: Bearer` header. Attributes:
+     * - httpOnly: not readable by JavaScript (XSS-safe).
+     * - secure: only sent over HTTPS in production.
+     * - sameSite=lax: not sent on cross-site POSTs (CSRF mitigation) while still
+     *   sent on the same-origin requests the SPA makes via the Next.js proxy.
+     * - domain=null: host-only, so it is scoped to the (proxy) origin the
+     *   browser actually sees rather than the backend API host.
+     *
+     * @param  string  $token  the signed JWT.
+     */
+    private function makeAuthCookie(string $token): \Symfony\Component\HttpFoundation\Cookie
+    {
+        $minutes = (int) config('jwt.ttl', 60);
+
+        return cookie(
+            self::AUTH_COOKIE,
+            $token,
+            $minutes,
+            '/',
+            null,
+            app()->isProduction(),
+            true,
+            false,
+            'lax'
+        );
+    }
+
+    /**
+     * Builds an expired clone of the auth cookie so the browser drops it on
+     * logout.
+     */
+    private function forgetAuthCookie(): \Symfony\Component\HttpFoundation\Cookie
+    {
+        return cookie()->forget(self::AUTH_COOKIE, '/');
     }
 
     /**
@@ -787,6 +836,11 @@ class AuthController extends Controller
 
             // auth0_sub is intentionally excluded from the response to avoid
             // leaking the internal Auth0 identity to the client.
+            //
+            // The JWT is ALSO set as an httpOnly cookie (see makeAuthCookie):
+            // browser clients authenticate via that cookie (XSS-safe), so they
+            // must not persist the body token. The token is still returned in
+            // the body for native/API clients and backward compatibility.
             return response()->json([
                 'data' => [
                     'token' => $token,
@@ -795,7 +849,7 @@ class AuthController extends Controller
                         'email_verified_at', 'created_at', 'updated_at',
                     ]),
                 ],
-            ]);
+            ])->withCookie($this->makeAuthCookie($token));
         } catch (\Exception $e) {
             AppLogger::event('auth', 'error', 'auth.auth0_exchange_error', [
                 'error' => $e->getMessage(),

@@ -153,6 +153,59 @@ class Auth0ExchangeTest extends TestCase
         $response->assertStatus(422);
     }
 
+    /** Exchange sets the JWT as an httpOnly auth_token cookie (XSS-safe). */
+    public function test_exchange_sets_httponly_auth_cookie(): void
+    {
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'google-oauth2|cookie',
+                'email' => 'cookie@example.com',
+                'name' => 'Cookie User',
+                'email_verified' => true,
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-valid-token',
+        ]);
+
+        $response->assertStatus(200)->assertCookie('auth_token');
+
+        // decrypt=false: the cookie is a raw JWT, not a Laravel-encrypted value.
+        $cookie = $response->getCookie('auth_token', false);
+        $this->assertNotNull($cookie);
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertSame('lax', strtolower((string) $cookie->getSameSite()));
+        $this->assertSame($response->json('data.token'), $cookie->getValue());
+    }
+
+    /**
+     * The auth_token cookie authenticates a protected route with no
+     * Authorization header — InjectBearerFromCookie promotes the cookie and the
+     * JWT guard accepts it. The token is minted the same way auth0Exchange does
+     * (JWTAuth::fromUser); that the exchange response carries this token as the
+     * cookie is asserted in test_exchange_sets_httponly_auth_cookie.
+     */
+    public function test_auth_cookie_authenticates_protected_route(): void
+    {
+        $user = User::factory()->create(['auth0_sub' => 'google-oauth2|me']);
+        $token = \Tymon\JWTAuth\Facades\JWTAuth::fromUser($user);
+
+        // Cookies are passed straight to call() so they populate the request
+        // cookie bag (the withCookie test helpers don't, on api routes without
+        // EncryptCookies). No Authorization header is set.
+        $me = $this->call(
+            'GET',
+            '/api/me',
+            [],
+            ['auth_token' => $token],
+            [],
+            ['HTTP_ACCEPT' => 'application/json'],
+        );
+
+        $me->assertStatus(200)->assertJsonPath('data.user.id', $user->id);
+    }
+
     /** email_hint must never be used to look up or link accounts (account-takeover vector). */
     public function test_ignores_email_hint_when_userinfo_has_no_email(): void
     {

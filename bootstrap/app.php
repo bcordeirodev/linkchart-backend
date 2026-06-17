@@ -136,7 +136,8 @@ return Application::configure(basePath: dirname(__DIR__))
                 error_log('Laravel Exception: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             }
 
-            $isDebug = (bool) env('APP_DEBUG', false);
+            // config(), not env(): env() returns null under config:cache in prod.
+            $isDebug = (bool) config('app.debug');
 
             $error = [
                 'code' => 'SERVER_ERROR',
