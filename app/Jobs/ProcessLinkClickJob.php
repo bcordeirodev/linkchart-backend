@@ -52,17 +52,21 @@ use Throwable;
  *     table. No explicit `failed()` callback is defined; the `jobs` channel
  *     already has a record from the last `jobFailed` log.
  *
- * Idempotency: YES (best-effort, dedup_key based).
- *   Before persisting, `alreadyProcessed()` checks a cache marker keyed by the
- *   payload's dedup_key (server-generated in RedirectController); after a
- *   successful insert, `markProcessed()` sets it (TTL 1h). A retry of the same
- *   click is skipped and logged as `job.duplicate_skipped` on the `jobs`
- *   channel. When Redis is unavailable or the payload has neither dedup_key nor
- *   request_id, behavior degrades to the old at-least-once semantics
- *   (duplicates possible, under-counting avoided).
- *   A failure between the click insert and the marker write (e.g. worker
- *   timeout) still re-runs the whole persistence on retry — duplicates remain
- *   possible in that narrow window; accepted for analytics data.
+ * Idempotency: YES (durable, dedup_key based).
+ *   The source-of-truth guarantee lives in the database: `clicks.dedup_key`
+ *   has a UNIQUE index and `LinkTrackingService` inserts via insertOrIgnore,
+ *   incrementing `links.clicks` only when a NEW row was actually inserted. A
+ *   retry of the same click (same server-generated dedup_key from
+ *   RedirectController) can therefore never produce a duplicate row or a double
+ *   counter increment — this holds even if the Cache is completely unavailable,
+ *   closing the old worker-timeout-between-insert-and-marker gap.
+ *   The Cache marker is kept purely as a fast-path optimization: when present,
+ *   `alreadyProcessed()` short-circuits before touching the DB and the retry is
+ *   logged as `job.duplicate_skipped` on the `jobs` channel. When the Cache is
+ *   down the job still runs, but the DB unique constraint makes the persistence
+ *   a no-op. Events with neither dedup_key nor request_id keep at-least-once
+ *   semantics (NULL dedup_key values are distinct in the unique index, so they
+ *   always insert).
  *
  * @see \App\Services\Links\LinkTrackingService::registrarCliqueFromPayload()
  * @see \App\Logging\Context\HasLogContext
@@ -88,9 +92,10 @@ class ProcessLinkClickJob implements ShouldQueue
     /**
      * Run the tracking service inside a request context populated from
      * $payload['request_id'] so every log line carries the same id as the
-     * originating HTTP redirect. A best-effort dedup guard (via Cache) skips
-     * processing when this request_id was already persisted by an earlier
-     * attempt, preventing duplicate `clicks` rows on retry.
+     * originating HTTP redirect. A Cache fast-path skips processing when this
+     * dedup_key was already persisted by an earlier attempt; if the Cache is
+     * unavailable the job still runs, and the durable UNIQUE constraint on
+     * `clicks.dedup_key` makes the re-persistence an idempotent no-op.
      */
     public function handle(LinkTrackingService $trackingService): void
     {

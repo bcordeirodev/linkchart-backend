@@ -29,6 +29,7 @@ use Illuminate\Database\Eloquent\Model;
  * Fillable: all columns above (see $fillable array below).
  *
  * @property int $id
+ * @property string|null $dedup_key Server-generated idempotency token (UNIQUE); null for legacy/edge events.
  * @property int $link_id FK to links.id (cascade delete).
  * @property string|null $ip Visitor IP address (IPv4 or IPv6, up to 45 chars).
  * @property string|null $user_agent Raw User-Agent string (up to 1 024 chars).
@@ -100,6 +101,7 @@ class Click extends Model
     ];
 
     protected $fillable = [
+        'dedup_key',
         'link_id',
         'ip',
         'user_agent',
