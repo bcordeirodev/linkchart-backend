@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Logging\AppLogger;
+use App\Support\ClientIpResolver;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,22 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class RedirectMetricsCollector
 {
+    /**
+     * @param  ClientIpResolver  $clientIpResolver  Shared client-IP resolver — single source of truth
+     *                                              for proxy/CDN header precedence (also used by
+     *                                              LinkTrackingService::resolveRealUserIP).
+     */
+    public function __construct(
+        private readonly ClientIpResolver $clientIpResolver,
+    ) {}
+
+    /**
+     * Collects detailed redirect metrics for the request and forwards it down the pipeline.
+     *
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Closure  $next  The next middleware in the pipeline.
+     * @return Response The downstream response.
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $startTime = microtime(true);
@@ -353,103 +370,42 @@ class RedirectMetricsCollector
     /**
      * 🌐 CAPTURA IP REAL DO USUÁRIO (MESMA LÓGICA DO LinkTrackingService)
      *
-     * PRIORIDADE DE CAPTURA:
-     * 1. real_ip query parameter (enviado pelo frontend para evitar CORS preflight)
-     * 2. X-Real-IP (enviado pelo frontend via header)
-     * 3. X-Forwarded-For (padrão de proxy)
-     * 4. CF-Connecting-IP (Cloudflare)
-     * 5. request->ip() (fallback)
+     * Delega a precedência/validação para o ClientIpResolver compartilhado e emite
+     * os mesmos logs de debug por origem que a versão original, via callback.
+     *
+     * @param  Request  $request  A requisição HTTP atual.
+     * @return string Um endereço IP válido.
      */
     private function getRealUserIP(Request $request): string
     {
-        // 1. PRIORIDADE MÁXIMA: real_ip query param (evita CORS preflight)
-        if ($realIP = $request->query('real_ip')) {
-            $cleanIP = trim($realIP);
-            if ($this->isValidIP($cleanIP)) {
-                AppLogger::event('redirect', 'debug', 'redirect_metrics.ip_captured_query_param', [
-                    'ip' => $cleanIP,
-                    'source' => 'query_param',
-                ]);
-
-                return $cleanIP;
-            }
-        }
-
-        // 2. X-Real-IP (enviado pelo nosso frontend via header)
-        if ($realIP = $request->header('X-Real-IP')) {
-            $cleanIP = trim($realIP);
-            if ($this->isValidIP($cleanIP)) {
-                AppLogger::event('redirect', 'debug', 'redirect_metrics.ip_captured_x_real_ip', [
-                    'ip' => $cleanIP,
-                    'source' => 'X-Real-IP',
-                ]);
-
-                return $cleanIP;
-            }
-        }
-
-        // 3. X-Forwarded-For (padrão da indústria para proxies)
-        if ($forwardedFor = $request->header('X-Forwarded-For')) {
-            // X-Forwarded-For pode ter múltiplos IPs: "client, proxy1, proxy2"
-            $ips = array_map('trim', explode(',', $forwardedFor));
-            $clientIP = $ips[0]; // Primeiro IP é sempre o cliente original
-
-            if ($this->isValidIP($clientIP)) {
-                AppLogger::event('redirect', 'debug', 'redirect_metrics.ip_captured_x_forwarded_for', [
-                    'ip' => $clientIP,
-                    'source' => 'X-Forwarded-For',
-                    'full_chain' => $forwardedFor,
-                ]);
-
-                return $clientIP;
-            }
-        }
-
-        // 4. CF-Connecting-IP (Cloudflare)
-        if ($cfIP = $request->header('CF-Connecting-IP')) {
-            $cleanIP = trim($cfIP);
-            if ($this->isValidIP($cleanIP)) {
-                AppLogger::event('redirect', 'debug', 'redirect_metrics.ip_captured_cf_connecting_ip', [
-                    'ip' => $cleanIP,
-                    'source' => 'Cloudflare',
-                ]);
-
-                return $cleanIP;
-            }
-        }
-
-        // 5. FALLBACK: IP da requisição (pode ser do proxy)
-        $fallbackIP = $request->ip() ?: '127.0.0.1';
-
-        AppLogger::event('redirect', 'debug', 'redirect_metrics.ip_fallback', [
-            'ip' => $fallbackIP,
-            'source' => 'request->ip()',
-            'warning' => 'This might be proxy IP, not real user IP',
-        ]);
-
-        return $fallbackIP;
+        return $this->clientIpResolver->resolve([
+            ClientIpResolver::SOURCE_QUERY_PARAM => $request->query('real_ip'),
+            ClientIpResolver::SOURCE_X_REAL_IP => $request->header('X-Real-IP'),
+            ClientIpResolver::SOURCE_X_FORWARDED_FOR => $request->header('X-Forwarded-For'),
+            ClientIpResolver::SOURCE_CF_CONNECTING_IP => $request->header('CF-Connecting-IP'),
+        ], $request->ip() ?: '127.0.0.1', $this->logResolvedIp(...));
     }
 
     /**
-     * Valida se um IP é válido e não é privado/local
+     * Emits the per-source debug log for a resolved client IP, preserving the
+     * original event names and context fields of this middleware.
+     *
+     * @param  string  $source  The winning source label (a ClientIpResolver::SOURCE_* constant).
+     * @param  string  $ip  The resolved IP address.
+     * @param  array<string, mixed>  $context  Extra context (e.g. the full X-Forwarded-For chain).
      */
-    private function isValidIP(string $ip): bool
+    private function logResolvedIp(string $source, string $ip, array $context): void
     {
-        // Validação básica de formato
-        if (! filter_var($ip, FILTER_VALIDATE_IP)) {
-            return false;
-        }
+        $events = [
+            ClientIpResolver::SOURCE_QUERY_PARAM => ['redirect_metrics.ip_captured_query_param', ['source' => 'query_param']],
+            ClientIpResolver::SOURCE_X_REAL_IP => ['redirect_metrics.ip_captured_x_real_ip', ['source' => 'X-Real-IP']],
+            ClientIpResolver::SOURCE_X_FORWARDED_FOR => ['redirect_metrics.ip_captured_x_forwarded_for', ['source' => 'X-Forwarded-For', 'full_chain' => $context['full_chain'] ?? null]],
+            ClientIpResolver::SOURCE_CF_CONNECTING_IP => ['redirect_metrics.ip_captured_cf_connecting_ip', ['source' => 'Cloudflare']],
+            ClientIpResolver::SOURCE_FALLBACK => ['redirect_metrics.ip_fallback', ['source' => 'request->ip()', 'warning' => 'This might be proxy IP, not real user IP']],
+        ];
 
-        // Rejeitar IPs privados/locais em produção
-        if (config('app.env') === 'production') {
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-                return true;
-            }
+        [$event, $extra] = $events[$source];
 
-            return false;
-        }
-
-        // Em desenvolvimento, aceitar qualquer IP válido
-        return true;
+        AppLogger::event('redirect', 'debug', $event, ['ip' => $ip] + $extra);
     }
 }
