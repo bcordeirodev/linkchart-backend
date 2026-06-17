@@ -77,5 +77,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('url-meta', function (Request $request) {
             return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
+
+        // Reenvio de email de verificação. Há um cooldown de 2 min no model
+        // (User::canResendVerificationEmail), mas sem limite de rota um atacante
+        // autenticado poderia abusar da cota/reputação do SendGrid. Chaveado por
+        // usuário (com fallback para IP) como defesa em profundidade.
+        RateLimiter::for('resend-verification', function (Request $request) {
+            return Limit::perMinute(5)->by($request->user()?->id ?: $request->ip());
+        });
     }
 }

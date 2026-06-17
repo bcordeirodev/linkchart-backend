@@ -30,7 +30,10 @@ class LinkResource extends JsonResource
             'is_active_valid' => $this->isActiveAndNotExpired(),
             'short_url' => $this->getShortedUrl(),
             'shorted_url' => $this->getShortedUrl(), // Mantido para compatibilidade
-            'clicks' => $this->clicks()->count(),
+            // Denormalised counter column (Link::$clicks), kept current by
+            // LinkTrackingService via a raw increment. Avoids a per-row COUNT
+            // query when serialising a collection (N+1). See Link model docblock.
+            'clicks' => $this->clicks,
             'utm_source' => $this->utm_source,
             'utm_medium' => $this->utm_medium,
             'utm_campaign' => $this->utm_campaign,

@@ -4,6 +4,10 @@ namespace App\Services\Links;
 
 use Illuminate\Support\Facades\Http;
 
+// SafeFetchUrlValidator is resolved via app() inside fetchPreview rather than
+// constructor-injected, so the existing `new LinkPreviewService` call site in
+// LinkMetaController keeps working unchanged.
+
 /**
  * Fetches Open Graph metadata and favicon URL for an arbitrary target URL.
  *
@@ -77,6 +81,18 @@ class LinkPreviewService
             'og_image_url' => null,
             'og_description' => null,
         ];
+
+        // SSRF guard. This service fetches arbitrary user-supplied URLs from both
+        // the authenticated url-meta endpoint and FetchLinkPreviewJob, so every
+        // outbound fetch path below (YouTube oEmbed and doFetch) must be gated by
+        // the same validator RedirectController uses. An unsafe target (internal
+        // IP, cloud-metadata endpoint, loopback, DNS-rebinding host) returns the
+        // empty preview set with no outbound request — favicon is derived from the
+        // host string only, no HTTP call. Residual redirect-hop TOCTOU is the same
+        // accepted risk documented in SafeFetchUrlValidator.
+        if (! app(SafeFetchUrlValidator::class)->isSafe($url)) {
+            return $empty;
+        }
 
         // YouTube: oEmbed gives clean structured data with no HTML parsing.
         if ($this->isYouTubeUrl($url)) {

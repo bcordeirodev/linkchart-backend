@@ -860,7 +860,10 @@ HTML;
     private function renderErrorPage(string $message): \Illuminate\Http\Response
     {
         $safeMessage = e($message);
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:3000');
+        // Use config(), not env(): with config:cache active in production,
+        // env() outside config/ returns null and the error page would link to
+        // localhost. config('app.frontend_url') reads the cached value.
+        $frontendUrl = config('app.frontend_url');
 
         $html = <<<HTML
 <!DOCTYPE html>

@@ -19,6 +19,30 @@ use Illuminate\Http\Request;
  */
 class UpdateLinkDTO
 {
+    /**
+     * Fields that {@see self::toArray()} may emit, in DB-column order.
+     * Used to intersect against the request keys so that "field present but
+     * null/empty" (clear the value) is distinguished from "field absent" (keep).
+     */
+    private const UPDATABLE_FIELDS = [
+        'original_url', 'title', 'slug', 'description', 'expires_at',
+        'is_active', 'starts_in', 'click_limit',
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+    ];
+
+    /**
+     * Names of the fields that were present in the source request.
+     *
+     * When non-null, {@see self::toArray()} emits exactly these fields (including
+     * those whose value is null), which is what lets a request clear a nullable
+     * column such as `click_limit` or a UTM parameter. When null (the DTO was
+     * constructed directly rather than via {@see self::fromRequest()}), toArray()
+     * falls back to legacy "strip all nulls" behaviour for backward compatibility.
+     *
+     * @var array<int, string>|null
+     */
+    private readonly ?array $presentFields;
+
     /** New destination URL; null means keep the existing value. */
     public readonly ?string $original_url;
 
@@ -88,6 +112,7 @@ class UpdateLinkDTO
      * @param  string|null  $utm_campaign  New UTM campaign; null = unchanged.
      * @param  string|null  $utm_term  New UTM term; null = unchanged.
      * @param  string|null  $utm_content  New UTM content; null = unchanged.
+     * @param  array<int, string>|null  $presentFields  Field names present in the source request; null = legacy null-stripping in toArray().
      */
     public function __construct(
         ?string $original_url = null,
@@ -102,8 +127,10 @@ class UpdateLinkDTO
         ?string $utm_medium = null,
         ?string $utm_campaign = null,
         ?string $utm_term = null,
-        ?string $utm_content = null
+        ?string $utm_content = null,
+        ?array $presentFields = null
     ) {
+        $this->presentFields = $presentFields;
         $this->original_url = $original_url;
         $this->title = $title;
         $this->slug = $slug;
@@ -126,15 +153,22 @@ class UpdateLinkDTO
      * default to null so they are excluded from {@see self::toArray()} and will not
      * overwrite existing database values. Special cases:
      * - `is_active`: uses `$request->has()` to distinguish "sent as false" from "not sent".
-     * - `click_limit`: uses `$request->has()` to distinguish "sent as 0/null" from "not sent";
-     *   a sent but falsy value is stored as null (clear the cap).
-     * - UTM parameters: empty strings are coerced to null to avoid storing blank values.
+     * - `click_limit`: a sent-but-falsy value (0 or null) is stored as null and,
+     *   because the field is recorded in `$presentFields`, is emitted by toArray()
+     *   so the existing cap is cleared. An absent field is not emitted.
+     * - UTM parameters: empty strings are coerced to null; when the field was sent
+     *   (present) this clears the stored value, otherwise it is left unchanged.
      *
      * @param  Request  $request  HTTP request, typically validated by {@see \App\Http\Requests\UpdateLinkRequest}.
      * @return self Immutable partial-update DTO.
      */
     public static function fromRequest(Request $request): self
     {
+        // Only the keys actually present in the request body — this is what
+        // distinguishes "clear this field" (present + null/empty) from
+        // "leave it alone" (absent) in toArray().
+        $presentFields = array_values(array_intersect(self::UPDATABLE_FIELDS, $request->keys()));
+
         return new self(
             original_url: $request->input('original_url'),
             title: $request->input('title'),
@@ -148,22 +182,28 @@ class UpdateLinkDTO
             utm_medium: $request->input('utm_medium') ?: null,
             utm_campaign: $request->input('utm_campaign') ?: null,
             utm_term: $request->input('utm_term') ?: null,
-            utm_content: $request->input('utm_content') ?: null
+            utm_content: $request->input('utm_content') ?: null,
+            presentFields: $presentFields
         );
     }
 
     /**
-     * Serialize only the non-null properties to an array for Eloquent mass-assignment.
+     * Serialize the fields to update for Eloquent mass-assignment.
      *
-     * Null values are stripped via `array_filter` so that only the fields that were
-     * explicitly provided in the request reach the database. This is what makes
-     * partial updates safe: absent fields will not overwrite existing link data.
+     * When the DTO was built from a request ({@see self::fromRequest()}), only the
+     * fields present in that request are emitted — including those whose value is
+     * null — so a partial update can both set and *clear* nullable columns
+     * (e.g. send `click_limit: 0` to remove an existing cap). Absent fields are
+     * never emitted and therefore never overwrite existing link data.
+     *
+     * When built directly (no `$presentFields`), it falls back to stripping nulls
+     * for backward compatibility.
      *
      * @return array<string, mixed> Associative array with only the fields to update.
      */
     public function toArray(): array
     {
-        return array_filter([
+        $all = [
             'original_url' => $this->original_url,
             'title' => $this->title,
             'slug' => $this->slug,
@@ -177,7 +217,21 @@ class UpdateLinkDTO
             'utm_campaign' => $this->utm_campaign,
             'utm_term' => $this->utm_term,
             'utm_content' => $this->utm_content,
-        ], fn ($value) => $value !== null);
+        ];
+
+        // Direct construction: legacy behaviour, strip all nulls.
+        if ($this->presentFields === null) {
+            return array_filter($all, fn ($value) => $value !== null);
+        }
+
+        // Request-built: emit exactly the fields the client sent, so nullable
+        // columns can be cleared by sending an explicit null/empty value. Only
+        // the nullable columns (expires_at, starts_in, click_limit, utm_*) can
+        // legitimately arrive as null here — UpdateLinkRequest validates the
+        // NOT NULL columns (slug, original_url, title, description) with
+        // `sometimes|string|url` (no `nullable`), so a present-but-null value
+        // for those fails validation upstream and never reaches this DTO.
+        return array_intersect_key($all, array_flip($this->presentFields));
     }
 
     /**
