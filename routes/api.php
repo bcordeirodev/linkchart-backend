@@ -76,7 +76,8 @@ Route::middleware(['api.auth:api'])->group(function () {
 
     // === VERIFICAÇÃO DE EMAIL (AUTENTICADO) ===
     Route::get('/email-verification-status', [AuthController::class, 'checkEmailVerificationStatus']); // ✅ NOVO: Status de verificação
-    Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail']);      // ✅ NOVO: Reenviar email
+    Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail'])
+        ->middleware('throttle:resend-verification');      // ✅ NOVO: Reenviar email (rate-limited)
 });
 
 /**
