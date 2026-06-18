@@ -2,6 +2,16 @@
 
 use Dedoc\Scramble\Http\Middleware\RestrictedDocsAccess;
 
+// Scramble is a dev-only dependency (require-dev). Production builds run
+// `composer install --no-dev`, so the package is absent there. This config must
+// not reference Scramble classes at load time in that case — the
+// `SecurityScheme::http()` call below would fatal during `artisan
+// package:discover` and break the image build. Bail out early when absent;
+// nothing reads this config in production anyway.
+if (! class_exists(\Dedoc\Scramble\Scramble::class)) {
+    return [];
+}
+
 return [
     /*
      * Which routes to document. String or array form; use Scramble::routes() for custom selection.
