@@ -3,6 +3,7 @@
 namespace App\Logging\Taps;
 
 use App\Logging\Formatters\KeyValueFormatter;
+use App\Logging\Processors\OtelContextProcessor;
 use App\Logging\Processors\PiiRedactionProcessor;
 use App\Logging\Processors\RequestContextProcessor;
 use Illuminate\Log\Logger;
@@ -11,6 +12,7 @@ use Illuminate\Log\Logger;
  * Standard tap applied to most channels:
  *  - Replaces handler formatter with KeyValueFormatter.
  *  - Pushes RequestContextProcessor (request_id/user_id/ip/route/env injection).
+ *  - Pushes OtelContextProcessor (trace_id/span_id from active OTel span).
  *  - Pushes PiiRedactionProcessor unless invoked with the ':skip-redaction' arg.
  *
  * Skipping redaction is required for auth/audit channels that need raw
@@ -39,6 +41,7 @@ final class ChannelTap
         }
 
         $monolog->pushProcessor(new RequestContextProcessor);
+        $monolog->pushProcessor(new OtelContextProcessor);
         if (! $skipRedaction) {
             $monolog->pushProcessor(new PiiRedactionProcessor);
         }
