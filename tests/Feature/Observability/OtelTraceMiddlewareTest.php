@@ -147,6 +147,62 @@ class OtelTraceMiddlewareTest extends TestCase
         );
     }
 
+    // -------------------------------------------------------------------------
+    // Redirect-aware sampling gate tests
+    // -------------------------------------------------------------------------
+
+    public function test_redirect_route_with_zero_ratio_emits_no_span(): void
+    {
+        // Ratio 0.0 → lcg_value() will always be >= 0.0 → sampled out entirely.
+        Config::set('otel.redirect_sampler_ratio', 0.0);
+
+        $middleware = new OtelTrace;
+        $request = $this->makeRedirectRequest('/r/abc123', 'public.redirect');
+
+        $middleware->handle($request, fn ($req) => response('redirecting', 302));
+        $middleware->terminate($request, response('redirecting', 302));
+
+        $this->assertCount(
+            0,
+            $this->exporter->getSpans(),
+            'With ratio 0.0 no span must be exported for a redirect route'
+        );
+    }
+
+    public function test_redirect_route_with_full_ratio_exports_a_span(): void
+    {
+        // Ratio 1.0 → lcg_value() will always be < 1.0 → always sampled in.
+        Config::set('otel.redirect_sampler_ratio', 1.0);
+
+        $middleware = new OtelTrace;
+        $request = $this->makeRedirectRequest('/r/abc123', 'public.redirect');
+
+        $middleware->handle($request, fn ($req) => response('redirecting', 302));
+        $middleware->terminate($request, response('redirecting', 302));
+
+        $this->assertCount(
+            1,
+            $this->exporter->getSpans(),
+            'With ratio 1.0 exactly one span must be exported for a redirect route'
+        );
+    }
+
+    /**
+     * Build a Request for a redirect route, attaching a named route instance so
+     * the OtelTrace middleware can read the route name via $request->route()->getName().
+     */
+    private function makeRedirectRequest(string $uri, string $routeName): Request
+    {
+        $request = Request::create($uri, 'GET');
+
+        // Build a minimal Route with the given name and bind it to the request.
+        $route = new \Illuminate\Routing\Route('GET', $uri, []);
+        $route->name($routeName);
+        $request->setRouteResolver(fn () => $route);
+
+        return $request;
+    }
+
     /**
      * Find the first exported span whose url.path attribute matches $path.
      */
