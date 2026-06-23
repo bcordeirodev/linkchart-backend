@@ -197,6 +197,12 @@ class RedirectController extends Controller
     private function dispatchTracking(Link $link, Request $request, string $slug): void
     {
         try {
+            // Inject W3C trace context so the worker can continue the same trace.
+            $carrier = [];
+            if (\App\Observability\Otel::enabled()) {
+                \OpenTelemetry\API\Globals::propagator()->inject($carrier);
+            }
+
             $payload = [
                 'request_id' => RequestContext::current()?->requestId,
                 // Server-generated, never client-influenced — used only for retry dedup.
@@ -216,6 +222,8 @@ class RedirectController extends Controller
                                         : null,
                 'save_data' => $request->header('Save-Data') === 'on',
                 'server_protocol' => $request->server('SERVER_PROTOCOL'),
+                'traceparent' => $carrier['traceparent'] ?? null,
+                'tracestate' => $carrier['tracestate'] ?? null,
             ];
 
             ProcessLinkClickJob::dispatch($link->id, $payload);
