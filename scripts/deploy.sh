@@ -38,7 +38,7 @@ fi
 # AUTH0_DOMAIN is not secret but .env.production is excluded from rsync, so
 # the server copy can fall behind. Ensure it is always current.
 sed -i '/^AUTH0_DOMAIN=/d' .env.production
-printf 'AUTH0_DOMAIN=%s\n' "dev-w4znncuexg628diu.us.auth0.com" >> .env.production
+printf 'AUTH0_DOMAIN=%s\n' "login.linkcharts.com.br" >> .env.production
 echo "Auth0 domain injected into .env.production"
 
 # ── Stop existing containers ──────────────────────────────────────────────────
