@@ -37,12 +37,43 @@ final class OtelTrace
     private const ATTR_SCOPE = 'otel.scope';
 
     /**
+     * Route names for the redirect hot path. Requests matching these routes
+     * are subject to a dedicated sampler ratio (otel.redirect_sampler_ratio)
+     * that defaults to 0.05, keeping 95 % of redirects span-free.
+     *
+     * @var list<string>
+     */
+    private const REDIRECT_ROUTE_NAMES = [
+        'public.redirect',
+        'public.redirect.clean',
+    ];
+
+    /**
      * Start a SERVER span and stash it on the request for use in terminate().
+     *
+     * Redirect routes (/r/{slug} and /{slug}) are sampled independently via
+     * otel.redirect_sampler_ratio to protect the hot path from unnecessary
+     * span-creation work. When a redirect request is not sampled in, the
+     * middleware is bypassed entirely — no span, no propagation overhead.
      */
     public function handle(Request $request, Closure $next): Response
     {
         if (! Otel::enabled()) {
             return $next($request);
+        }
+
+        // Redirect-aware sampling gate: apply a separate, lower sample ratio for
+        // the redirect hot path so the global TracerProvider sampler (which runs
+        // at ratio 1.0 for normal routes) does not record a SERVER span for every
+        // redirect.  lcg_value() returns a float in [0, 1) — when it is >= the
+        // configured ratio we skip span creation entirely, keeping the check cheap
+        // (one config read + one RNG call) and non-throwing.
+        $routeName = $request->route()?->getName();
+        if (in_array($routeName, self::REDIRECT_ROUTE_NAMES, true)) {
+            $ratio = (float) config('otel.redirect_sampler_ratio', 0.05);
+            if (lcg_value() >= $ratio) {
+                return $next($request);
+            }
         }
 
         try {
