@@ -79,12 +79,16 @@ class OpenTelemetryServiceProvider extends ServiceProvider
             ->setSampler(new ParentBased(new TraceIdRatioBasedSampler((float) (config('otel.traces.sampler_ratio') ?? 1.0))))
             ->build();
 
-        // --- Metrics (delta temporality suits short-lived FPM processes) ---
+        // --- Metrics ---
+        // Cumulative temporality: Grafana Cloud's metrics backend is
+        // Prometheus-native (Mimir) and rejects delta OTLP metrics with HTTP
+        // 400. Cumulative is the Prometheus-aligned model — counter resets on
+        // process/worker restart are handled by the OTLP→Prometheus conversion.
         $metricTransport = (new OtlpHttpTransportFactory)
             ->create($endpoint.'/v1/metrics', 'application/json', $headers);
         $meterProvider = MeterProvider::builder()
             ->setResource($resource)
-            ->addReader(new ExportingReader(new MetricExporter($metricTransport, Temporality::DELTA)))
+            ->addReader(new ExportingReader(new MetricExporter($metricTransport, Temporality::CUMULATIVE)))
             ->build();
 
         // --- Logs ---
