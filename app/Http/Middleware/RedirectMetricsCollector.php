@@ -73,6 +73,13 @@ class RedirectMetricsCollector
                 'utm_params' => $request->query(),
             ]);
 
+            \App\Observability\Otel::recordRedirect(
+                $statusCode,
+                $responseTime,
+                $this->getCountryFromIp($ip),
+                $this->getDeviceType($userAgent),
+            );
+
             AppLogger::redirectMetricsCollected(
                 $slug,
                 $statusCode,
