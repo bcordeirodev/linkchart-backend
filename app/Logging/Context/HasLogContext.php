@@ -47,6 +47,31 @@ trait HasLogContext
     }
 
     /**
+     * Return the W3C traceparent passed in the job payload, or null. Override
+     * in jobs whose payload carries it so the worker can continue the trace.
+     */
+    protected function logContextTraceparent(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Build an OpenTelemetry Context from the propagated traceparent so a span
+     * opened in the worker is a child of the originating HTTP request's trace.
+     * Returns the root context when none was propagated.
+     */
+    public function extractedTraceContext(): \OpenTelemetry\Context\Context
+    {
+        $traceparent = $this->logContextTraceparent();
+
+        if ($traceparent === null) {
+            return \OpenTelemetry\Context\Context::getCurrent();
+        }
+
+        return \OpenTelemetry\API\Globals::propagator()->extract(['traceparent' => $traceparent]);
+    }
+
+    /**
      * Return the request id passed in the job payload (or null).
      * Implementing class must override to expose its payload's request_id.
      */

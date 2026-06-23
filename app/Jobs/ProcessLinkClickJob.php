@@ -103,6 +103,17 @@ class ProcessLinkClickJob implements ShouldQueue
         $start = microtime(true);
         AppLogger::jobStarted(static::class, ['link_id' => $this->linkId]);
 
+        $span = null;
+        $scope = null;
+        if (\App\Observability\Otel::enabled()) {
+            $span = \App\Observability\Otel::tracer()
+                ->spanBuilder('process-click')
+                ->setParent($this->extractedTraceContext())
+                ->setAttribute('link.id', $this->linkId)
+                ->startSpan();
+            $scope = $span->activate();
+        }
+
         try {
             if ($this->alreadyProcessed()) {
                 AppLogger::event('jobs', 'info', 'job.duplicate_skipped', [
@@ -119,9 +130,13 @@ class ProcessLinkClickJob implements ShouldQueue
             $this->markProcessed();
             AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
         } catch (Throwable $e) {
+            $span?->recordException($e);
+            $span?->setStatus(\OpenTelemetry\API\Trace\StatusCode::STATUS_ERROR);
             AppLogger::jobFailed(static::class, $e, $this->attempts());
             throw $e;
         } finally {
+            $scope?->detach();
+            $span?->end();
             $this->popLogContext();
         }
     }
@@ -130,6 +145,12 @@ class ProcessLinkClickJob implements ShouldQueue
     protected function logContextRequestId(): ?string
     {
         return $this->payload['request_id'] ?? null;
+    }
+
+    /** {@inheritDoc} */
+    protected function logContextTraceparent(): ?string
+    {
+        return $this->payload['traceparent'] ?? null;
     }
 
     /**
