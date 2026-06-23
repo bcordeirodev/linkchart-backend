@@ -32,5 +32,6 @@
         <env name="AUTH0_DOMAIN" value="test.auth0.test" force="true"/>
         <!-- Vazio = LinkSafetyService fail-open; testes nunca chamam a API real do Google -->
         <env name="GOOGLE_SAFE_BROWSING_KEY" value="" force="true"/>
+        <env name="OTEL_ENABLED" value="false"/>
     </php>
 </phpunit>
