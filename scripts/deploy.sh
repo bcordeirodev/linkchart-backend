@@ -38,8 +38,32 @@ fi
 # AUTH0_DOMAIN is not secret but .env.production is excluded from rsync, so
 # the server copy can fall behind. Ensure it is always current.
 sed -i '/^AUTH0_DOMAIN=/d' .env.production
-printf 'AUTH0_DOMAIN=%s\n' "dev-w4znncuexg628diu.us.auth0.com" >> .env.production
+printf 'AUTH0_DOMAIN=%s\n' "login.linkcharts.com.br" >> .env.production
 echo "Auth0 domain injected into .env.production"
+
+# ── OpenTelemetry → Grafana Cloud injection ───────────────────────────────────
+# Telemetry export (traces/metrics/logs). OTEL_EXPORTER_OTLP_HEADERS carries the
+# secret Authorization header (passed from GitHub Secrets); the rest are
+# non-secret literals. .env.production is excluded from rsync, so upsert all of
+# them here. Redirect spans are sampled at 0.05 to protect the hot path.
+for otel_kv in \
+    "OTEL_ENABLED=true" \
+    "OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-sa-east-1.grafana.net/otlp" \
+    "OTEL_SERVICE_NAME=linkcharts-backend" \
+    "OTEL_TRACES_SAMPLER_RATIO=1.0" \
+    "OTEL_REDIRECT_SAMPLER_RATIO=0.05"; do
+    otel_key="${otel_kv%%=*}"
+    sed -i "/^${otel_key}=/d" .env.production
+    printf '%s\n' "$otel_kv" >> .env.production
+done
+if [ -n "${OTEL_EXPORTER_OTLP_HEADERS:-}" ]; then
+    sed -i '/^OTEL_EXPORTER_OTLP_HEADERS=/d' .env.production
+    printf 'OTEL_EXPORTER_OTLP_HEADERS="%s"\n' "$OTEL_EXPORTER_OTLP_HEADERS" >> .env.production
+    echo "OTel OTLP headers injected into .env.production"
+else
+    echo "WARNING: OTEL_EXPORTER_OTLP_HEADERS not set — telemetry export will fail auth"
+fi
+echo "OpenTelemetry config injected into .env.production"
 
 # ── Stop existing containers ──────────────────────────────────────────────────
 echo "Stopping existing containers..."
