@@ -152,11 +152,26 @@ return [
         ],
 
         'errors' => [
+            'driver' => 'stack',
+            'channels' => ['errors_file', 'otlp'],
+            // transport failures (e.g. Loki down) must never surface to callers
+            'ignore_exceptions' => true,
+        ],
+        'errors_file' => [
             'driver' => 'daily',
             'path' => storage_path('logs/errors.log'),
             'level' => 'error',
             'days' => env('LOG_ERRORS_DAYS', 14),
             'tap' => [App\Logging\Taps\ChannelTap::class],
+        ],
+
+        // Forwards error-level records to Grafana Cloud Loki via OTLP/HTTP.
+        // When OTEL_ENABLED is false (default) the channel attaches a NullHandler
+        // so there is zero shipping and the test suite is not affected.
+        'otlp' => [
+            'driver' => 'custom',
+            'via' => App\Logging\OtlpLogChannel::class,
+            'level' => 'error',
         ],
 
         // ===== Standard channels (kept for compatibility/fallback) =====

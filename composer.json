@@ -17,6 +17,7 @@
         "laravel/tinker": "^2.10.1",
         "nyholm/psr7": "^1.8",
         "open-telemetry/exporter-otlp": "^1.4",
+        "open-telemetry/opentelemetry-logger-monolog": "^1.2",
         "open-telemetry/sdk": "^1.14",
         "php-http/guzzle7-adapter": "^1.1",
         "predis/predis": "^2.3",
