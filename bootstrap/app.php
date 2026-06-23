@@ -45,6 +45,12 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
+        // Append OtelTrace after AssignRequestId so request_id is already set
+        // when the span is opened, and after the response is sent so the
+        // batch flush does not add latency to the client.
+        $middleware->web(append: [\App\Http\Middleware\OtelTrace::class]);
+        $middleware->api(append: [\App\Http\Middleware\OtelTrace::class]);
+
         $middleware->alias([
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
