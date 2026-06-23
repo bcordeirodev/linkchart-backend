@@ -100,6 +100,7 @@ jobs:
             chmod +x ${{ env.PROJECT_PATH }}/scripts/deploy.sh
             SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY }}" \
             GOOGLE_SAFE_BROWSING_KEY="${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}" \
+            OTEL_EXPORTER_OTLP_HEADERS="${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}" \
             FORCE_REBUILD="${{ inputs.force_rebuild || 'false' }}" \
             ${{ env.PROJECT_PATH }}/scripts/deploy.sh
 
