@@ -67,6 +67,13 @@ class OtelTraceMiddlewareTest extends TestCase
         Config::set('otel.enabled', false);
         $this->assertFalse(Otel::enabled());
 
+        // Auto-instrumentation packages emit spans through whatever TracerProvider
+        // is globally registered — including our in-memory test provider set up in
+        // setUp(). To simulate production (where OpenTelemetryServiceProvider skips
+        // registration when disabled), we reset Globals so the extension falls back
+        // to the no-op provider and emits nothing.
+        Globals::reset();
+
         $this->get('/health')->assertStatus(200);
 
         $this->assertCount(0, $this->exporter->getSpans(), 'No spans must be exported when disabled');
