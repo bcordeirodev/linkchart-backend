@@ -114,7 +114,7 @@ services:
       - linkchartnet
 
   alloy:
-    image: grafana/alloy:v1.4.2
+    image: grafana/alloy:v1.17.0
     container_name: linkchart-alloy
     restart: unless-stopped
     command:
