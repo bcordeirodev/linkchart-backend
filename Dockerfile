@@ -43,6 +43,9 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
 # Instalar Redis extension
 RUN pecl install redis && docker-php-ext-enable redis
 
+# OpenTelemetry auto-instrumentation extension (Zend hooks), pinned for reproducible builds
+RUN pecl install opentelemetry-1.2.1 && docker-php-ext-enable opentelemetry
+
 # Remover dependências de build temporárias
 RUN apk del .build-deps
 
