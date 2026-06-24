@@ -85,7 +85,33 @@ services:
       retries: 5
       start_period: 30s
 
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: linkchart-pg-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://monitoring:${PG_MONITORING_PASSWORD}@linkchartdb:5432/linkchartprod?sslmode=disable"
+      PG_EXPORTER_DISABLE_DEFAULT_METRICS: "false"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "false"
+      PG_EXPORTER_EXCLUDE_DATABASES: "template0,template1"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - linkchartnet
 
+  redis_exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: linkchart-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://linkchartredis:6379"
+      REDIS_PASSWORD: "CHANGE_ME_REDIS_PASSWORD"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - linkchartnet
 
 volumes:
   postgres_data:
