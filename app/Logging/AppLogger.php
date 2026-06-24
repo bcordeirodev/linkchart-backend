@@ -3,6 +3,7 @@
 namespace App\Logging;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -436,6 +437,24 @@ final class AppLogger
     {
         self::write('app', 'error', self::SAFETY_API_ERROR,
             ['url' => $url] + self::throwableContext($e));
+    }
+
+    /**
+     * Logs a non-2xx response from the Safe Browsing API, preserving the real
+     * HTTP status and a truncated response body so a misconfigured key
+     * (403 PERMISSION_DENIED, 400 API_KEY_INVALID, 429, ...) is diagnosable.
+     *
+     * @param  int  $status  The HTTP status code returned by the API.
+     * @param  string  $body  The raw response body (truncated to 500 chars).
+     * @param  string  $url  The URL that was being checked.
+     */
+    public static function safetyApiBadResponse(int $status, string $body, string $url): void
+    {
+        self::write('app', 'error', self::SAFETY_API_ERROR, [
+            'url' => $url,
+            'status' => $status,
+            'body' => Str::limit($body, 500),
+        ]);
     }
 
     // ============================================================
