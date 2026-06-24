@@ -121,7 +121,7 @@ services:
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
-      - --stability.level=public-preview   # required for otelcol.receiver.filelog
+      - --stability.level=experimental   # deltatocumulative (+ filelog) require this
       - /etc/alloy/config.alloy
     volumes:
       - ./ops/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
