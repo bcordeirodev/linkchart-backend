@@ -27,6 +27,12 @@ final class Otel
     /** Memoized redirect duration histogram; created once per process. */
     private static ?HistogramInterface $redirectHistogram = null;
 
+    /** Memoized HTTP server request counter; created once per process. */
+    private static ?CounterInterface $httpCounter = null;
+
+    /** Memoized HTTP server request duration histogram; created once per process. */
+    private static ?HistogramInterface $httpHistogram = null;
+
     /** Whether telemetry export is active for this process. */
     public static function enabled(): bool
     {
@@ -78,6 +84,44 @@ final class Otel
             self::$redirectHistogram->record($durationSeconds, $attributes);
         } catch (Throwable) {
             // Telemetry must never break a redirect.
+        }
+    }
+
+    /** Maps an HTTP status code to its class string (caps metric cardinality). */
+    public static function statusClass(int $statusCode): string
+    {
+        return intdiv($statusCode, 100).'xx';
+    }
+
+    /**
+     * Records one HTTP server request as RED metrics (rate/errors/duration).
+     * No-op + exception-swallowing; instruments memoized once per process.
+     *
+     * @param  string  $route  Route name or URI template (never the raw path).
+     * @param  string  $method  HTTP method (GET, POST, …).
+     * @param  int  $statusCode  HTTP response status code.
+     * @param  float  $durationSeconds  Wall-clock time for the full request.
+     */
+    public static function recordHttpServer(string $route, string $method, int $statusCode, float $durationSeconds): void
+    {
+        if (! self::enabled()) {
+            return;
+        }
+
+        try {
+            self::$httpCounter ??= self::meter()->createCounter('http.server.request.count');
+            self::$httpHistogram ??= self::meter()->createHistogram('http.server.request.duration', 's');
+
+            $attributes = [
+                'http.route' => $route,
+                'http.request.method' => $method,
+                'http.response.status_class' => self::statusClass($statusCode),
+            ];
+
+            self::$httpCounter->add(1, $attributes);
+            self::$httpHistogram->record($durationSeconds, $attributes);
+        } catch (Throwable) {
+            // Telemetry must never break a request.
         }
     }
 }
