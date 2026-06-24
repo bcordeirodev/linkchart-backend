@@ -106,5 +106,24 @@ class OpenTelemetryServiceProvider extends ServiceProvider
             ->setPropagator(TraceContextPropagator::getInstance())
             ->setAutoShutdown(true)
             ->buildAndRegisterGlobal();
+
+        // Flush metrics during Laravel's terminate, not at PHP shutdown.
+        //
+        // The ExportingReader exports on shutdown. With the `opentelemetry`
+        // auto-instrumentation extension loaded, the OTLP exporter's own HTTP call
+        // is itself instrumented; at PHP shutdown the tracer provider is already
+        // shutting down, so creating that export span fails and the metric POST is
+        // silently dropped (spans still work because BatchSpanProcessor flushes
+        // mid-request while the SDK is alive). Forcing a metric flush in
+        // App::terminating() — after the response is sent but before PHP shutdown,
+        // with the SDK fully alive — makes the export succeed. The later
+        // auto-shutdown flush then has nothing left to send.
+        $this->app->terminating(static function () use ($meterProvider): void {
+            try {
+                $meterProvider->forceFlush();
+            } catch (\Throwable) {
+                // Telemetry must never break the request lifecycle.
+            }
+        });
     }
 }
