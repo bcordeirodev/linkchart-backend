@@ -71,7 +71,8 @@ otelcol.receiver.otlp "app" {
 // DELTA (from app) → cumulative (for Mimir). Fixes multi-worker series collision.
 otelcol.processor.deltatocumulative "app" {
 	max_stale   = "10m"
-	max_streams = 0
+	// max_streams=0 means ZERO streams (drops all datapoints) in this Alloy version - use a finite positive cap.
+	max_streams = 10000
 	output { metrics = [otelcol.processor.batch.app.input] }
 }
 
