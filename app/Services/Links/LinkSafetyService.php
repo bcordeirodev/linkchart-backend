@@ -76,7 +76,7 @@ class LinkSafetyService
             ]);
 
             if ($response->failed()) {
-                AppLogger::safetyApiError(new \RuntimeException('safety_api_error_response'), $url);
+                AppLogger::safetyApiBadResponse($response->status(), $response->body(), $url);
 
                 return ['safe' => true, 'threats' => [], 'api_available' => false];
             }
