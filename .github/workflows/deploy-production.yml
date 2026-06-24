@@ -101,6 +101,10 @@ jobs:
             SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY }}" \
             GOOGLE_SAFE_BROWSING_KEY="${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}" \
             OTEL_EXPORTER_OTLP_HEADERS="${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}" \
+            PG_MONITORING_PASSWORD="${{ secrets.PG_MONITORING_PASSWORD }}" \
+            GCLOUD_OTLP_ENDPOINT="${{ secrets.GCLOUD_OTLP_ENDPOINT }}" \
+            GCLOUD_OTLP_USER="${{ secrets.GCLOUD_OTLP_USER }}" \
+            GCLOUD_OTLP_PASS="${{ secrets.GCLOUD_OTLP_PASS }}" \
             FORCE_REBUILD="${{ inputs.force_rebuild || 'false' }}" \
             ${{ env.PROJECT_PATH }}/scripts/deploy.sh
 
