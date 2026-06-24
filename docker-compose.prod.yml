@@ -22,11 +22,15 @@ services:
       - DB_PASSWORD=linkchartpassword123
       - REDIS_CLIENT=phpredis
       - REDIS_PASSWORD=linkchartredis123
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+      - OTEL_EXPORTER_OTLP_HEADERS=
     depends_on:
       database:
         condition: service_healthy
       redis:
         condition: service_healthy
+      alloy:
+        condition: service_started
     networks:
       - linkchartnet
       - linkcharts-network
