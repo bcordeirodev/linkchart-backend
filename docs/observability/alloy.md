@@ -95,6 +95,23 @@ lost during the switchover.
 
 ---
 
+## Phase 3a — auto-instrumentation
+
+The application now emits child spans automatically for:
+- **Database operations** (PDO): table/query type spans.
+- **Outbound HTTP** (Guzzle): spans for Safe Browsing, OG metadata fetch, Auth0, and SendGrid requests.
+- **Laravel & cache operations**: framework request context and cache hit/miss spans.
+
+Auto-instrumentation is enabled by `ext-opentelemetry` 1.2.1 (installed in `Dockerfile` and `Dockerfile.dev`) plus composer packages `opentelemetry-auto-{laravel,pdo,guzzle}`. Spans flow to the same manually-built global TracerProvider and through the existing Alloy tail-sampled pipeline (Phase 2).
+
+**Activation model:** auto packages register hooks whenever `ext-opentelemetry` is loaded; they emit spans only if a global TracerProvider exists. When `OTEL_ENABLED=false`, no provider is registered, so no spans are emitted. Setting `OTEL_PHP_AUTOLOAD_ENABLED=false` keeps a single manually-built provider (prevents double-initialization).
+
+**Tuning dial:** disable noisy instrumentations via `OTEL_PHP_DISABLED_INSTRUMENTATIONS=<csv>`. Example values: `laravel` (framework spans), `pdo` (database spans—use if redirect hot path shows excessive spans). Set in `.env.production` or inject as Docker env var.
+
+**Rollback (fast):** set `OTEL_ENABLED=false` (stops all emission). **Rollback (full):** redeploy the previous image (extension + packages are baked in).
+
+---
+
 ## Verify
 
 ### 1 — Containers running on the server
