@@ -70,6 +70,8 @@ otelcol.receiver.otlp "app" {
 
 // DELTA (from app) → cumulative (for Mimir). Fixes multi-worker series collision.
 otelcol.processor.deltatocumulative "app" {
+	max_stale   = "10m"
+	max_streams = 0
 	output { metrics = [otelcol.processor.batch.app.input] }
 }
 
