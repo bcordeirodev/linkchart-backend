@@ -36,6 +36,9 @@ final class OtelTrace
     /** @var string Request attribute key for the active scope. */
     private const ATTR_SCOPE = 'otel.scope';
 
+    /** @var string Request attribute key for the request start time (microtime float). */
+    private const ATTR_START = 'otel.start';
+
     /**
      * Route names for the redirect hot path. Requests matching these routes
      * are subject to a dedicated sampler ratio (otel.redirect_sampler_ratio)
@@ -61,6 +64,10 @@ final class OtelTrace
         if (! Otel::enabled()) {
             return $next($request);
         }
+
+        // Stash start time for ALL requests (even non-sampled) so terminate()
+        // can compute duration for RED metrics regardless of span creation.
+        $request->attributes->set(self::ATTR_START, microtime(true));
 
         // Redirect-aware sampling gate: apply a separate, lower sample ratio for
         // the redirect hot path so the global TracerProvider sampler (which runs
@@ -123,6 +130,18 @@ final class OtelTrace
      */
     public function terminate(Request $request, Response $response): void
     {
+        $start = $request->attributes->get(self::ATTR_START);
+        $routeName = $request->route()?->getName();
+
+        if ($start !== null && ! in_array($routeName, self::REDIRECT_ROUTE_NAMES, true)) {
+            Otel::recordHttpServer(
+                $routeName ?? $request->route()?->uri() ?? 'unknown',
+                $request->method(),
+                $response->getStatusCode(),
+                microtime(true) - $start,
+            );
+        }
+
         $span = $request->attributes->get(self::ATTR_SPAN);
 
         if ($span === null) {
