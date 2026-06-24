@@ -43,12 +43,55 @@ exporters by Docker DNS name.
 | `linkchart-pg-exporter` | `prometheuscommunity/postgres-exporter:v0.15.0` | Exposes PostgreSQL metrics on `:9187` |
 | `linkchart-redis-exporter` | `oliver006/redis_exporter:v1.62.0` | Exposes Redis metrics on `:9121` |
 
-Alloy is launched with `--stability.level=public-preview` to unlock the
-`prometheus.exporter.unix` (node/host) component.
+Alloy is launched with `--stability.level=experimental` (required by the
+`deltatocumulative` processor; this lowers the component-stability bar for the
+whole agent) to unlock the `prometheus.exporter.unix` (node/host) component.
 
 The application container (`linkchartapi`) continues to export its own OTLP
 traces/metrics/logs directly to Grafana Cloud — it does **not** route through
 Alloy in Phase 1.
+
+---
+
+## Phase 2 — app → Alloy
+
+As of Phase 2, the application container (`linkchartapi`) exports OTLP
+**to the local Alloy** at `http://alloy:4318` (no authentication required —
+internal Docker network only) instead of directly to Grafana Cloud.
+
+This is achieved by injecting two environment variables into the `app` service
+in `docker-compose.prod.yml`:
+
+```yaml
+- OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+- OTEL_EXPORTER_OTLP_HEADERS=
+```
+
+Docker env vars override the values in the mounted `.env.production` because
+Laravel's Dotenv does not override real env vars, and `config:cache` runs after
+the container starts.
+
+### What Alloy does with app telemetry
+
+- **Metrics:** converts DELTA temporality (emitted by the Laravel SDK) to
+  CUMULATIVE before forwarding to Grafana Cloud (Mimir rejects DELTA).
+- **Traces:** applies tail-based sampling before forwarding to Tempo.
+- **Logs:** forwards OTLP logs as-is to Loki.
+
+### Rollback
+
+Remove the two lines from the `app` service `environment` block in
+`docker-compose.prod.yml`:
+
+```yaml
+- OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+- OTEL_EXPORTER_OTLP_HEADERS=
+```
+
+Then redeploy. The app falls back to the `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_HEADERS` values still present in `.env.production`,
+reverting to direct export to the Grafana Cloud gateway. No telemetry data is
+lost during the switchover.
 
 ---
 
