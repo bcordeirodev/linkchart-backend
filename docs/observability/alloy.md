@@ -43,8 +43,9 @@ exporters by Docker DNS name.
 | `linkchart-pg-exporter` | `prometheuscommunity/postgres-exporter:v0.15.0` | Exposes PostgreSQL metrics on `:9187` |
 | `linkchart-redis-exporter` | `oliver006/redis_exporter:v1.62.0` | Exposes Redis metrics on `:9121` |
 
-Alloy is launched with `--stability.level=public-preview` to unlock the
-`prometheus.exporter.unix` (node/host) component.
+Alloy is launched with `--stability.level=experimental` (required by the
+`deltatocumulative` processor; this lowers the component-stability bar for the
+whole agent) to unlock the `prometheus.exporter.unix` (node/host) component.
 
 The application container (`linkchartapi`) continues to export its own OTLP
 traces/metrics/logs directly to Grafana Cloud — it does **not** route through
