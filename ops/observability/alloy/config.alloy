@@ -22,6 +22,9 @@ otelcol.receiver.prometheus "to_otlp" {
 // Host metrics (curated collectors). Requires rootfs mounts (see compose).
 prometheus.exporter.unix "host" {
 	set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "loadavg", "netdev"]
+	rootfs_path    = "/rootfs"
+	procfs_path    = "/rootfs/proc"
+	sysfs_path     = "/rootfs/sys"
 }
 
 prometheus.scrape "infra" {

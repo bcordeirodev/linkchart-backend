@@ -11,6 +11,7 @@ services:
       - ./storage/logs:/var/www/storage/logs
       - ./storage/app:/var/www/storage/app
       - ./.env.production:/var/www/.env
+      - /var/log/nginx:/var/log/nginx
     environment:
       - CONTAINER_ROLE=app
       - DB_HOST=linkchartdb
