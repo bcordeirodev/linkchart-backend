@@ -106,6 +106,8 @@ Auto-instrumentation is enabled by `ext-opentelemetry` 1.2.1 (installed in `Dock
 
 **Activation model:** auto packages register hooks whenever `ext-opentelemetry` is loaded; they emit spans only if a global TracerProvider exists. When `OTEL_ENABLED=false`, no provider is registered, so no spans are emitted. Setting `OTEL_PHP_AUTOLOAD_ENABLED=false` keeps a single manually-built provider (prevents double-initialization).
 
+**Performance tradeoff: PHP JIT** — The `ext-opentelemetry` extension overrides `zend_execute_ex()`, so PHP disables the JIT entirely at startup (prod sets `opcache.jit=tracing`, 128M in `docker/php/opcache-prod.ini`). This affects every request, including the redirect hot path, regardless of OTEL sampling. The `OTEL_PHP_DISABLED_INSTRUMENTATIONS` dial does not recover the JIT — that loss comes from loading the extension itself, not from the hooks. For an I/O-bound Laravel app the JIT gain is usually small, so the tradeoff is typically acceptable; weigh it in the deploy p95 comparison. The only way to fully recover JIT is to remove the extension entirely — note that "Rollback (fast): OTEL_ENABLED=false" stops spans but keeps the JIT disabled, whereas "Rollback (full): redeploy the previous image" re-enables JIT (the previous image has no extension).
+
 **Tuning dial:** disable noisy instrumentations via `OTEL_PHP_DISABLED_INSTRUMENTATIONS=<csv>`. Example values: `laravel` (framework spans), `pdo` (database spans—use if redirect hot path shows excessive spans). Set in `.env.production` or inject as Docker env var.
 
 **Rollback (fast):** set `OTEL_ENABLED=false` (stops all emission). **Rollback (full):** redeploy the previous image (extension + packages are baked in).
