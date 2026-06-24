@@ -22,11 +22,15 @@ services:
       - DB_PASSWORD=linkchartpassword123
       - REDIS_CLIENT=phpredis
       - REDIS_PASSWORD=linkchartredis123
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+      - OTEL_EXPORTER_OTLP_HEADERS=
     depends_on:
       database:
         condition: service_healthy
       redis:
         condition: service_healthy
+      alloy:
+        condition: service_started
     networks:
       - linkchartnet
       - linkcharts-network
@@ -121,7 +125,7 @@ services:
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
-      - --stability.level=public-preview   # required for otelcol.receiver.filelog
+      - --stability.level=experimental   # deltatocumulative (+ filelog) require this
       - /etc/alloy/config.alloy
     volumes:
       - ./ops/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
