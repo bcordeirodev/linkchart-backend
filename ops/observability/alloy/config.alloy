@@ -1,0 +1,37 @@
+// ops/observability/alloy/config.alloy
+// Grafana Cloud OTLP gateway (creds from env; single credential reused).
+otelcol.auth.basic "gcloud" {
+	username = sys.env("GCLOUD_OTLP_USER")
+	password = sys.env("GCLOUD_OTLP_PASS")
+}
+
+otelcol.exporter.otlphttp "gcloud" {
+	client {
+		endpoint = sys.env("GCLOUD_OTLP_ENDPOINT")
+		auth     = otelcol.auth.basic.gcloud.handler
+	}
+}
+
+// Bridge: Prometheus-format scrapes → OTLP → Grafana Cloud.
+otelcol.receiver.prometheus "to_otlp" {
+	output {
+		metrics = [otelcol.exporter.otlphttp.gcloud.input]
+	}
+}
+
+// Host metrics (curated collectors). Requires rootfs mounts (see compose).
+prometheus.exporter.unix "host" {
+	set_collectors = ["cpu", "meminfo", "filesystem", "diskstats", "loadavg", "netdev"]
+}
+
+prometheus.scrape "infra" {
+	targets = array.concat(
+		prometheus.exporter.unix.host.targets,
+		[
+			{"__address__" = "postgres_exporter:9187", "job" = "postgres"},
+			{"__address__" = "redis_exporter:9121", "job" = "redis"},
+		],
+	)
+	scrape_interval = "60s"
+	forward_to      = [otelcol.receiver.prometheus.to_otlp.receiver]
+}
