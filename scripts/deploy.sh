@@ -65,6 +65,25 @@ else
 fi
 echo "OpenTelemetry config injected into .env.production"
 
+# ── Observability (Alloy + exporters) — compose interpolation ────────────────
+# docker compose reads ./.env (the repo-root file) for ${VAR} interpolation in
+# docker-compose.prod.yml. This block is distinct from .env.production, which is
+# bind-mounted INTO the app container. Write is idempotent: existing lines are
+# removed before appending so repeated deploys never accumulate duplicates.
+# On a fresh server .env may not exist yet (rsync-excluded); touch it first so
+# the sed -i commands below do not abort under set -euo pipefail.
+touch "$PROJECT_PATH/.env"
+for obs_kv in \
+    "PG_MONITORING_PASSWORD=${PG_MONITORING_PASSWORD:-}" \
+    "GCLOUD_OTLP_ENDPOINT=${GCLOUD_OTLP_ENDPOINT:-}" \
+    "GCLOUD_OTLP_USER=${GCLOUD_OTLP_USER:-}" \
+    "GCLOUD_OTLP_PASS=${GCLOUD_OTLP_PASS:-}"; do
+    obs_key="${obs_kv%%=*}"
+    sed -i "/^${obs_key}=/d" "$PROJECT_PATH/.env"
+    printf '%s\n' "$obs_kv" >> "$PROJECT_PATH/.env"
+done
+echo "Observability vars injected into .env for compose interpolation"
+
 # ── Stop existing containers ──────────────────────────────────────────────────
 echo "Stopping existing containers..."
 docker compose -f "$COMPOSE_FILE" down --timeout 60 || true

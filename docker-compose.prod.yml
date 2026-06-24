@@ -11,6 +11,7 @@ services:
       - ./storage/logs:/var/www/storage/logs
       - ./storage/app:/var/www/storage/app
       - ./.env.production:/var/www/.env
+      - /var/log/nginx:/var/log/nginx
     environment:
       - CONTAINER_ROLE=app
       - DB_HOST=linkchartdb
@@ -85,7 +86,58 @@ services:
       retries: 5
       start_period: 30s
 
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: linkchart-pg-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://monitoring:${PG_MONITORING_PASSWORD}@linkchartdb:5432/linkchartprod?sslmode=disable"
+      PG_EXPORTER_DISABLE_DEFAULT_METRICS: "false"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "false"
+      PG_EXPORTER_EXCLUDE_DATABASES: "template0,template1"
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - linkchartnet
 
+  redis_exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: linkchart-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://linkchartredis:6379"
+      REDIS_PASSWORD: "CHANGE_ME_REDIS_PASSWORD"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - linkchartnet
+
+  alloy:
+    image: grafana/alloy:v1.17.0
+    container_name: linkchart-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --stability.level=public-preview   # required for otelcol.receiver.filelog
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./ops/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /:/rootfs:ro,rslave            # host metrics (prometheus.exporter.unix)
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log/nginx:/var/log/nginx:ro
+    environment:
+      GCLOUD_OTLP_ENDPOINT: "${GCLOUD_OTLP_ENDPOINT}"
+      GCLOUD_OTLP_USER: "${GCLOUD_OTLP_USER}"
+      GCLOUD_OTLP_PASS: "${GCLOUD_OTLP_PASS}"
+    depends_on:
+      - postgres_exporter
+      - redis_exporter
+    networks:
+      - linkchartnet
+    # 12345 not published — internal debug UI only.
 
 volumes:
   postgres_data:
