@@ -35,3 +35,21 @@ prometheus.scrape "infra" {
 	scrape_interval = "60s"
 	forward_to      = [otelcol.receiver.prometheus.to_otlp.receiver]
 }
+
+// Container stdout (json-file driver) + nginx host logs → OTLP logs → Loki.
+// Deviation from brief: uses `resource = {}` map instead of operators[{type="add",field="resource[...]"}]
+// because `resource` is the idiomatic Alloy attribute for resource-level attributes in this component.
+// Requires --stability.level=public-preview (or experimental) at runtime (public-preview component).
+otelcol.receiver.filelog "logs" {
+	include = [
+		"/var/lib/docker/containers/*/*-json.log",
+		"/var/log/nginx/*.log",
+	]
+	include_file_path = true
+	resource = {
+		"service.name" = "linkcharts-infra",
+	}
+	output {
+		logs = [otelcol.exporter.otlphttp.gcloud.input]
+	}
+}

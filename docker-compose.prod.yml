@@ -120,10 +120,13 @@ services:
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
+      - --stability.level=public-preview   # required for otelcol.receiver.filelog
       - /etc/alloy/config.alloy
     volumes:
       - ./ops/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /:/rootfs:ro,rslave            # host metrics (prometheus.exporter.unix)
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log/nginx:/var/log/nginx:ro
     environment:
       GCLOUD_OTLP_ENDPOINT: "${GCLOUD_OTLP_ENDPOINT}"
       GCLOUD_OTLP_USER: "${GCLOUD_OTLP_USER}"
