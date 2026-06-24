@@ -70,6 +70,9 @@ echo "OpenTelemetry config injected into .env.production"
 # docker-compose.prod.yml. This block is distinct from .env.production, which is
 # bind-mounted INTO the app container. Write is idempotent: existing lines are
 # removed before appending so repeated deploys never accumulate duplicates.
+# On a fresh server .env may not exist yet (rsync-excluded); touch it first so
+# the sed -i commands below do not abort under set -euo pipefail.
+touch "$PROJECT_PATH/.env"
 for obs_kv in \
     "PG_MONITORING_PASSWORD=${PG_MONITORING_PASSWORD:-}" \
     "GCLOUD_OTLP_ENDPOINT=${GCLOUD_OTLP_ENDPOINT:-}" \
