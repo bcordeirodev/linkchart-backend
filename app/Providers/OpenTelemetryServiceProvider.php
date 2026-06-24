@@ -80,15 +80,15 @@ class OpenTelemetryServiceProvider extends ServiceProvider
             ->build();
 
         // --- Metrics ---
-        // Cumulative temporality: Grafana Cloud's metrics backend is
-        // Prometheus-native (Mimir) and rejects delta OTLP metrics with HTTP
-        // 400. Cumulative is the Prometheus-aligned model — counter resets on
-        // process/worker restart are handled by the OTLP→Prometheus conversion.
+        // DELTA temporality: the app now exports to the local Alloy collector,
+        // which runs a deltatocumulative processor before forwarding cumulative
+        // metrics to Mimir. DELTA from short-lived FPM/queue workers avoids the
+        // multi-process cumulative-series collision that direct export caused.
         $metricTransport = (new OtlpHttpTransportFactory)
             ->create($endpoint.'/v1/metrics', 'application/json', $headers);
         $meterProvider = MeterProvider::builder()
             ->setResource($resource)
-            ->addReader(new ExportingReader(new MetricExporter($metricTransport, Temporality::CUMULATIVE)))
+            ->addReader(new ExportingReader(new MetricExporter($metricTransport, Temporality::DELTA)))
             ->build();
 
         // --- Logs ---
