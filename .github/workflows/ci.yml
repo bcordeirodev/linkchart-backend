@@ -32,7 +32,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: mbstring, xml, zip, pdo_sqlite, redis, bcmath
+          extensions: mbstring, xml, zip, pdo_sqlite, redis, bcmath, opentelemetry
           coverage: none
 
       - name: 📥 Install Composer dependencies
@@ -96,7 +96,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
-          extensions: mbstring, xml, zip, pdo_pgsql, pgsql, redis, bcmath
+          extensions: mbstring, xml, zip, pdo_pgsql, pgsql, redis, bcmath, opentelemetry
           coverage: none
 
       - name: 📥 Install Composer dependencies
