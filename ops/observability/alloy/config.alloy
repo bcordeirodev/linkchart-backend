@@ -56,3 +56,48 @@ otelcol.receiver.filelog "logs" {
 		logs = [otelcol.exporter.otlphttp.gcloud.input]
 	}
 }
+
+// ── App OTLP ingest (Phase 2): app → Alloy → Grafana Cloud ──────────────────
+otelcol.receiver.otlp "app" {
+	grpc { endpoint = "0.0.0.0:4317" }
+	http { endpoint = "0.0.0.0:4318" }
+	output {
+		metrics = [otelcol.processor.deltatocumulative.app.input]
+		traces  = [otelcol.processor.tail_sampling.app.input]
+		logs    = [otelcol.processor.batch.app.input]
+	}
+}
+
+// DELTA (from app) → cumulative (for Mimir). Fixes multi-worker series collision.
+otelcol.processor.deltatocumulative "app" {
+	output { metrics = [otelcol.processor.batch.app.input] }
+}
+
+// Keep 100% of error + slow traces, ~10% of the rest (free-tier trace volume).
+otelcol.processor.tail_sampling "app" {
+	decision_wait = "10s"
+	policy {
+		name = "errors"
+		type = "status_code"
+		status_code { status_codes = ["ERROR"] }
+	}
+	policy {
+		name = "slow"
+		type = "latency"
+		latency { threshold_ms = 500 }
+	}
+	policy {
+		name = "sample-rest"
+		type = "probabilistic"
+		probabilistic { sampling_percentage = 10 }
+	}
+	output { traces = [otelcol.processor.batch.app.input] }
+}
+
+otelcol.processor.batch "app" {
+	output {
+		metrics = [otelcol.exporter.otlphttp.gcloud.input]
+		traces  = [otelcol.exporter.otlphttp.gcloud.input]
+		logs    = [otelcol.exporter.otlphttp.gcloud.input]
+	}
+}
