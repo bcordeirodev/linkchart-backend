@@ -44,5 +44,13 @@ class ObservabilityServiceProvider extends ServiceProvider
         $start = $this->started[$id] ?? null;
         unset($this->started[$id]);
         Otel::recordJob($name, $status, $start !== null ? microtime(true) - $start : 0.0);
+
+        try {
+            if ($this->app->bound('otel.meter_provider')) {
+                $this->app->make('otel.meter_provider')->forceFlush();
+            }
+        } catch (\Throwable) {
+            // never break the worker
+        }
     }
 }
