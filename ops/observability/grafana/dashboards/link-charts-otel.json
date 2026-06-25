@@ -3,7 +3,10 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -31,7 +34,12 @@
   "liveNow": false,
   "panels": [
     {
-      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
       "options": {
         "code": {
@@ -49,27 +57,47 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 3},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
       "id": 200,
       "panels": [],
       "title": "Resumo",
       "type": "row"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Redirects executados por minuto no intervalo atual — métrica de volume de tráfego principal do produto.",
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 1,
           "thresholds": {
             "mode": "absolute",
-            "steps": [{"color": "green", "value": 0}]
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
           },
           "unit": "short"
         }
       },
-      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 4},
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
       "id": 2,
       "options": {
         "colorMode": "value",
@@ -77,7 +105,13 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
@@ -85,7 +119,10 @@
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum(rate(redirect_count_total[$__rate_interval])) * 60",
           "refId": "A"
         }
@@ -94,24 +131,43 @@
       "type": "stat"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Latência p95 do redirect no momento atual — amarelo ≥ 200 ms, vermelho ≥ 500 ms.",
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 3,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": 0},
-              {"color": "yellow", "value": 0.2},
-              {"color": "red", "value": 0.5}
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.2
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
             ]
           },
           "unit": "s"
         }
       },
-      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 4},
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 4
+      },
       "id": 3,
       "options": {
         "colorMode": "value",
@@ -119,7 +175,13 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
@@ -127,7 +189,10 @@
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "histogram_quantile(0.95, sum by (le) (rate(redirect_duration_seconds_bucket[$__rate_interval])))",
           "refId": "A"
         }
@@ -136,26 +201,45 @@
       "type": "stat"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Proporção de redirects com resposta 4xx ou 5xx — amarelo ≥ 1%, vermelho ≥ 5%.",
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "decimals": 2,
           "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": 0},
-              {"color": "yellow", "value": 0.01},
-              {"color": "red", "value": 0.05}
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "yellow",
+                "value": 0.01
+              },
+              {
+                "color": "red",
+                "value": 0.05
+              }
             ]
           },
           "unit": "percentunit"
         }
       },
-      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 4},
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 4
+      },
       "id": 4,
       "options": {
         "colorMode": "background",
@@ -163,7 +247,13 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
@@ -171,7 +261,10 @@
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum(rate(redirect_count_total{http_response_status_code=~\"[45]..\"}[$__rate_interval])) / clamp_min(sum(rate(redirect_count_total[$__rate_interval])), 0.001)",
           "refId": "A"
         }
@@ -180,23 +273,36 @@
       "type": "stat"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Total absoluto de redirects ocorridos no período selecionado no time picker.",
       "fieldConfig": {
         "defaults": {
-          "color": {"fixedColor": "blue", "mode": "fixed"},
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": 0},
-              {"color": "red", "value": 80}
+              {
+                "color": "green",
+                "value": 0
+              }
             ]
           },
           "unit": "short"
         }
       },
-      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 4},
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 4
+      },
       "id": 5,
       "options": {
         "colorMode": "value",
@@ -204,7 +310,13 @@
         "justifyMode": "auto",
         "orientation": "auto",
         "percentChangeColorMode": "standard",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
@@ -212,7 +324,10 @@
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum(increase(redirect_count_total[$__range]))",
           "instant": true,
           "queryType": "instant",
@@ -225,37 +340,112 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 9},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
       "id": 201,
       "panels": [],
       "title": "Latência",
       "type": "row"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Volume de redirects por código de status HTTP ao longo do tempo — empilhado para visualizar a composição do tráfego.",
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "palette-classic"},
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 20,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
             "lineWidth": 1,
-            "stacking": {"group": "A", "mode": "normal"}
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "reqps"
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
       "id": 6,
       "options": {
-        "legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom", "showLegend": true},
-        "tooltip": {"hideZeros": false, "mode": "multi", "sort": "none"}
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "enableFacetedFilter": false,
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
       },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum by (http_response_status_code) (rate(redirect_count_total[$__rate_interval]))",
           "legendFormat": "{{http_response_status_code}}",
           "refId": "A"
@@ -265,44 +455,130 @@
       "type": "timeseries"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Percentis p50, p95 e p99 da latência do redirect ao longo do tempo — p99 revela a cauda de usuários mais lentos.",
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "palette-classic"},
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
             "lineWidth": 1,
-            "stacking": {"group": "A", "mode": "none"}
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "s"
         }
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
       "id": 7,
       "options": {
-        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
-        "tooltip": {"hideZeros": false, "mode": "multi", "sort": "none"}
+        "annotations": {
+          "clustering": -1,
+          "multiLane": false
+        },
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "enableFacetedFilter": false,
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
       },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "app": "grafana-assistant-app",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "histogram_quantile(0.50, sum by (le) (rate(redirect_duration_seconds_bucket[$__rate_interval])))",
+          "instant": false,
           "legendFormat": "p50",
+          "queryType": "range",
+          "range": true,
           "refId": "A"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "app": "grafana-assistant-app",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "histogram_quantile(0.95, sum by (le) (rate(redirect_duration_seconds_bucket[$__rate_interval])))",
+          "instant": false,
           "legendFormat": "p95",
+          "queryType": "range",
+          "range": true,
           "refId": "B"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "app": "grafana-assistant-app",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "histogram_quantile(0.99, sum by (le) (rate(redirect_duration_seconds_bucket[$__rate_interval])))",
+          "instant": false,
           "legendFormat": "p99",
+          "queryType": "range",
+          "range": true,
           "refId": "C"
         }
       ],
@@ -311,34 +587,77 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 18},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
       "id": 202,
       "panels": [],
       "title": "Distribuição",
       "type": "row"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Distribuição geográfica dos redirects por país no período — identifica os mercados de maior tráfego.",
       "fieldConfig": {
         "defaults": {
-          "color": {"fixedColor": "#73BF69", "mode": "palette-classic"},
-          "custom": {"hideFrom": {"legend": false, "tooltip": false, "viz": false}}
+          "color": {
+            "fixedColor": "#73BF69",
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
         }
       },
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 19},
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 19
+      },
       "id": 8,
       "options": {
-        "legend": {"displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"]},
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
         "pieType": "donut",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "sort": "desc",
-        "tooltip": {"hideZeros": false, "mode": "single", "sort": "none"}
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum by (redirect_country) (increase(redirect_count_total[$__range]))",
           "instant": true,
           "legendFormat": "{{redirect_country}}",
@@ -349,27 +668,65 @@
       "type": "piechart"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Distribuição dos redirects por tipo de dispositivo (mobile, desktop, tablet) no período selecionado.",
       "fieldConfig": {
         "defaults": {
-          "color": {"fixedColor": "#73BF69", "mode": "palette-classic"},
-          "custom": {"hideFrom": {"legend": false, "tooltip": false, "viz": false}}
+          "color": {
+            "fixedColor": "#73BF69",
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
         }
       },
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 19},
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 19
+      },
       "id": 9,
       "options": {
-        "legend": {"displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"]},
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
         "pieType": "pie",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "sort": "desc",
-        "tooltip": {"hideZeros": false, "mode": "single", "sort": "none"}
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum by (redirect_device) (increase(redirect_count_total[$__range]))",
           "instant": true,
           "legendFormat": "{{redirect_device}}",
@@ -380,27 +737,65 @@
       "type": "piechart"
     },
     {
-      "datasource": {"type": "prometheus", "uid": "${prom}"},
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${prom}"
+      },
       "description": "Distribuição de redirects por código de status HTTP no período — proporção de 302 vs erros 4xx/5xx.",
       "fieldConfig": {
         "defaults": {
-          "color": {"fixedColor": "#73BF69", "mode": "palette-classic"},
-          "custom": {"hideFrom": {"legend": false, "tooltip": false, "viz": false}}
+          "color": {
+            "fixedColor": "#73BF69",
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
         }
       },
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 19},
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 19
+      },
       "id": 10,
       "options": {
-        "legend": {"displayMode": "table", "placement": "right", "showLegend": true, "values": ["value", "percent"]},
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
         "pieType": "pie",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "sort": "desc",
-        "tooltip": {"hideZeros": false, "mode": "single", "sort": "none"}
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
       },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "${prom}"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${prom}"
+          },
           "expr": "sum by (http_response_status_code) (increase(redirect_count_total[$__range]))",
           "instant": true,
           "legendFormat": "{{http_response_status_code}}",
@@ -412,31 +807,53 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 27},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
       "id": 203,
       "panels": [],
       "title": "Logs & Traces",
       "type": "row"
     },
     {
-      "datasource": {"type": "loki", "uid": "${loki}"},
+      "datasource": {
+        "type": "loki",
+        "uid": "${loki}"
+      },
       "description": "Stream de logs de erro do backend enviados via OTLP para o Loki — expanda cada linha para ver o trace_id e contexto completo.",
-      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 28},
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
       "id": 11,
       "options": {
         "dedupStrategy": "none",
         "enableInfiniteScrolling": false,
         "enableLogDetails": true,
         "prettifyLogMessage": true,
+        "showControls": false,
+        "showFieldSelector": false,
+        "showLevel": true,
+        "showLogAttributes": true,
         "showTime": true,
         "sortOrder": "Descending",
+        "timestampResolution": "ms",
+        "unwrappedColumns": false,
         "wrapLogMessage": true
       },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "loki", "uid": "${loki}"},
-          "expr": "{service_name=\"linkcharts-backend\"} | detected_level = \"error\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "${loki}"
+          },
+          "expr": "{service_name=\"linkcharts-backend\"} | severity_text=\"ERROR\"",
           "queryType": "range",
           "refId": "A"
         }
@@ -445,32 +862,56 @@
       "type": "logs"
     },
     {
-      "datasource": {"type": "tempo", "uid": "${tempo}"},
+      "datasource": {
+        "type": "tempo",
+        "uid": "${tempo}"
+      },
       "description": "Últimas 20 traces do backend — clique em um trace para abrir o flamegraph e identificar spans lentos.",
       "fieldConfig": {
         "defaults": {
           "custom": {
             "align": "auto",
-            "cellOptions": {"type": "auto"},
-            "footer": {"reducers": []},
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
             "inspect": false
           },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": 0},
-              {"color": "red", "value": 80}
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
             ]
           }
         }
       },
-      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 37},
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 37
+      },
       "id": 12,
-      "options": {"cellHeight": "sm", "showHeader": true},
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
       "pluginVersion": "13.1.0-27822252871",
       "targets": [
         {
-          "datasource": {"type": "tempo", "uid": "${tempo}"},
+          "datasource": {
+            "type": "tempo",
+            "uid": "${tempo}"
+          },
           "limit": 20,
           "query": "{ resource.service.name = \"linkcharts-backend\" }",
           "queryType": "traceqlSearch",
@@ -485,11 +926,18 @@
   "preload": false,
   "refresh": "30s",
   "schemaVersion": 42,
-  "tags": ["link-charts", "opentelemetry"],
+  "tags": [
+    "link-charts",
+    "opentelemetry"
+  ],
   "templating": {
     "list": [
       {
         "allowCustomValue": true,
+        "current": {
+          "text": "",
+          "value": ""
+        },
         "hide": 0,
         "includeAll": false,
         "label": "Métricas (Mimir)",
@@ -504,6 +952,10 @@
       },
       {
         "allowCustomValue": true,
+        "current": {
+          "text": "",
+          "value": ""
+        },
         "hide": 0,
         "includeAll": false,
         "label": "Logs (Loki)",
@@ -518,6 +970,10 @@
       },
       {
         "allowCustomValue": true,
+        "current": {
+          "text": "",
+          "value": ""
+        },
         "hide": 0,
         "includeAll": false,
         "label": "Traces (Tempo)",
@@ -532,9 +988,23 @@
       }
     ]
   },
-  "time": {"from": "now-6h", "to": "now"},
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {
-    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m",
+      "5m",
+      "15m",
+      "30m",
+      "1h",
+      "2h",
+      "1d"
+    ]
   },
   "timezone": "browser",
   "title": "Link Charts — Observability",
