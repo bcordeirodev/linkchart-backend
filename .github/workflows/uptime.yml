@@ -1,0 +1,64 @@
+name: Uptime (external probe)
+
+# External uptime safety net: runs OUTSIDE the droplet (GitHub infra), so it
+# catches a full outage (droplet/nginx/Alloy down) that the in-cluster exporters
+# and no_data=OK Grafana alerts cannot. On failure it opens/keeps a GitHub issue
+# (which notifies) and fails the run.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *" # every 5 minutes (GitHub's minimum)
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production endpoints
+        id: probe
+        run: |
+          set -u
+          fail=0
+          check() {
+            local name="$1" url="$2" last=""
+            for i in 1 2 3; do
+              last=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$url" || echo "000")
+              if [ "$last" = "200" ]; then
+                echo "OK   $name -> $last ($url)"
+                return 0
+              fi
+              sleep 5
+            done
+            echo "DOWN $name -> $last ($url)"
+            echo "- **$name** retornou \`$last\` em \`$url\`" >> /tmp/down.md
+            return 1
+          }
+          : > /tmp/down.md
+          check "Backend API"  "https://api.linkcharts.com.br/health" || fail=1
+          check "Frontend"     "https://linkcharts.com.br/api/health"  || fail=1
+          echo "fail=$fail" >> "$GITHUB_OUTPUT"
+          { echo "## Uptime probe"; cat /tmp/down.md 2>/dev/null || true; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$fail" = "0" ]
+
+      - name: Open issue on failure (deduped)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="🔴 Uptime: produção inacessível"
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          body="O probe externo falhou em $(date -u '+%Y-%m-%d %H:%M UTC').
+          $(cat /tmp/down.md 2>/dev/null)
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          (Esta issue é reaberta/atualizada automaticamente; feche quando resolver.)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label "incident" 2>/dev/null \
+              || gh issue create --title "$title" --body "$body"
+          fi
