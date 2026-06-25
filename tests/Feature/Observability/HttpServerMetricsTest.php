@@ -23,4 +23,11 @@ class HttpServerMetricsTest extends TestCase
         $this->assertSame('5xx', Otel::statusClass(500));
         $this->assertSame('3xx', Otel::statusClass(302));
     }
+
+    /** method label is clamped to a bounded set. */
+    public function test_method_label_is_clamped(): void
+    {
+        $this->assertSame('GET', Otel::methodLabel('get'));
+        $this->assertSame('OTHER', Otel::methodLabel('PROPFIND'));
+    }
 }
