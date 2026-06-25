@@ -80,7 +80,11 @@ otelcol.processor.deltatocumulative "app" {
 	output { metrics = [otelcol.processor.batch.app.input] }
 }
 
-// Keep 100% of error + slow traces, ~10% of the rest (free-tier trace volume).
+// Keep 100% of all traces so frontend RUM spans link to their backend half
+// (frontend Faro samples at 100%; <100% here orphans the backend span of fast
+// happy-path requests). Traffic is low — revisit if trace volume grows: lower
+// `sample-rest` back to a probabilistic % (errors + slow stay 100% via the
+// policies below regardless).
 otelcol.processor.tail_sampling "app" {
 	decision_wait = "10s"
 	policy {
@@ -96,7 +100,7 @@ otelcol.processor.tail_sampling "app" {
 	policy {
 		name = "sample-rest"
 		type = "probabilistic"
-		probabilistic { sampling_percentage = 10 }
+		probabilistic { sampling_percentage = 100 }
 	}
 	output { traces = [otelcol.processor.batch.app.input] }
 }
