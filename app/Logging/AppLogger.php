@@ -40,6 +40,8 @@ final class AppLogger
 
     public const OG_FETCH_SUCCESS = 'og.fetch_succeeded';
 
+    public const OG_FETCH_BUDGET_EXCEEDED = 'og.fetch_budget_exceeded';
+
     public const TRACKING_CLICK_REGISTERED = 'tracking.click_registered';
 
     public const TRACKING_LINK_NOT_FOUND = 'tracking.link_not_found';
@@ -229,6 +231,22 @@ final class AppLogger
         self::write('redirect', 'warning', self::OG_FETCH_NON_OK, [
             'url' => $url,
             'status' => $status,
+        ]);
+    }
+
+    /**
+     * The OG fetch wall-clock budget was exhausted before all fallback
+     * strategies were tried; the remaining strategies are skipped and the
+     * caller falls back to the bot-passthrough / default-metadata path.
+     *
+     * @param  string  $url  The destination URL whose metadata fetch was cut short.
+     * @param  float  $elapsedMs  Wall-clock spent fetching before the budget tripped.
+     */
+    public static function ogFetchBudgetExceeded(string $url, float $elapsedMs): void
+    {
+        self::write('redirect', 'warning', self::OG_FETCH_BUDGET_EXCEEDED, [
+            'url' => $url,
+            'elapsed_ms' => $elapsedMs,
         ]);
     }
 
