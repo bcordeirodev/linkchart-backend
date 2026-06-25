@@ -95,6 +95,7 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.15.0
     container_name: linkchart-pg-exporter
     restart: unless-stopped
+    mem_limit: 128m
     environment:
       DATA_SOURCE_NAME: "postgresql://monitoring:${PG_MONITORING_PASSWORD}@linkchartdb:5432/linkchartprod?sslmode=disable"
       PG_EXPORTER_DISABLE_DEFAULT_METRICS: "false"
@@ -110,6 +111,7 @@ services:
     image: oliver006/redis_exporter:v1.62.0
     container_name: linkchart-redis-exporter
     restart: unless-stopped
+    mem_limit: 128m
     environment:
       REDIS_ADDR: "redis://linkchartredis:6379"
       REDIS_PASSWORD: "CHANGE_ME_REDIS_PASSWORD"
@@ -123,6 +125,7 @@ services:
     image: grafana/alloy:v1.17.0
     container_name: linkchart-alloy
     restart: unless-stopped
+    mem_limit: 512m
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
