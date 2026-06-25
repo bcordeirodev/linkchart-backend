@@ -3,6 +3,7 @@
 namespace App\Services\Links;
 
 use App\Logging\AppLogger;
+use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -42,6 +43,14 @@ class RedirectMetadataFetcher
     private const METADATA_CACHE_TTL_SECONDS = 86400;
 
     /**
+     * Maximum wall-clock the multi-strategy OG fetch may consume on the redirect
+     * hot path before remaining fallback strategies are skipped. Checked between
+     * strategies (soft deadline), so one in-flight request may overshoot by up to
+     * one doHtmlFetch timeout.
+     */
+    private const FETCH_BUDGET_SECONDS = 4.5;
+
+    /**
      * Primary social-crawler User-Agent used when fetching OG metadata.
      *
      * Most platforms (YouTube, LinkedIn, Twitter, Shopee, etc.) serve their
@@ -72,9 +81,20 @@ class RedirectMetadataFetcher
      */
     private const FETCH_UA_BROWSER = 'Mozilla/5.0 (compatible; LinkPreview/1.0; +https://linkchar.com.br)';
 
+    /** Wall-clock source (seconds, monotonic); injectable for deterministic tests. */
+    protected Closure $clock;
+
+    /**
+     * @param  SafeFetchUrlValidator  $safeFetchUrlValidator  SSRF guard for outbound fetches.
+     * @param  Closure|null  $clock  Returns the current time in seconds as a float.
+     *                               Defaults to microtime(true); override in tests.
+     */
     public function __construct(
-        protected SafeFetchUrlValidator $safeFetchUrlValidator
-    ) {}
+        protected SafeFetchUrlValidator $safeFetchUrlValidator,
+        ?Closure $clock = null
+    ) {
+        $this->clock = $clock ?? static fn (): float => microtime(true);
+    }
 
     /**
      * Fetch and cache Open Graph metadata for the given URL (24-hour TTL).
@@ -112,6 +132,9 @@ class RedirectMetadataFetcher
         $cacheKey = 'metadata_'.md5($this->normalizeMetaUrl($url));
 
         return Cache::remember($cacheKey, self::METADATA_CACHE_TTL_SECONDS, function () use ($url) {
+            $start = ($this->clock)();
+            $deadline = $start + self::FETCH_BUDGET_SECONDS;
+
             // YouTube: oEmbed API gives clean structured data without HTML parsing.
             if ($this->isYouTubeUrl($url)) {
                 $ytMeta = $this->fetchYouTubeOembed($url);
@@ -128,17 +151,22 @@ class RedirectMetadataFetcher
 
             // UA fallback: Amazon and certain e-commerce platforms block facebookexternalhit
             // because Meta operates a competing shopping platform. Retry with Twitterbot,
-            // which those platforms accept and which returns full OG data.
+            // which those platforms accept and which returns full OG data — but only if the
+            // hot-path budget still allows another outbound request.
             if ($metadata === null || empty($metadata['og_image'])) {
-                $fallback = $this->doHtmlFetch($url, self::FETCH_UA_FALLBACK);
-                if ($fallback !== null && ! empty($fallback['og_image'])) {
-                    AppLogger::ogFetchSucceeded($url, 'html_fallback');
+                if ($this->budgetExceeded($deadline)) {
+                    AppLogger::ogFetchBudgetExceeded($url, round((($this->clock)() - $start) * 1000, 2));
+                } else {
+                    $fallback = $this->doHtmlFetch($url, self::FETCH_UA_FALLBACK);
+                    if ($fallback !== null && ! empty($fallback['og_image'])) {
+                        AppLogger::ogFetchSucceeded($url, 'html_fallback');
 
-                    return $fallback;
-                }
-                // Promote fallback result if it has more data than the primary.
-                if ($fallback !== null && $metadata === null) {
-                    $metadata = $fallback;
+                        return $fallback;
+                    }
+                    // Promote fallback result if it has more data than the primary.
+                    if ($fallback !== null && $metadata === null) {
+                        $metadata = $fallback;
+                    }
                 }
             }
 
@@ -150,23 +178,28 @@ class RedirectMetadataFetcher
 
             // Both crawler UAs returned non-2xx (e.g. Cloudflare blocks VPS IPs
             // that impersonate facebookexternalhit/Twitterbot without a matching
-            // source IP). Try a generic browser UA — some WAF configs allow it.
-            $browserMeta = $this->doHtmlFetch(
-                $url,
-                self::FETCH_UA_BROWSER,
-                [
-                    'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language' => 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                ]
-            );
-            if ($browserMeta !== null) {
-                AppLogger::ogFetchSucceeded($url, 'html_browser_ua');
+            // source IP). Try a generic browser UA — some WAF configs allow it —
+            // unless the budget is already spent.
+            if ($this->budgetExceeded($deadline)) {
+                AppLogger::ogFetchBudgetExceeded($url, round((($this->clock)() - $start) * 1000, 2));
+            } else {
+                $browserMeta = $this->doHtmlFetch(
+                    $url,
+                    self::FETCH_UA_BROWSER,
+                    [
+                        'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language' => 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                    ]
+                );
+                if ($browserMeta !== null) {
+                    AppLogger::ogFetchSucceeded($url, 'html_browser_ua');
 
-                return $browserMeta;
+                    return $browserMeta;
+                }
             }
 
-            // All three strategies failed — mark the result so the caller can
-            // decide to pass the bot through directly to the original URL.
+            // All strategies failed or were skipped by the budget — mark the result
+            // so the caller can pass the bot through directly to the original URL.
             $failed = $this->getDefaultMetadata($url);
             $failed['_fetch_failed'] = true;
             AppLogger::event('redirect', 'warning', 'og.fetch_all_attempts_failed', ['url' => $url]);
@@ -187,6 +220,16 @@ class RedirectMetadataFetcher
      * @param  array<string,string>  $extraHeaders  Additional HTTP headers merged after User-Agent.
      * @return array{title:string,description:string,og_title:string,og_description:string,og_image:string|null,og_type:string,url:string}|null
      */
+    /**
+     * True once the OG-fetch wall-clock budget has been exhausted.
+     *
+     * @param  float  $deadline  Absolute clock value (seconds) at which the budget expires.
+     */
+    private function budgetExceeded(float $deadline): bool
+    {
+        return ($this->clock)() >= $deadline;
+    }
+
     private function doHtmlFetch(string $url, string $userAgent, array $extraHeaders = []): ?array
     {
         try {
@@ -194,9 +237,9 @@ class RedirectMetadataFetcher
                 ['User-Agent' => $userAgent],
                 $extraHeaders,
             ))
-                ->connectTimeout(3)
-                ->timeout(5)
-                ->retry(2, 200)
+                ->connectTimeout(2)
+                ->timeout(3)
+                ->retry(1, 0)
                 ->withOptions([
                     'allow_redirects' => [
                         'max' => 5,
