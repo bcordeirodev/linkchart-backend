@@ -99,6 +99,8 @@ class OpenTelemetryServiceProvider extends ServiceProvider
             ->addLogRecordProcessor(new BatchLogRecordProcessor(new LogsExporter($logTransport), $clock))
             ->build();
 
+        $this->app->instance('otel.meter_provider', $meterProvider);
+
         Sdk::builder()
             ->setTracerProvider($tracerProvider)
             ->setMeterProvider($meterProvider)
