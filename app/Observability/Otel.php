@@ -149,6 +149,14 @@ final class Otel
         return intdiv($statusCode, 100).'xx';
     }
 
+    /** Caps the HTTP method label to a bounded set (avoids cardinality from arbitrary verbs). */
+    public static function methodLabel(string $method): string
+    {
+        $m = strtoupper($method);
+
+        return in_array($m, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'], true) ? $m : 'OTHER';
+    }
+
     /**
      * Records one HTTP server request as RED metrics (rate/errors/duration).
      * No-op + exception-swallowing; instruments memoized once per process.
@@ -170,7 +178,7 @@ final class Otel
 
             $attributes = [
                 'http.route' => $route,
-                'http.request.method' => $method,
+                'http.request.method' => self::methodLabel($method),
                 'http.response.status_class' => self::statusClass($statusCode),
             ];
 
