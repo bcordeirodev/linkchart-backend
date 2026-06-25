@@ -17,6 +17,7 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Probe production endpoints
         id: probe
@@ -50,7 +51,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           title="🔴 Uptime: produção inacessível"
-          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+          existing=$(gh issue list --state open --label incident --json number --jq '.[0].number' 2>/dev/null || true)
           body="O probe externo falhou em $(date -u '+%Y-%m-%d %H:%M UTC').
           $(cat /tmp/down.md 2>/dev/null)
 

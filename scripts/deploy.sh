@@ -6,6 +6,11 @@ COMPOSE_FILE="docker-compose.prod.yml"
 
 cd "$PROJECT_PATH"
 
+# Ensure .env.production exists on fresh servers — rsync excludes it, so it will
+# be absent on first deploy. All sed -i / printf calls below require it to exist.
+# (Docker file bind-mount: changes here only take effect after compose down/up.)
+touch .env.production
+
 # ── SendGrid injection ────────────────────────────────────────────────────────
 # .env.production is excluded from rsync so the server's copy (with real secrets)
 # persists across deploys. SENDGRID_API_KEY is passed from GitHub Secrets and
@@ -130,6 +135,18 @@ timeout 120 bash -c "
     done
 "
 echo "PostgreSQL ready"
+
+# ── Postgres monitoring role ──────────────────────────────────────────────────
+# Idempotent: creates the role only if absent, then ensures password + grants.
+# Requires PG_MONITORING_PASSWORD secret; skipped gracefully if unset.
+if [ -n "${PG_MONITORING_PASSWORD:-}" ]; then
+    docker compose -f "$COMPOSE_FILE" exec -T database psql -U linkchartuser -d linkchartprod \
+      -c "DO \$do\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='monitoring') THEN CREATE ROLE monitoring LOGIN; END IF; END \$do\$;" \
+      -c "ALTER ROLE monitoring LOGIN PASSWORD '${PG_MONITORING_PASSWORD}';" \
+      -c "GRANT pg_monitor TO monitoring;" \
+      -c "GRANT CONNECT ON DATABASE linkchartprod TO monitoring;" \
+      && echo "Postgres monitoring role provisioned" || echo "WARNING: monitoring role provisioning failed"
+fi
 
 # ── Wait for Redis ────────────────────────────────────────────────────────────
 echo "Waiting for Redis..."

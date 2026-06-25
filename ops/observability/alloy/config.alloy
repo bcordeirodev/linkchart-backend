@@ -43,6 +43,10 @@ prometheus.scrape "infra" {
 // Deviation from brief: uses `resource = {}` map instead of operators[{type="add",field="resource[...]"}]
 // because `resource` is the idiomatic Alloy attribute for resource-level attributes in this component.
 // Requires --stability.level=public-preview (or experimental) at runtime (public-preview component).
+// NOTE: self-ingest caveat — the glob pattern "/var/lib/docker/containers/*/*-json.log" includes
+// the alloy container's own stdout. filelog has no native exclude-by-container-name filter for
+// json-file logs, so alloy's own log lines will appear in Loki tagged as service.name=linkcharts-infra.
+// This is acceptable noise on the free tier; filter at query time with `container_name!="linkchart-alloy"`.
 otelcol.receiver.filelog "logs" {
 	include = [
 		"/var/lib/docker/containers/*/*-json.log",

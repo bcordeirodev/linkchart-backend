@@ -19,8 +19,11 @@ use Illuminate\Support\Facades\Http;
  * Side effects:
  *   - Outbound HTTP POST to Google Safe Browsing API (timeout 5s).
  *   - Logs via AppLogger::safetyApiUnavailable (key missing),
- *     AppLogger::safetyApiError (HTTP failure or exception),
+ *     AppLogger::safetyApiBadResponse (non-2xx HTTP response),
+ *     AppLogger::safetyApiError (exception / network failure),
  *     AppLogger::safetyUrlFlagged (threat detected) — channel: app.
+ *   - Emits Otel::recordSafetyCheck with result ∈ ok|flagged|bad_response|unavailable
+ *     so the safety_check_total counter in Grafana reflects every outcome.
  */
 class LinkSafetyService
 {
