@@ -89,4 +89,14 @@ class LinkSafetyServiceTest extends TestCase
         $this->assertTrue($result['safe']);
         $this->assertFalse($result['api_available']);
     }
+
+    /**
+     * Otel::recordSafetyCheck is callable without throwing when telemetry is disabled.
+     */
+    public function test_record_safety_check_is_noop_when_disabled(): void
+    {
+        config(['otel.enabled' => false]);
+        \App\Observability\Otel::recordSafetyCheck('bad_response');
+        $this->addToAssertionCount(1);
+    }
 }
