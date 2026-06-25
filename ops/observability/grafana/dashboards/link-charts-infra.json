@@ -1,0 +1,340 @@
+{
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "Host",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Percentual de CPU consumida (média de todos os cores); laranja ≥ 75%, vermelho ≥ 90%.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 75},
+              {"color": "red", "value": 90}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU em uso %",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Percentual de RAM em uso; laranja ≥ 80%, vermelho ≥ 90%.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 80},
+              {"color": "red", "value": 90}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+          "refId": "A"
+        }
+      ],
+      "title": "Memória em uso %",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Percentual do disco raiz (/) ocupado; laranja ≥ 80%, vermelho ≥ 90%.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 80},
+              {"color": "red", "value": 90}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 1},
+      "id": 3,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Disco / em uso %",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Load average de 1 minuto — número médio de processos aguardando CPU; valores acima do número de cores indicam saturação.",
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 1},
+      "id": 4,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "node_load1",
+          "legendFormat": "load1",
+          "refId": "A"
+        }
+      ],
+      "title": "Load average (1m)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 8},
+      "id": 101,
+      "panels": [],
+      "title": "Postgres",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Indica se o exporter Postgres está acessível — UP (verde) ou DOWN (vermelho).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {"color": "red", "text": "DOWN"},
+                "1": {"color": "green", "text": "UP"}
+              },
+              "type": "value"
+            }
+          ]
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 9},
+      "id": 5,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "pg_up",
+          "refId": "A"
+        }
+      ],
+      "title": "Postgres up",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Número de conexões ativas versus o limite configurado (max_connections); aproximar-se do limite causa rejeição de novas conexões.",
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 9},
+      "id": 6,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum(pg_stat_database_numbackends)",
+          "legendFormat": "ativas",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "max(pg_settings_max_connections)",
+          "legendFormat": "max",
+          "refId": "B"
+        }
+      ],
+      "title": "Postgres conexões",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Taxa de acerto do cache de blocos do Postgres (shared_buffers); abaixo de 90% indica I/O excessivo em disco.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 0.9},
+              {"color": "green", "value": 0.99}
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 9},
+      "id": 7,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum(rate(pg_stat_database_blks_hit[5m])) / (sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])))",
+          "refId": "A"
+        }
+      ],
+      "title": "Postgres cache hit %",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Taxa de commits e rollbacks por segundo; aumento de rollbacks pode indicar erros de aplicação ou deadlocks.",
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 9},
+      "id": 8,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum(rate(pg_stat_database_xact_commit[5m]))",
+          "legendFormat": "commits",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum(rate(pg_stat_database_xact_rollback[5m]))",
+          "legendFormat": "rollbacks",
+          "refId": "B"
+        }
+      ],
+      "title": "Postgres commits / rollbacks (rate)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "id": 102,
+      "panels": [],
+      "title": "Redis",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Indica se o exporter Redis está acessível — UP (verde) ou DOWN (vermelho).",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "options": {
+                "0": {"color": "red", "text": "DOWN"},
+                "1": {"color": "green", "text": "UP"}
+              },
+              "type": "value"
+            }
+          ]
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 0, "y": 17},
+      "id": 9,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "redis_up",
+          "refId": "A"
+        }
+      ],
+      "title": "Redis up",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Bytes de memória RAM utilizados pelo Redis; monitore para detectar crescimento antes de atingir o limite e acionar evictions.",
+      "fieldConfig": {"defaults": {"unit": "bytes"}},
+      "gridPos": {"h": 7, "w": 6, "x": 6, "y": 17},
+      "id": 10,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "redis_memory_used_bytes",
+          "legendFormat": "usada",
+          "refId": "A"
+        }
+      ],
+      "title": "Redis memória usada",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Proporção de lookups que encontram a chave no cache; abaixo de 90% indica muitas chaves ausentes ou TTLs curtos.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 0.8},
+              {"color": "green", "value": 0.95}
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 7, "w": 6, "x": 12, "y": 17},
+      "id": 11,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Redis hit ratio %",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Número de comandos Redis processados por segundo; picos inesperados podem indicar loops de retry ou comportamento anômalo da aplicação.",
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 7, "w": 6, "x": 18, "y": 17},
+      "id": 12,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "rate(redis_commands_processed_total[5m])",
+          "legendFormat": "ops/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Redis ops/seg",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["link-charts", "infra"],
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Link Charts — Infra (Host / Postgres / Redis)",
+  "uid": "link-charts-infra"
+}
