@@ -33,6 +33,9 @@ final class Otel
     /** Memoized HTTP server request duration histogram; created once per process. */
     private static ?HistogramInterface $httpHistogram = null;
 
+    /** Memoized Safe Browsing check counter; created once per process. */
+    private static ?CounterInterface $safetyCounter = null;
+
     /** Whether telemetry export is active for this process. */
     public static function enabled(): bool
     {
@@ -84,6 +87,27 @@ final class Otel
             self::$redirectHistogram->record($durationSeconds, $attributes);
         } catch (Throwable) {
             // Telemetry must never break a redirect.
+        }
+    }
+
+    /**
+     * Records one Safe Browsing check outcome. No-op and exception-swallowing so
+     * a telemetry failure never breaks link creation. The instrument is memoized
+     * once per process.
+     *
+     * @param  string  $result  One of: ok|flagged|bad_response|unavailable.
+     */
+    public static function recordSafetyCheck(string $result): void
+    {
+        if (! self::enabled()) {
+            return;
+        }
+
+        try {
+            self::$safetyCounter ??= self::meter()->createCounter('safety.check.count');
+            self::$safetyCounter->add(1, ['safety.result' => $result]);
+        } catch (Throwable) {
+            // Telemetry must never break a safety check.
         }
     }
 
