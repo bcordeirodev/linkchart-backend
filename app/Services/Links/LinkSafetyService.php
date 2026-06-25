@@ -3,6 +3,7 @@
 namespace App\Services\Links;
 
 use App\Logging\AppLogger;
+use App\Observability\Otel;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -57,6 +58,7 @@ class LinkSafetyService
 
         if (empty($apiKey)) {
             AppLogger::safetyApiUnavailable('GOOGLE_SAFE_BROWSING_KEY missing');
+            Otel::recordSafetyCheck('unavailable');
 
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
@@ -77,6 +79,7 @@ class LinkSafetyService
 
             if ($response->failed()) {
                 AppLogger::safetyApiBadResponse($response->status(), $response->body(), $url);
+                Otel::recordSafetyCheck('bad_response');
 
                 return ['safe' => true, 'threats' => [], 'api_available' => false];
             }
@@ -84,6 +87,8 @@ class LinkSafetyService
             $matches = $response->json('matches', []);
 
             if (empty($matches)) {
+                Otel::recordSafetyCheck('ok');
+
                 return ['safe' => true, 'threats' => [], 'api_available' => true];
             }
 
@@ -95,9 +100,12 @@ class LinkSafetyService
                 $matches
             )));
 
+            Otel::recordSafetyCheck('flagged');
+
             return ['safe' => false, 'threats' => $threats, 'api_available' => true];
         } catch (\Throwable $e) {
             AppLogger::safetyApiError($e, $url);
+            Otel::recordSafetyCheck('unavailable');
 
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
