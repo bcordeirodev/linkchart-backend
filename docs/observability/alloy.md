@@ -90,8 +90,9 @@ Remove the two lines from the `app` service `environment` block in
 
 Then redeploy. The app falls back to the `OTEL_EXPORTER_OTLP_ENDPOINT` and
 `OTEL_EXPORTER_OTLP_HEADERS` values still present in `.env.production`,
-reverting to direct export to the Grafana Cloud gateway. No telemetry data is
-lost during the switchover.
+reverting to direct export to the Grafana Cloud gateway. Note: in-flight
+buffered metric/trace data at the container restart is lost; all subsequent
+data flows normally.
 
 ---
 
@@ -111,6 +112,8 @@ Auto-instrumentation is enabled by `ext-opentelemetry` 1.2.1 (installed in `Dock
 **Tuning dial:** disable noisy instrumentations via `OTEL_PHP_DISABLED_INSTRUMENTATIONS=<csv>`. Example values: `laravel` (framework spans), `pdo` (database spans—use if redirect hot path shows excessive spans). Set in `.env.production` or inject as Docker env var.
 
 **Rollback (fast):** set `OTEL_ENABLED=false` (stops all emission). **Rollback (full):** redeploy the previous image (extension + packages are baked in).
+
+**Metric flush on shutdown:** `OpenTelemetryServiceProvider` calls `$meterProvider->forceFlush()` in `App::terminating()` (HTTP) and `ObservabilityServiceProvider::finish()` calls a flush after each job (worker), so metrics export before PHP shutdown and queue workers don't lose DELTA points. This is why auto-instrumentation doesn't silently drop metrics.
 
 ---
 
@@ -183,10 +186,14 @@ in `ops/observability/alloy/config.alloy` and redeploy.
 
 ---
 
-## Rollback
+## Rollback — Fase 1 (infra apenas)
 
-Stop only the three new containers — the app container keeps exporting directly, so
-application telemetry (traces, metrics, logs from `linkchartapi`) is unaffected:
+Stop only the three infra containers. This halts host/node metrics, container
+and nginx log collection (Alloy's infra pipeline). **Post-Phase-2, stopping
+Alloy also drops all app traces, metrics, and logs** (`linkchartapi` won't
+crash — export fails silently/async — but telemetry is lost). To halt only app
+telemetry without stopping Alloy, set `OTEL_ENABLED=false` in the app's
+environment instead.
 
 ```bash
 ssh root@134.209.33.182 \
@@ -216,16 +223,36 @@ Check: if `node_filesystem_avail_bytes{mountpoint="/"}` shows only a few GB (the
 container root), the component is reading the container namespace rather than the
 host.
 
-Fix: add the following arguments to the `prometheus.exporter.unix` block in
-`ops/observability/alloy/config.alloy`:
+**This is already solved in the live config.** The `prometheus.exporter.unix "host"`
+block in `ops/observability/alloy/config.alloy` already contains all three rootfs
+paths:
 
 ```alloy
-prometheus.exporter.unix "node" {
+prometheus.exporter.unix "host" {
+  rootfs_path = "/rootfs"
   procfs_path = "/rootfs/proc"
   sysfs_path  = "/rootfs/sys"
-  rootfs_path = "/rootfs"
 }
 ```
 
 The `/rootfs` bind-mount (`/:/rootfs:ro,rslave`) is already declared in
-`docker-compose.prod.yml` for this purpose.
+`docker-compose.prod.yml` for this purpose. To verify the paths are present:
+
+```bash
+grep rootfs_path ops/observability/alloy/config.alloy
+```
+
+---
+
+## Operação relacionada
+
+- **Uptime externo:** o workflow `.github/workflows/uptime.yml` (GitHub Actions,
+  executa a cada 5 min, fora do droplet) abre uma issue com label `incident` se a
+  prod cair. Antes de investigar qualquer incidente, cheque se há issues abertas
+  recentes nesse repositório — pode confirmar que o problema é na infraestrutura e
+  não na observabilidade.
+- **`service.version`:** o deploy injeta `APP_VERSION` com os 12 primeiros chars do
+  `github.sha` → esse valor aparece como `service_version` em toda a telemetria
+  (métricas, traces, logs). Use-o para correlacionar um spike ou regressão com o
+  release exato no Tempo/Mimir (filtre `service_version="<sha>"` antes/depois do
+  deploy).
