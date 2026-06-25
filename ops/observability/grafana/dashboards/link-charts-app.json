@@ -1,0 +1,196 @@
+{
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "API (RED)",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Taxa de requisições chegando à API (todas as rotas); queda brusca pode indicar indisponibilidade.",
+      "fieldConfig": {"defaults": {"unit": "reqps"}},
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum(rate(http_server_request_count_total[5m]))",
+          "refId": "A"
+        }
+      ],
+      "title": "API req/s",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Fração de respostas 5xx sobre o total; laranja ≥ 2%, vermelho ≥ 5%.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 0.02},
+              {"color": "red", "value": 0.05}
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "options": {"reduceOptions": {"calc": ["lastNotNull"]}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum(rate(http_server_request_count_total{http_response_status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(http_server_request_count_total[5m])),0.001)",
+          "refId": "A"
+        }
+      ],
+      "title": "API taxa de erro (5xx) %",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Percentis de latência da API ao longo do tempo — p50 é a mediana, p95 e p99 revelam a cauda lenta.",
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 1},
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "title": "API latência p50/p95/p99",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Volume de requests por classe de status HTTP (2xx, 4xx, 5xx) ao longo do tempo — identifica visualmente se erros estão crescendo.",
+      "fieldConfig": {"defaults": {"unit": "reqps"}},
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 7},
+      "id": 4,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum by (http_response_status_class) (rate(http_server_request_count_total[5m]))",
+          "legendFormat": "{{http_response_status_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Requests por classe de status (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "As 10 rotas mais chamadas no intervalo selecionado — use para identificar endpoints com maior carga.",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 7},
+      "id": 5,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "topk(10, sum by (http_route, http_request_method) (rate(http_server_request_count_total[5m])))",
+          "format": "table",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Top rotas (req/s)",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 101,
+      "panels": [],
+      "title": "Safety",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Distribuição dos resultados da verificação de segurança de URLs (safe, unsafe, error) no período selecionado.",
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 15},
+      "id": 6,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum by (safety_result) (increase(safety_check_count_total[$__range]))",
+          "instant": true,
+          "legendFormat": "{{safety_result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Safety check por resultado",
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 22},
+      "id": 102,
+      "panels": [],
+      "title": "Jobs",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Taxa de jobs processados por segundo, separados por status (processed, failed, retrying) — permite ver throughput e taxa de falhas.",
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 23},
+      "id": 7,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "sum by (job_status) (rate(job_count_total[5m]))",
+          "legendFormat": "{{job_status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Jobs por status (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+      "description": "Percentil 95 da duração de execução dos jobs — valores altos indicam jobs lentos que podem acumular na fila.",
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 7, "w": 8, "x": 8, "y": 23},
+      "id": 8,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "grafanacloud-prom"},
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(job_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "title": "Job duração p95",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["link-charts", "app", "red"],
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser",
+  "title": "Link Charts — App (RED / Safety / Jobs)",
+  "uid": "link-charts-app"
+}
