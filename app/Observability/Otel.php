@@ -36,6 +36,12 @@ final class Otel
     /** Memoized Safe Browsing check counter; created once per process. */
     private static ?CounterInterface $safetyCounter = null;
 
+    /** Memoized job counter; created once per process. */
+    private static ?CounterInterface $jobCounter = null;
+
+    /** Memoized job duration histogram; created once per process. */
+    private static ?HistogramInterface $jobHistogram = null;
+
     /** Whether telemetry export is active for this process. */
     public static function enabled(): bool
     {
@@ -108,6 +114,32 @@ final class Otel
             self::$safetyCounter->add(1, ['safety.result' => $result]);
         } catch (Throwable) {
             // Telemetry must never break a safety check.
+        }
+    }
+
+    /**
+     * Records one finished queue job as OTel metrics. No-op and exception-swallowing
+     * so a telemetry failure never breaks job processing. Instruments memoized once
+     * per process.
+     *
+     * @param  string  $job  Fully-qualified job class name.
+     * @param  string  $status  One of: succeeded|failed.
+     * @param  float  $durationSeconds  Wall-clock time from job start to completion.
+     */
+    public static function recordJob(string $job, string $status, float $durationSeconds): void
+    {
+        if (! self::enabled()) {
+            return;
+        }
+
+        try {
+            self::$jobCounter ??= self::meter()->createCounter('job.count');
+            self::$jobHistogram ??= self::meter()->createHistogram('job.duration', 's');
+            $attributes = ['job.name' => $job, 'job.status' => $status];
+            self::$jobCounter->add(1, $attributes);
+            self::$jobHistogram->record($durationSeconds, $attributes);
+        } catch (Throwable) {
+            // Telemetry must never break job processing.
         }
     }
 
