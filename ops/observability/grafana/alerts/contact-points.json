@@ -1,0 +1,12 @@
+[
+  {
+    "disableResolveMessage": false,
+    "name": "Link Charts Email",
+    "settings": {
+      "addresses": "linkcharts@gmail.com",
+      "singleEmail": true
+    },
+    "type": "email",
+    "uid": "dfq1agmr359tsb"
+  }
+]
