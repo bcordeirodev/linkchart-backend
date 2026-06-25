@@ -90,16 +90,7 @@ final class OtelTrace
             // an array — so we can pass the raw headers bag directly.
             $parent = Globals::propagator()->extract($request->headers->all());
 
-            // Prefer the route NAME, then the route URI TEMPLATE (e.g.
-            // "links/analytics/link/{id}/dashboard"), and only fall back to the
-            // raw path as a last resort. Using the template keeps span-name
-            // cardinality bounded — the raw path embeds numeric IDs and would
-            // explode the number of distinct span names in production.
-            $name = $request->method().' '.(
-                $request->route()?->getName()
-                ?? $request->route()?->uri()
-                ?? $request->path()
-            );
+            $name = $request->method().' '.self::routeLabel($request);
 
             $span = Otel::tracer()
                 ->spanBuilder($name)
@@ -135,7 +126,7 @@ final class OtelTrace
 
         if ($start !== null && ! in_array($routeName, self::REDIRECT_ROUTE_NAMES, true)) {
             Otel::recordHttpServer(
-                $routeName ?? $request->route()?->uri() ?? 'unknown',
+                self::routeLabel($request),
                 $request->method(),
                 $response->getStatusCode(),
                 microtime(true) - $start,
@@ -165,5 +156,30 @@ final class OtelTrace
             $request->attributes->remove(self::ATTR_SPAN);
             $request->attributes->remove(self::ATTR_SCOPE);
         }
+    }
+
+    /**
+     * Human-readable, low-cardinality route identifier for span names and the
+     * `http.route` metric label.
+     *
+     * Prefers a real route name; Laravel's auto-generated names (`generated::…`,
+     * for routes registered without ->name()) are useless for analysis, so for
+     * those we use the URI TEMPLATE instead (e.g. "api/public/link/{slug}").
+     * Unmatched requests (404, no route) return 'unknown' — never the raw path,
+     * whose embedded IDs would explode cardinality.
+     */
+    private static function routeLabel(Request $request): string
+    {
+        $route = $request->route();
+
+        if ($route === null) {
+            return 'unknown';
+        }
+
+        $name = $route->getName();
+
+        return ($name !== null && ! str_starts_with($name, 'generated::'))
+            ? $name
+            : $route->uri();
     }
 }
