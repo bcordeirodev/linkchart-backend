@@ -3,6 +3,10 @@ name: Deploy backend to Production
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'ops/observability/grafana/**'
   workflow_dispatch:
     inputs:
       force_rebuild:
