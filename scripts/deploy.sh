@@ -41,6 +41,18 @@ sed -i '/^AUTH0_DOMAIN=/d' .env.production
 printf 'AUTH0_DOMAIN=%s\n' "login.linkcharts.com.br" >> .env.production
 echo "Auth0 domain injected into .env.production"
 
+# ── App version (git SHA) injection ───────────────────────────────────────────
+# Stamps OTel service.version with the deployed commit so traces/metrics/logs in
+# Grafana can be correlated to the exact release. Passed as APP_VERSION (full SHA)
+# from the deploy workflow; shortened to 12 chars for readability. config/otel.php
+# reads env('OTEL_SERVICE_VERSION', env('APP_VERSION', 'dev')).
+if [ -n "${APP_VERSION:-}" ]; then
+    APP_VERSION_SHORT=$(printf '%s' "$APP_VERSION" | tr -d '[:space:]' | cut -c1-12)
+    sed -i '/^APP_VERSION=/d' .env.production
+    printf 'APP_VERSION=%s\n' "$APP_VERSION_SHORT" >> .env.production
+    echo "App version ($APP_VERSION_SHORT) injected into .env.production"
+fi
+
 # ── OpenTelemetry → Grafana Cloud injection ───────────────────────────────────
 # Telemetry export (traces/metrics/logs). OTEL_EXPORTER_OTLP_HEADERS carries the
 # secret Authorization header (passed from GitHub Secrets); the rest are
