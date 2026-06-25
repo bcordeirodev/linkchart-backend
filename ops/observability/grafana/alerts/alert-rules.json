@@ -1,612 +1,828 @@
 [
-  {
-    "annotations": {
-      "summary": "Mais de 5% das requests da API retornando 5xx (5m). Investigue erros do backend no Loki/Tempo."
+    {
+        "id": 7,
+        "uid": "efq78j3qb3htsa",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-app",
+        "title": "Link Charts \u2014 Taxa de erro 5xx alta (API)",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "sum(rate(http_server_request_count_total{http_response_status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(http_server_request_count_total[5m])),0.001)",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    0.05
+                                ],
+                                "type": "gt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T12:23:21Z",
+        "noDataState": "OK",
+        "execErrState": "OK",
+        "for": "10m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "Mais de 5% das requests da API retornando 5xx (5m). Investigue erros do backend no Loki/Tempo."
+        },
+        "labels": {
+            "app": "link-charts",
+            "severity": "critical"
+        },
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
+        },
+        "record": null
     },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "sum(rate(http_server_request_count_total{http_response_status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(http_server_request_count_total[5m])),0.001)",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
+    {
+        "id": 8,
+        "uid": "cfq78jdka7htse",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-app",
+        "title": "Link Charts \u2014 Lat\u00eancia p95 alta (API)",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    1.5
+                                ],
+                                "type": "gt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T12:23:26Z",
+        "noDataState": "OK",
+        "execErrState": "OK",
+        "for": "10m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "p95 de lat\u00eancia da API > 1.5s (5m). Veja as rotas/queries lentas no Tempo (spans de DB/HTTP)."
         },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
+        "labels": {
+            "app": "link-charts",
+            "severity": "warning"
         },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [0.05], "type": "gt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
         },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "10m",
-    "id": 7,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "critical"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
+        "record": null
     },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-app",
-    "title": "Link Charts — Taxa de erro 5xx alta (API)",
-    "uid": "efq78j3qb3htsa",
-    "updated": "2026-06-25T12:23:21Z"
-  },
-  {
-    "annotations": {
-      "summary": "p95 de latência da API > 1.5s (5m). Veja as rotas/queries lentas no Tempo (spans de DB/HTTP)."
+    {
+        "id": 9,
+        "uid": "efq78jo9jjpq8a",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-app",
+        "title": "Link Charts \u2014 Falha de jobs de fila",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 3600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "sum(increase(job_count_total{job_status=\"failed\"}[1h]))",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    0
+                                ],
+                                "type": "gt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T12:23:32Z",
+        "noDataState": "OK",
+        "execErrState": "OK",
+        "for": "5m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "Job(s) de fila falhando (1h). Ex: ProcessLinkClickJob. Veja jobs.failed nos logs e o trace process-click."
+        },
+        "labels": {
+            "app": "link-charts",
+            "severity": "warning"
+        },
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
+        },
+        "record": null
     },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
+    {
+        "id": 3,
+        "uid": "cfq4dw0khnchsd",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-infra",
+        "title": "Link Charts \u2014 Disco do droplet quase cheio",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    0.1
+                                ],
+                                "type": "lt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T15:34:02Z",
+        "noDataState": "Alerting",
+        "execErrState": "OK",
+        "for": "10m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "Menos de 10% de disco livre em / no droplet. Risco de quebra (logs, DB, build). Limpe espa\u00e7o ou aumente o volume."
         },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
+        "labels": {
+            "app": "link-charts",
+            "severity": "critical"
         },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [1.5], "type": "gt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
         },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "10m",
-    "id": 8,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "warning"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
+        "record": null
     },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-app",
-    "title": "Link Charts — Latência p95 alta (API)",
-    "uid": "cfq78jdka7htse",
-    "updated": "2026-06-25T12:23:26Z"
-  },
-  {
-    "annotations": {
-      "summary": "Job(s) de fila falhando (1h). Ex: ProcessLinkClickJob. Veja jobs.failed nos logs e o trace process-click."
+    {
+        "id": 4,
+        "uid": "afq4dwbfuqmtce",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-infra",
+        "title": "Link Charts \u2014 Mem\u00f3ria do droplet alta (risco OOM)",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    0.1
+                                ],
+                                "type": "lt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T15:34:07Z",
+        "noDataState": "Alerting",
+        "execErrState": "OK",
+        "for": "10m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "Menos de 10% de mem\u00f3ria dispon\u00edvel no droplet (4GB). Risco de OOM matar cont\u00eaineres. Verifique consumo."
+        },
+        "labels": {
+            "app": "link-charts",
+            "severity": "warning"
+        },
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
+        },
+        "record": null
     },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "sum(increase(job_count_total{job_status=\"failed\"}[1h]))",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
+    {
+        "id": 5,
+        "uid": "cfq4dwm8fxzb4e",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-infra",
+        "title": "Link Charts \u2014 Postgres down",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "pg_up",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    1
+                                ],
+                                "type": "lt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T15:33:50Z",
+        "noDataState": "Alerting",
+        "execErrState": "OK",
+        "for": "5m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "postgres_exporter reporta pg_up=0 \u2014 o banco est\u00e1 inacess\u00edvel. App degrada (fail/erros). Investigue o cont\u00eainer linkchartdb."
         },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 3600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
+        "labels": {
+            "app": "link-charts",
+            "severity": "critical"
         },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [0], "type": "gt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
         },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "5m",
-    "id": 9,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "warning"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
+        "record": null
     },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-app",
-    "title": "Link Charts — Falha de jobs de fila",
-    "uid": "efq78jo9jjpq8a",
-    "updated": "2026-06-25T12:23:32Z"
-  },
-  {
-    "annotations": {
-      "summary": "Menos de 10% de disco livre em / no droplet. Risco de quebra (logs, DB, build). Limpe espaço ou aumente o volume."
+    {
+        "id": 6,
+        "uid": "efq4dwvizueioc",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-infra",
+        "title": "Link Charts \u2014 Redis down",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-prom",
+                "model": {
+                    "expr": "redis_up",
+                    "instant": true,
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "range": false,
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    1
+                                ],
+                                "type": "lt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-25T15:33:56Z",
+        "noDataState": "Alerting",
+        "execErrState": "OK",
+        "for": "5m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "redis_exporter reporta redis_up=0 \u2014 cache/filas indispon\u00edveis. Redirect cache e jobs afetados. Investigue o cont\u00eainer linkchartredis."
+        },
+        "labels": {
+            "app": "link-charts",
+            "severity": "critical"
+        },
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
+        },
+        "record": null
     },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
+    {
+        "id": 1,
+        "uid": "ffq1aiqlc5vr4c",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-prod",
+        "title": "Link Charts \u2014 Safety check falhando (prod)",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "instant",
+                "relativeTimeRange": {
+                    "from": 3600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-logs",
+                "model": {
+                    "expr": "sum(count_over_time({service_name=\"linkcharts-backend\", deployment_environment_name=\"production\"} |= \"safety.api_error\" [1h]))",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "queryType": "instant",
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    0
+                                ],
+                                "type": "gt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-23T20:24:17Z",
+        "noDataState": "OK",
+        "execErrState": "OK",
+        "for": "5m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "Google Safe Browsing est\u00e1 retornando erro em produ\u00e7\u00e3o \u2014 prote\u00e7\u00e3o de URL desligada (fail-open). Veja status/corpo reais nos logs: {service_name=\"linkcharts-backend\"} |= \"safety.api_error\"."
         },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
+        "labels": {
+            "app": "link-charts",
+            "severity": "warning"
         },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [0.1], "type": "lt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
         },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "10m",
-    "id": 3,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "critical"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
+        "record": null
     },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-infra",
-    "title": "Link Charts — Disco do droplet quase cheio",
-    "uid": "cfq4dw0khnchsd",
-    "updated": "2026-06-24T17:12:44Z"
-  },
-  {
-    "annotations": {
-      "summary": "Menos de 10% de memória disponível no droplet (4GB). Risco de OOM matar contêineres. Verifique consumo."
-    },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
+    {
+        "id": 2,
+        "uid": "afq1aj2u0qzuoa",
+        "orgID": 1,
+        "folderUID": "link-charts-alerts",
+        "ruleGroup": "link-charts-prod",
+        "title": "Link Charts \u2014 Erros do backend em prod (exceto safety)",
+        "condition": "C",
+        "data": [
+            {
+                "refId": "A",
+                "queryType": "instant",
+                "relativeTimeRange": {
+                    "from": 3600,
+                    "to": 0
+                },
+                "datasourceUid": "grafanacloud-logs",
+                "model": {
+                    "expr": "sum(count_over_time({service_name=\"linkcharts-backend\", deployment_environment_name=\"production\"} != \"safety.api_error\" | severity_text=\"ERROR\" [1h]))",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "queryType": "instant",
+                    "refId": "A"
+                }
+            },
+            {
+                "refId": "B",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "expression": "A",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "reducer": "last",
+                    "refId": "B",
+                    "type": "reduce"
+                }
+            },
+            {
+                "refId": "C",
+                "queryType": "",
+                "relativeTimeRange": {
+                    "from": 0,
+                    "to": 0
+                },
+                "datasourceUid": "__expr__",
+                "model": {
+                    "conditions": [
+                        {
+                            "evaluator": {
+                                "params": [
+                                    0
+                                ],
+                                "type": "gt"
+                            }
+                        }
+                    ],
+                    "expression": "B",
+                    "intervalMs": 1000,
+                    "maxDataPoints": 43200,
+                    "refId": "C",
+                    "type": "threshold"
+                }
+            }
+        ],
+        "updated": "2026-06-23T20:24:23Z",
+        "noDataState": "OK",
+        "execErrState": "OK",
+        "for": "5m",
+        "keep_firing_for": "0s",
+        "annotations": {
+            "summary": "Erro(s) de n\u00edvel ERROR no backend em produ\u00e7\u00e3o (fora o safety). Investigue: {service_name=\"linkcharts-backend\", deployment_environment_name=\"production\"} | severity_text=\"ERROR\"."
         },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
+        "labels": {
+            "app": "link-charts",
+            "severity": "critical"
         },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [0.1], "type": "lt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
+        "isPaused": false,
+        "notification_settings": {
+            "receiver": "Link Charts Email",
+            "group_by": [
+                "grafana_folder",
+                "alertname"
+            ]
         },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "10m",
-    "id": 4,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "warning"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
-    },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-infra",
-    "title": "Link Charts — Memória do droplet alta (risco OOM)",
-    "uid": "afq4dwbfuqmtce",
-    "updated": "2026-06-24T17:12:50Z"
-  },
-  {
-    "annotations": {
-      "summary": "postgres_exporter reporta pg_up=0 — o banco está inacessível. App degrada (fail/erros). Investigue o contêiner linkchartdb."
-    },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "pg_up",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
-        },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
-        },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [1], "type": "lt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
-        },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "5m",
-    "id": 5,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "critical"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
-    },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-infra",
-    "title": "Link Charts — Postgres down",
-    "uid": "cfq4dwm8fxzb4e",
-    "updated": "2026-06-24T17:12:55Z"
-  },
-  {
-    "annotations": {
-      "summary": "redis_exporter reporta redis_up=0 — cache/filas indisponíveis. Redirect cache e jobs afetados. Investigue o contêiner linkchartredis."
-    },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-prom",
-        "model": {
-          "expr": "redis_up",
-          "instant": true,
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "range": false,
-          "refId": "A"
-        },
-        "queryType": "",
-        "refId": "A",
-        "relativeTimeRange": {"from": 600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
-        },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [1], "type": "lt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
-        },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "5m",
-    "id": 6,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "critical"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
-    },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-infra",
-    "title": "Link Charts — Redis down",
-    "uid": "efq4dwvizueioc",
-    "updated": "2026-06-24T17:13:00Z"
-  },
-  {
-    "annotations": {
-      "summary": "Google Safe Browsing está retornando erro em produção — proteção de URL desligada (fail-open). Veja status/corpo reais nos logs: {service_name=\"linkcharts-backend\"} |= \"safety.api_error\"."
-    },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-logs",
-        "model": {
-          "expr": "sum(count_over_time({service_name=\"linkcharts-backend\", deployment_environment_name=\"production\"} |= \"safety.api_error\" [1h]))",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "queryType": "instant",
-          "refId": "A"
-        },
-        "queryType": "instant",
-        "refId": "A",
-        "relativeTimeRange": {"from": 3600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
-        },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [0], "type": "gt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
-        },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "5m",
-    "id": 1,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "warning"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
-    },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-prod",
-    "title": "Link Charts — Safety check falhando (prod)",
-    "uid": "ffq1aiqlc5vr4c",
-    "updated": "2026-06-23T20:24:17Z"
-  },
-  {
-    "annotations": {
-      "summary": "Erro(s) de nível ERROR no backend em produção (fora o safety). Investigue: {service_name=\"linkcharts-backend\", deployment_environment_name=\"production\"} | severity_text=\"ERROR\"."
-    },
-    "condition": "C",
-    "data": [
-      {
-        "datasourceUid": "grafanacloud-logs",
-        "model": {
-          "expr": "sum(count_over_time({service_name=\"linkcharts-backend\", deployment_environment_name=\"production\"} != \"safety.api_error\" | severity_text=\"ERROR\" [1h]))",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "queryType": "instant",
-          "refId": "A"
-        },
-        "queryType": "instant",
-        "refId": "A",
-        "relativeTimeRange": {"from": 3600, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "expression": "A",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "reducer": "last",
-          "refId": "B",
-          "type": "reduce"
-        },
-        "queryType": "",
-        "refId": "B",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      },
-      {
-        "datasourceUid": "__expr__",
-        "model": {
-          "conditions": [{"evaluator": {"params": [0], "type": "gt"}}],
-          "expression": "B",
-          "intervalMs": 1000,
-          "maxDataPoints": 43200,
-          "refId": "C",
-          "type": "threshold"
-        },
-        "queryType": "",
-        "refId": "C",
-        "relativeTimeRange": {"from": 0, "to": 0}
-      }
-    ],
-    "execErrState": "OK",
-    "folderUID": "link-charts-alerts",
-    "for": "5m",
-    "id": 2,
-    "isPaused": false,
-    "keep_firing_for": "0s",
-    "labels": {"app": "link-charts", "severity": "critical"},
-    "noDataState": "OK",
-    "notification_settings": {
-      "group_by": ["grafana_folder", "alertname"],
-      "receiver": "Link Charts Email"
-    },
-    "orgID": 1,
-    "record": null,
-    "ruleGroup": "link-charts-prod",
-    "title": "Link Charts — Erros do backend em prod (exceto safety)",
-    "uid": "afq1aj2u0qzuoa",
-    "updated": "2026-06-23T20:24:23Z"
-  }
+        "record": null
+    }
 ]
