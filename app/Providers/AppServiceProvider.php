@@ -89,6 +89,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(30)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Sugestão de slug do shortener público. Faz um fetch externo de preview
+        // (og:title) por request, então é throttled por IP para conter abuso —
+        // o endpoint é público e não autenticado.
+        RateLimiter::for('suggest-slug', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
         // Reenvio de email de verificação. Há um cooldown de 2 min no model
         // (User::canResendVerificationEmail), mas sem limite de rota um atacante
         // autenticado poderia abusar da cota/reputação do SendGrid. Chaveado por
