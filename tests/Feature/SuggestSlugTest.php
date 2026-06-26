@@ -40,6 +40,9 @@ class SuggestSlugTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.slug', 'cat-wikipedia');
+        // og:title is returned alongside the slug so the public form can fill the
+        // title from the same request (no separate authenticated url-meta call).
+        $response->assertJsonPath('data.og_title', 'Cat - Wikipedia');
     }
 
     public function test_taken_base_gets_short_random_token_not_a_counter(): void
@@ -65,6 +68,8 @@ class SuggestSlugTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.slug', 'my-cool-page');
+        // No og:title available → null is surfaced (slug still derived from path).
+        $response->assertJsonPath('data.og_title', null);
     }
 
     public function test_falls_back_to_host_when_no_title_and_no_path(): void

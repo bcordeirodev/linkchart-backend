@@ -51,17 +51,29 @@ class SlugSuggestionService
     ) {}
 
     /**
-     * Suggest a single available slug for the given target URL.
+     * Suggest a single available slug for the given target URL, alongside the
+     * page's og:title.
+     *
+     * The preview is fetched once here and reused both for slug derivation and
+     * for the returned `og_title`, so a public (unauthenticated) caller can fill
+     * the link title and slug from a single request without a second metadata
+     * round-trip.
      *
      * @param  string  $url  The target URL (with or without scheme).
-     * @return string A normalized, currently-available slug.
+     * @return array{slug: string, og_title: string|null} A normalized,
+     *                                                    currently-available slug
+     *                                                    and the page's og:title.
      */
-    public function suggestForUrl(string $url): string
+    public function suggestForUrl(string $url): array
     {
         $normalizedUrl = $this->normalizeUrl($url);
-        $base = $this->deriveBase($normalizedUrl);
+        $ogTitle = $this->fetchOgTitle($normalizedUrl);
+        $base = $this->deriveBase($normalizedUrl, $ogTitle);
 
-        return $this->resolveAvailable($base);
+        return [
+            'slug' => $this->resolveAvailable($base),
+            'og_title' => $ogTitle,
+        ];
     }
 
     /**
@@ -80,22 +92,31 @@ class SlugSuggestionService
     }
 
     /**
-     * Derive a base slug, preferring the page's og:title and falling back to the
-     * URL's last path segment, then its host label. Returns null when nothing
-     * usable can be produced (caller then uses a random slug).
+     * Fetch the target page's og:title, best-effort. Preview failures are
+     * swallowed (returns null) so slug resolution always proceeds.
      */
-    private function deriveBase(string $url): ?string
+    private function fetchOgTitle(string $url): ?string
     {
         try {
-            $title = $this->previewService->fetchPreview($url)['og_title'] ?? null;
-            if ($title) {
-                $fromTitle = $this->normalize($title);
-                if ($fromTitle !== null) {
-                    return $fromTitle;
-                }
-            }
+            return $this->previewService->fetchPreview($url)['og_title'] ?? null;
         } catch (\Throwable) {
-            // Preview fetch is best-effort — fall through to URL-based derivation.
+            // Preview fetch is best-effort — caller falls back to URL derivation.
+            return null;
+        }
+    }
+
+    /**
+     * Derive a base slug, preferring the (already-fetched) og:title and falling
+     * back to the URL's last path segment, then its host label. Returns null when
+     * nothing usable can be produced (caller then uses a random slug).
+     */
+    private function deriveBase(string $url, ?string $ogTitle): ?string
+    {
+        if ($ogTitle) {
+            $fromTitle = $this->normalize($ogTitle);
+            if ($fromTitle !== null) {
+                return $fromTitle;
+            }
         }
 
         return $this->deriveFromUrl($url);
