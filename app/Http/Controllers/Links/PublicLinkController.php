@@ -104,7 +104,7 @@ class PublicLinkController extends Controller
      * Auth: not required
      * Owner check: no
      *
-     * Response shape: { data: { slug: string } } (200)
+     * Response shape: { data: { slug: string, og_title: string|null } } (200)
      *                 { error } (422) when `url` is missing.
      *                 { error, message } on server error (500)
      */
@@ -115,10 +115,13 @@ class PublicLinkController extends Controller
         ]);
 
         try {
-            $slug = $suggestionService->suggestForUrl($validated['url']);
+            $suggestion = $suggestionService->suggestForUrl($validated['url']);
 
             return response()->json([
-                'data' => ['slug' => $slug],
+                'data' => [
+                    'slug' => $suggestion['slug'],
+                    'og_title' => $suggestion['og_title'],
+                ],
             ]);
         } catch (\Exception $e) {
             \App\Logging\AppLogger::httpServerError('api.public.links.suggest-slug', $e, auth()->id());
