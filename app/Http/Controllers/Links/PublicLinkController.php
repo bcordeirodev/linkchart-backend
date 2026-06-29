@@ -8,7 +8,9 @@ use App\DTOs\CreatePublicLinkDTO;
 use App\Http\Requests\CreatePublicLinkRequest;
 use App\Http\Resources\PublicLinkResource;
 use App\Services\Analytics\Support\SqlDateExpr;
+use App\Services\Links\SlugSuggestionService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -22,9 +24,10 @@ use Illuminate\Support\Facades\DB;
  * by that user; otherwise it is created anonymously (user_id = null).
  *
  * Routes (all under /api/public/* prefix, no auth middleware):
- *   POST   /api/public/shorten          → store       (throttle:public-shorten)
- *   GET    /api/public/link/{slug}      → showBySlug  (no throttle)
- *   GET    /api/public/analytics/{slug} → basicAnalytics (throttle:public-analytics)
+ *   POST   /api/public/shorten             → store          (throttle:public-shorten)
+ *   GET    /api/public/link/{slug}         → showBySlug     (throttle:60,1)
+ *   GET    /api/public/links/suggest-slug  → suggestSlug    (throttle:suggest-slug)
+ *   GET    /api/public/analytics/{slug}    → basicAnalytics (throttle:public-analytics)
  *
  * Depends on: LinkServiceInterface (injected).
  */
@@ -77,6 +80,51 @@ class PublicLinkController extends Controller
             ], 422);
         } catch (\Exception $e) {
             \App\Logging\AppLogger::httpServerError('api.public.shorten', $e, auth()->id());
+
+            return response()->json([
+                'error' => [
+                    'code' => 'INTERNAL_ERROR',
+                    'message' => 'Ocorreu um erro interno. Tente novamente.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/public/links/suggest-slug
+     *
+     * Resolve a single available slug for the given target URL in one request,
+     * replacing the previous client-side loop that issued one HTTP call per
+     * candidate (base, base-2, …). Derivation and availability are delegated to
+     * {@see SlugSuggestionService}: og:title → URL path → host label, with a
+     * short random-token collision suffix and a fully-random fallback. The
+     * returned slug is always currently available.
+     *
+     * Middleware: throttle:suggest-slug (30/min per IP)
+     * Auth: not required
+     * Owner check: no
+     *
+     * Response shape: { data: { slug: string, og_title: string|null } } (200)
+     *                 { error } (422) when `url` is missing.
+     *                 { error, message } on server error (500)
+     */
+    public function suggestSlug(Request $request, SlugSuggestionService $suggestionService): JsonResponse
+    {
+        $validated = $request->validate([
+            'url' => ['required', 'string', 'max:2048'],
+        ]);
+
+        try {
+            $suggestion = $suggestionService->suggestForUrl($validated['url']);
+
+            return response()->json([
+                'data' => [
+                    'slug' => $suggestion['slug'],
+                    'og_title' => $suggestion['og_title'],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \App\Logging\AppLogger::httpServerError('api.public.links.suggest-slug', $e, auth()->id());
 
             return response()->json([
                 'error' => [

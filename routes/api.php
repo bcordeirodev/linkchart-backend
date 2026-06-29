@@ -40,6 +40,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('public')->controller(PublicLinkController::class)->group(function () {
     Route::post('/shorten', 'store')->middleware('throttle:public-shorten'); // ✅ NOVO: Encurtamento público
     Route::get('/link/{slug}', 'showBySlug')->middleware('throttle:60,1');                   // ✅ NOVO: Informações básicas do link
+    Route::get('/links/suggest-slug', 'suggestSlug')->middleware('throttle:suggest-slug');   // Slug disponível resolvido server-side
     Route::get('/analytics/{slug}', 'basicAnalytics')->middleware('throttle:public-analytics'); // ✅ NOVO: Analytics básicos públicos
 });
 
