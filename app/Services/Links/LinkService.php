@@ -95,7 +95,11 @@ class LinkService implements LinkServiceInterface
             throw new \InvalidArgumentException('Slug personalizado já está em uso.');
         }
 
-        return $this->linkRepository->create($data);
+        $link = $this->linkRepository->create($data);
+
+        \App\Logging\AppLogger::linkCreated($link, false);
+
+        return $link;
     }
 
     /**
@@ -175,6 +179,8 @@ class LinkService implements LinkServiceInterface
         }
 
         $link = $this->linkRepository->create($data);
+
+        \App\Logging\AppLogger::linkCreated($link, true);
 
         // Apply the user's custom subdomain if they have one active.
         // Mirrors the behaviour of createLink() for authenticated users.

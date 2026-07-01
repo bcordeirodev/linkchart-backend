@@ -408,6 +408,35 @@ final class AppLogger
     }
 
     // ============================================================
+    // LINKS (channel: app)
+    // ============================================================
+
+    /**
+     * A short link was just created (authenticated or public/guest flow).
+     *
+     * Logged to the `app` channel so link creation is visible in the growth
+     * dashboard (there is otherwise no "link created" signal — it is a plain
+     * DB insert). `host` is the destination host (parsed from the original
+     * URL), which powers "what is being shortened" reports without exposing
+     * the full target URL.
+     *
+     * @param  \App\Models\Link  $link  the freshly-created link
+     * @param  bool  $isPublic  true when created via the public/guest flow
+     */
+    public static function linkCreated(\App\Models\Link $link, bool $isPublic): void
+    {
+        $host = parse_url((string) $link->original_url, PHP_URL_HOST) ?: 'unknown';
+
+        self::write('app', 'info', self::LINK_CREATED, [
+            'slug' => $link->slug,
+            'host' => $host,
+            'link_id' => $link->id,
+            'is_public' => $isPublic,
+            'is_guest' => empty($link->user_id),
+        ]);
+    }
+
+    // ============================================================
     // EMAIL (channel: app)
     // ============================================================
 
