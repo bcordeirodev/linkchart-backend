@@ -44,7 +44,8 @@ class Auth0ExchangeTest extends TestCase
         ]);
 
         $response->assertStatus(200)
-            ->assertJsonStructure(['data' => ['token', 'user']]);
+            ->assertJsonStructure(['data' => ['token', 'is_new', 'user']])
+            ->assertJsonPath('data.is_new', true);
 
         $this->assertDatabaseHas('users', [
             'email' => 'newuser@example.com',
@@ -73,7 +74,8 @@ class Auth0ExchangeTest extends TestCase
             'access_token' => 'any-valid-token',
         ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(200)
+            ->assertJsonPath('data.is_new', false);
 
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
@@ -100,7 +102,8 @@ class Auth0ExchangeTest extends TestCase
             'access_token' => 'any-valid-token',
         ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(200)
+            ->assertJsonPath('data.is_new', false);
         $this->assertDatabaseCount('users', 1);
         $response->assertJsonPath('data.user.id', $user->id);
     }
