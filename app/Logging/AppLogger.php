@@ -116,6 +116,8 @@ final class AppLogger
 
     public const SAFETY_URL_FLAGGED = 'safety.url_flagged';
 
+    public const SAFETY_URL_BLOCKED_HEURISTIC = 'safety.url_blocked_heuristic';
+
     public const SAFETY_API_UNAVAILABLE = 'safety.api_unavailable';
 
     public const SAFETY_API_ERROR = 'safety.api_error';
@@ -473,6 +475,20 @@ final class AppLogger
     public static function safetyUrlFlagged(string $url, array $threats): void
     {
         self::write('app', 'warning', self::SAFETY_URL_FLAGGED, ['url' => $url, 'threats' => $threats]);
+    }
+
+    /**
+     * Logs a URL blocked by the local Layer 1 heuristic (brand impersonation or
+     * compound-keyword denylist) before the Safe Browsing call. The matched
+     * reasons are recorded so the heuristic lists can be tuned from production
+     * signal and false positives diagnosed.
+     *
+     * @param  string  $url  The URL that was blocked.
+     * @param  string[]  $reasons  Human-readable reasons for the block.
+     */
+    public static function safetyUrlBlockedHeuristic(string $url, array $reasons): void
+    {
+        self::write('app', 'warning', self::SAFETY_URL_BLOCKED_HEURISTIC, ['url' => $url, 'reasons' => $reasons]);
     }
 
     public static function safetyApiUnavailable(string $reason): void

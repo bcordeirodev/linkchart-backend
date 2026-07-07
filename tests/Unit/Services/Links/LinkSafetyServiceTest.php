@@ -99,4 +99,144 @@ class LinkSafetyServiceTest extends TestCase
         \App\Observability\Otel::recordSafetyCheck('bad_response');
         $this->addToAssertionCount(1);
     }
+
+    // ============================================================
+    // Layer 1 — local lexical/brand heuristic (runs before Safe Browsing)
+    // ============================================================
+
+    /**
+     * A brand token in the host whose registrable domain is not the brand's
+     * official domain is blocked locally, without ever calling Safe Browsing.
+     * This is the exact shape of the phishing abuse seen in production
+     * (instagram-passwords-leaks.vercel.app).
+     */
+    public function test_brand_impersonation_is_blocked_before_reaching_safe_browsing(): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake();
+
+        $result = (new LinkSafetyService)->checkUrl('https://instagram-passwords-leaks.vercel.app/?id=8887167178');
+
+        Http::assertNothingSent();
+        $this->assertFalse($result['safe']);
+        $this->assertNotEmpty($result['threats']);
+    }
+
+    /**
+     * A legitimate subdomain of the official brand domain passes the heuristic
+     * and proceeds to the Safe Browsing check (which here returns clean).
+     */
+    public function test_official_brand_subdomain_passes_heuristic_and_reaches_safe_browsing(): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake(['*' => Http::response('{}', 200)]);
+
+        $result = (new LinkSafetyService)->checkUrl('https://www.instagram.com/someprofile');
+
+        Http::assertSentCount(1);
+        $this->assertTrue($result['safe']);
+        $this->assertTrue($result['api_available']);
+    }
+
+    /**
+     * A high-signal compound keyword in the host is blocked locally.
+     */
+    public function test_keyword_denylist_blocks_locally(): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake();
+
+        $result = (new LinkSafetyService)->checkUrl('https://free-robux-generator.example.com');
+
+        Http::assertNothingSent();
+        $this->assertFalse($result['safe']);
+    }
+
+    /**
+     * The heuristic protects even when the Safe Browsing key is absent — it must
+     * run before the missing-key fail-open early return.
+     */
+    public function test_heuristic_blocks_even_without_api_key(): void
+    {
+        config(['services.google_safe_browsing.key' => null]);
+        Http::fake();
+
+        $result = (new LinkSafetyService)->checkUrl('https://instagram-passwords-leaks.vercel.app');
+
+        Http::assertNothingSent();
+        $this->assertFalse($result['safe']);
+    }
+
+    /**
+     * With the heuristic disabled via config, a would-be-flagged URL falls
+     * through to the Safe Browsing layer instead of being blocked locally.
+     */
+    public function test_heuristic_can_be_disabled_via_config(): void
+    {
+        config([
+            'services.google_safe_browsing.key' => 'test-key',
+            'link_safety.heuristic_enabled' => false,
+        ]);
+        Http::fake(['*' => Http::response('{}', 200)]);
+
+        $result = (new LinkSafetyService)->checkUrl('https://instagram-passwords-leaks.vercel.app');
+
+        Http::assertSentCount(1);
+        $this->assertTrue($result['safe']);
+    }
+
+    /**
+     * Brand tokens embedded inside an unrelated word must NOT trigger the brand
+     * rule (boundary-aware match): "caixa" in "caixadagua", "steam" in "steampunk".
+     *
+     * @dataProvider brandSubstringFalsePositives
+     */
+    public function test_brand_token_inside_unrelated_word_is_not_flagged(string $url): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake(['*' => Http::response('{}', 200)]);
+
+        $result = (new LinkSafetyService)->checkUrl($url);
+
+        Http::assertSentCount(1);
+        $this->assertTrue($result['safe']);
+    }
+
+    public static function brandSubstringFalsePositives(): array
+    {
+        return [
+            'caixa in caixadagua' => ['https://caixadagua.com.br'],
+            'steam in steampunk' => ['https://steampunk-store.com'],
+            'itau in capacitau' => ['https://capacitau.com.br'],
+        ];
+    }
+
+    /**
+     * A brand token set off by a separator (the real impersonation shape) is
+     * still flagged locally.
+     */
+    public function test_brand_token_with_separator_is_flagged(): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake();
+
+        $result = (new LinkSafetyService)->checkUrl('https://steam-free-gift.example.com');
+
+        Http::assertNothingSent();
+        $this->assertFalse($result['safe']);
+    }
+
+    /**
+     * A clean, unrelated URL passes the heuristic and reaches Safe Browsing.
+     */
+    public function test_clean_url_reaches_safe_browsing(): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake(['*' => Http::response('{}', 200)]);
+
+        $result = (new LinkSafetyService)->checkUrl('https://docs.google.com/forms/d/e/abc');
+
+        Http::assertSentCount(1);
+        $this->assertTrue($result['safe']);
+    }
 }
