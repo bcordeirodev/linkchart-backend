@@ -57,6 +57,19 @@ class LinkSafetyService
      */
     public function checkUrl(string $url): array
     {
+        // Layer 1 — local lexical/brand heuristic. Runs first, so it protects
+        // even when the Safe Browsing key is missing or the API is down, and
+        // short-circuits the outbound HTTP call when it already has a verdict.
+        $reasons = $this->heuristicReasons($url);
+
+        if (! empty($reasons)) {
+            AppLogger::safetyUrlBlockedHeuristic($url, $reasons);
+            Otel::recordSafetyCheck('flagged');
+
+            return ['safe' => false, 'threats' => ['conteúdo suspeito'], 'api_available' => true];
+        }
+
+        // Layer 4 — Google Safe Browsing (unchanged).
         $apiKey = config('services.google_safe_browsing.key');
 
         if (empty($apiKey)) {
@@ -112,5 +125,105 @@ class LinkSafetyService
 
             return ['safe' => true, 'threats' => [], 'api_available' => false];
         }
+    }
+
+    /**
+     * Evaluates the local Layer 1 heuristic against the URL host and returns the
+     * list of reasons it should be blocked. An empty array means the heuristic
+     * has no objection (the caller then defers to Safe Browsing).
+     *
+     * Rules (host-only, to keep false positives low):
+     *   - Brand impersonation: host carries a known brand token but is not the
+     *     brand's official domain nor a subdomain of it.
+     *   - Compound-keyword denylist: host contains a high-signal phishing/scam
+     *     substring that is implausible in a legitimate hostname.
+     *
+     * Returns early with no reasons when the heuristic is disabled, the host
+     * cannot be parsed, or the host is explicitly allow-listed.
+     *
+     * @param  string  $url  The full URL being checked.
+     * @return string[] Human-readable block reasons, empty when clean.
+     */
+    private function heuristicReasons(string $url): array
+    {
+        if (! config('link_safety.heuristic_enabled', true)) {
+            return [];
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+
+        if ($host === '' || $this->isAllowedHost($host)) {
+            return [];
+        }
+
+        $reasons = [];
+
+        foreach ((array) config('link_safety.brands', []) as $token => $officialDomains) {
+            if (! $this->hostMentionsBrand($host, (string) $token)) {
+                continue;
+            }
+
+            if (! $this->hostBelongsToAny($host, (array) $officialDomains)) {
+                $reasons[] = "brand_impersonation:{$token}";
+            }
+        }
+
+        foreach ((array) config('link_safety.blocked_keywords', []) as $keyword) {
+            if ($keyword !== '' && str_contains($host, strtolower((string) $keyword))) {
+                $reasons[] = "keyword:{$keyword}";
+            }
+        }
+
+        return $reasons;
+    }
+
+    /**
+     * Determines whether the host mentions a brand token as a distinct label —
+     * bounded by the string edges or by a non-alphanumeric separator (-, ., digit).
+     * This is how impersonation hosts are actually built ("instagram-login...",
+     * "steam-gift...") and it avoids matching the token inside an unrelated word
+     * ("itau" in "capacitau", "caixa" in "caixadagua", "steam" in "steampunk").
+     *
+     * @param  string  $host  The lowercase host to test.
+     * @param  string  $token  The lowercase brand token.
+     */
+    private function hostMentionsBrand(string $host, string $token): bool
+    {
+        if ($token === '') {
+            return false;
+        }
+
+        return preg_match('/(?:^|[^a-z0-9])'.preg_quote($token, '/').'(?:[^a-z0-9]|$)/', $host) === 1;
+    }
+
+    /**
+     * Determines whether the host equals one of the given registrable domains or
+     * is a subdomain of one (e.g. "www.instagram.com" belongs to "instagram.com").
+     *
+     * @param  string  $host  The lowercase host to test.
+     * @param  string[]  $domains  Official registrable domains for a brand.
+     */
+    private function hostBelongsToAny(string $host, array $domains): bool
+    {
+        foreach ($domains as $domain) {
+            $domain = strtolower((string) $domain);
+
+            if ($host === $domain || str_ends_with($host, '.'.$domain)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks the host against the configured allow-list, matching an exact host
+     * or any subdomain of an allow-listed entry.
+     *
+     * @param  string  $host  The lowercase host to test.
+     */
+    private function isAllowedHost(string $host): bool
+    {
+        return $this->hostBelongsToAny($host, (array) config('link_safety.allowed_hosts', []));
     }
 }
