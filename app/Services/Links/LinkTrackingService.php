@@ -264,6 +264,12 @@ class LinkTrackingService
      */
     private function insertClickIdempotently(array $attributes): ?Click
     {
+        // Defensively clamp every bounded column to its width before the raw
+        // insertOrIgnore (which bypasses Eloquent mutators): a client-supplied
+        // header longer than its column — e.g. a Facebook l.php `referer` — must
+        // never abort the insert and silently drop the click. See Click::COLUMN_LIMITS.
+        $attributes = Click::clampToColumnLimits($attributes);
+
         $now = now();
         $row = array_merge($attributes, [
             'created_at' => $now,

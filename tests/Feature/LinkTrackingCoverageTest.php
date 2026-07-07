@@ -476,4 +476,39 @@ class LinkTrackingCoverageTest extends TestCase
 
         $this->assertNull($click->social_platform);
     }
+
+    // -----------------------------------------------------------------------
+    // Regression — over-long referer must not abort the insert (SQLSTATE[22001])
+    // -----------------------------------------------------------------------
+
+    /**
+     * A realistic Facebook in-app-browser wrapper referer (~400 chars, the case
+     * that overflowed the old varchar(255)) is now persisted intact.
+     */
+    public function test_facebook_wrapper_referer_is_persisted_intact(): void
+    {
+        $link = $this->makeLink();
+        $facebookReferer = 'https://lm.facebook.com/l.php?u=https%3A%2F%2Fredirect.linkcharts.com.br%2Fg3iila%3Ffbclid%3D'
+            .str_repeat('A', 120).'&h='.str_repeat('B', 180);
+
+        $click = $this->runJob($link->id, ['referer' => $facebookReferer]);
+
+        $this->assertSame($facebookReferer, $click->referer);
+    }
+
+    /**
+     * A pathologically long referer is clamped to the column width by the insert
+     * path rather than aborting the whole click write.
+     */
+    public function test_pathological_referer_is_clamped_before_insert(): void
+    {
+        $link = $this->makeLink();
+
+        $click = $this->runJob($link->id, [
+            'referer' => 'https://x.test/'.str_repeat('q', 5000),
+        ]);
+
+        $this->assertNotNull($click);
+        $this->assertSame(Click::COLUMN_LIMITS['referer'], mb_strlen($click->referer));
+    }
 }
