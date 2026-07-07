@@ -96,6 +96,54 @@ class Click extends Model
 {
     use HasFactory;
 
+    /**
+     * Maximum character length of every bounded (varchar) column on this table.
+     *
+     * Mirrors the schema in database/migrations — keep in sync when a column's
+     * length changes. Used by {@see self::clampToColumnLimits()} to defensively
+     * truncate over-long values so a single oversized field (typically a header
+     * value such as `referer` or `accept_language`) can never abort the whole
+     * click insert with SQLSTATE[22001]. Columns without a length limit (`ip`,
+     * numeric/boolean/timestamp columns) are intentionally omitted.
+     *
+     * @var array<string, int>
+     */
+    public const COLUMN_LIMITS = [
+        'referer' => 2048,
+        'user_agent' => 1024,
+        'country' => 255,
+        'city' => 255,
+        'device' => 255,
+        'state_name' => 255,
+        'accept_language' => 100,
+        'holiday_name' => 100,
+        'dedup_key' => 80,
+        'browser' => 50,
+        'click_source' => 50,
+        'os' => 50,
+        'timezone' => 50,
+        'ch_platform' => 30,
+        'fetch_dest' => 30,
+        'navigation_context' => 30,
+        'social_platform' => 30,
+        'browser_version' => 20,
+        'connection_type' => 20,
+        'continent' => 20,
+        'local_time' => 20,
+        'os_version' => 20,
+        'postal_code' => 20,
+        'rendering_engine' => 20,
+        'quality_tier' => 15,
+        'viral_rank' => 15,
+        'http_protocol' => 10,
+        'language_region' => 10,
+        'primary_language' => 10,
+        'season' => 10,
+        'state' => 10,
+        'currency' => 3,
+        'iso_code' => 2,
+    ];
+
     protected $casts = [
         'ip_anonymized' => 'boolean',
     ];
@@ -169,6 +217,34 @@ class Click extends Model
         // LGPD retention
         'ip_anonymized',
     ];
+
+    /**
+     * Truncates every string attribute to its column's character limit.
+     *
+     * Defensive guard against SQLSTATE[22001] ("value too long"): the click
+     * enrichment pipeline pulls values straight from client-controlled HTTP
+     * headers (`referer`, `user_agent`, `accept_language`), any of which can
+     * exceed the column width and abort the whole insert — silently dropping
+     * the click from analytics. Clamping keeps the click, losing only the
+     * overflowing tail of one field. Truncation is by characters (mb_substr),
+     * never splitting a multibyte sequence.
+     *
+     * Values not present in {@see self::COLUMN_LIMITS}, and non-string values,
+     * are returned unchanged.
+     *
+     * @param  array<string, mixed>  $attributes  Click row about to be inserted.
+     * @return array<string, mixed> The same attributes with bounded columns clamped.
+     */
+    public static function clampToColumnLimits(array $attributes): array
+    {
+        foreach (self::COLUMN_LIMITS as $column => $limit) {
+            if (isset($attributes[$column]) && is_string($attributes[$column])) {
+                $attributes[$column] = mb_substr($attributes[$column], 0, $limit);
+            }
+        }
+
+        return $attributes;
+    }
 
     /**
      * The shortened link this click belongs to (belongsTo Link).
