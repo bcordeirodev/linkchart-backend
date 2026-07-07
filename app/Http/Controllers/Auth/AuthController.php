@@ -790,6 +790,12 @@ class AuthController extends Controller
                 ], 422);
             }
 
+            // Tracks whether this exchange created a brand-new account, so the
+            // client can fire a one-time "sign up" conversion. Only branch 3
+            // (first-time creation) flips this to true; returning users and
+            // legacy-account linking stay false and never re-fire the event.
+            $isNew = false;
+
             // 1. Look up by auth0_sub (returning user).
             $user = User::where('auth0_sub', $sub)->first();
 
@@ -820,8 +826,11 @@ class AuthController extends Controller
                             'email_verified' => $emailVerified,
                             'email_verified_at' => $emailVerified ? now() : null,
                         ]);
+                        $isNew = true;
                     } catch (\Illuminate\Database\QueryException $e) {
                         // Lost the race — another request created the user first.
+                        // The winning request already counts as the signup, so
+                        // this loser stays $isNew = false to avoid double-firing.
                         $user = User::where('auth0_sub', $sub)->firstOrFail();
                     }
                 }
@@ -844,6 +853,7 @@ class AuthController extends Controller
             return response()->json([
                 'data' => [
                     'token' => $token,
+                    'is_new' => $isNew,
                     'user' => $user->only([
                         'id', 'name', 'email',
                         'email_verified_at', 'created_at', 'updated_at',
