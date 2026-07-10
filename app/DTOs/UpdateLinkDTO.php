@@ -99,6 +99,26 @@ class UpdateLinkDTO
     public readonly ?string $utm_content;
 
     /**
+     * New complete set of tag IDs to sync onto the link, replacing the
+     * current set; null means "tag_ids was not sent" (leave tags untouched).
+     * Deliberately excluded from {@see self::toArray()} — tags are a
+     * many-to-many relation, not a `links` column — and tracked separately
+     * from {@see self::$presentFields} via {@see self::$tagIdsPresent} /
+     * {@see self::hasTagIds()}, since presence must be distinguishable from
+     * "sent as an empty array" (clear all tags).
+     *
+     * @var array<int, int>|null
+     */
+    public readonly ?array $tag_ids;
+
+    /**
+     * Whether `tag_ids` was present in the source request, independent of
+     * {@see self::$presentFields} (which only drives {@see self::toArray()}
+     * mass-assignment and never includes `tag_ids`). See {@see self::hasTagIds()}.
+     */
+    private readonly bool $tagIdsPresent;
+
+    /**
      * @param  string|null  $original_url  New destination URL; null = unchanged.
      * @param  string|null  $title  New label; null = unchanged.
      * @param  string|null  $slug  New slug; null = unchanged.
@@ -113,6 +133,8 @@ class UpdateLinkDTO
      * @param  string|null  $utm_term  New UTM term; null = unchanged.
      * @param  string|null  $utm_content  New UTM content; null = unchanged.
      * @param  array<int, string>|null  $presentFields  Field names present in the source request; null = legacy null-stripping in toArray().
+     * @param  array<int, int>|null  $tag_ids  New complete tag id set; null = tag_ids not sent (leave tags untouched).
+     * @param  bool  $tagIdsPresent  Whether tag_ids was present in the source request.
      */
     public function __construct(
         ?string $original_url = null,
@@ -128,7 +150,9 @@ class UpdateLinkDTO
         ?string $utm_campaign = null,
         ?string $utm_term = null,
         ?string $utm_content = null,
-        ?array $presentFields = null
+        ?array $presentFields = null,
+        ?array $tag_ids = null,
+        bool $tagIdsPresent = false
     ) {
         $this->presentFields = $presentFields;
         $this->original_url = $original_url;
@@ -144,6 +168,8 @@ class UpdateLinkDTO
         $this->utm_campaign = $utm_campaign;
         $this->utm_term = $utm_term;
         $this->utm_content = $utm_content;
+        $this->tag_ids = $tag_ids;
+        $this->tagIdsPresent = $tagIdsPresent;
     }
 
     /**
@@ -183,7 +209,11 @@ class UpdateLinkDTO
             utm_campaign: $request->input('utm_campaign') ?: null,
             utm_term: $request->input('utm_term') ?: null,
             utm_content: $request->input('utm_content') ?: null,
-            presentFields: $presentFields
+            presentFields: $presentFields,
+            tag_ids: $request->has('tag_ids')
+                ? array_map('intval', $request->input('tag_ids', []))
+                : null,
+            tagIdsPresent: $request->has('tag_ids')
         );
     }
 
@@ -241,11 +271,30 @@ class UpdateLinkDTO
      * all fields were omitted), allowing the service/controller to short-circuit and
      * return a validation error rather than issuing a no-op UPDATE query.
      *
-     * @return bool True when `toArray()` produces at least one entry.
+     * Also true when `tag_ids` was present, even if `toArray()` is otherwise
+     * empty — a request containing only `tag_ids` is a legitimate partial
+     * update (sync the link's tags) and must not be rejected as empty.
+     *
+     * @return bool True when `toArray()` produces at least one entry, or tag_ids was sent.
      */
     public function hasDataToUpdate(): bool
     {
-        return ! empty($this->toArray());
+        return ! empty($this->toArray()) || $this->tagIdsPresent;
+    }
+
+    /**
+     * Check whether `tag_ids` was present in the source request.
+     *
+     * Distinguishes "sync tags to an empty set" (present, empty array) from
+     * "leave tags untouched" (absent). Used by
+     * {@see \App\Services\Links\LinkService::updateLink()} to decide whether
+     * to call `$link->tags()->sync()` at all.
+     *
+     * @return bool True if tag_ids was sent in the request that built this DTO.
+     */
+    public function hasTagIds(): bool
+    {
+        return $this->tagIdsPresent;
     }
 
     /**

@@ -34,11 +34,15 @@ class LinkRepository implements LinkRepositoryInterface
      * `2025_09_14_140100_add_performance_indexes_simple.php`. Modifying the `ORDER BY`
      * or adding a filter on a different column may bypass that index.
      *
+     * Eager-loads the `tags` relation so LinkResource can include the `tags` array
+     * without an N+1 query per link.
+     *
      * @return Collection<int, Link> All links belonging to the authenticated user.
      */
     public function getAllByUser(): Collection
     {
-        return Link::where('user_id', auth()->guard('api')->id())
+        return Link::with('tags')
+            ->where('user_id', auth()->guard('api')->id())
             ->orderBy('created_at', 'desc')
             ->get();
     }
@@ -51,13 +55,16 @@ class LinkRepository implements LinkRepositoryInterface
      * `idx_links_user_active` index (`user_id`, `is_active`, `created_at`) from
      * `2025_09_14_140100_add_performance_indexes_simple.php`.
      *
+     * Eager-loads the `tags` relation so LinkResource can include the `tags` array.
+     *
      * @param  string  $id  Primary key of the link (UUID string).
      * @param  int  $userId  ID of the user who must own the link.
      * @return Link|null The matching link, or null if not found or not owned.
      */
     public function findByIdAndUser(string $id, int $userId): ?Link
     {
-        return Link::where('id', $id)
+        return Link::with('tags')
+            ->where('id', $id)
             ->where('user_id', $userId)
             ->first();
     }

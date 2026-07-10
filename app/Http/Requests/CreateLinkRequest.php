@@ -88,6 +88,11 @@ class CreateLinkRequest extends FormRequest
             'utm_campaign' => 'nullable|string|max:100',
             'utm_term' => 'nullable|string|max:100',
             'utm_content' => 'nullable|string|max:100',
+
+            // Tags — ownership of each id is verified (and silently filtered)
+            // in LinkService, not here; this only bounds the shape/size.
+            'tag_ids' => 'nullable|array|max:5',
+            'tag_ids.*' => 'integer',
         ];
     }
 
@@ -115,6 +120,10 @@ class CreateLinkRequest extends FormRequest
             'custom_slug.alpha_dash' => 'O slug pode conter apenas letras, números, hífens e underscores.',
             'custom_slug.unique' => 'Este slug já está em uso.',
             'custom_slug.not_in' => 'Este slug é reservado e não pode ser usado.',
+
+            'tag_ids.array' => 'As tags devem ser enviadas como uma lista.',
+            'tag_ids.max' => 'Um link pode ter no máximo 5 tags.',
+            'tag_ids.*.integer' => 'Cada tag deve ser um identificador numérico válido.',
         ];
     }
 
