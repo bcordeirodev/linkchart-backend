@@ -23,6 +23,16 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\Links\LinkService::class
         );
 
+        $this->app->bind(
+            \App\Contracts\Repositories\TagRepositoryInterface::class,
+            \App\Repositories\TagRepository::class
+        );
+
+        $this->app->bind(
+            \App\Contracts\Services\TagServiceInterface::class,
+            \App\Services\Links\TagService::class
+        );
+
         $this->app->bind(\App\Contracts\Analytics\DashboardAnalyticsInterface::class, \App\Services\Analytics\DashboardAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\GeographicAnalyticsInterface::class, \App\Services\Analytics\GeographicAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\TemporalAnalyticsInterface::class, \App\Services\Analytics\TemporalAnalyticsService::class);
