@@ -74,6 +74,21 @@ class CreateLinkDTO
     public readonly ?string $utm_content;
 
     /**
+     * Optional list of tag IDs to attach to the link on creation.
+     *
+     * Null means "no tag_ids field was sent" (create with no tags). An empty
+     * array is meaningfully different only if the caller cares to distinguish
+     * it, but both null and [] result in no tags being attached — see
+     * {@see \App\Services\Links\LinkService::createLink()}. Ownership of each
+     * id is verified in the service layer, not here; ids that do not belong
+     * to `$user_id` are silently dropped. Deliberately excluded from
+     * {@see self::toArray()} because tags are a relation, not a `links` column.
+     *
+     * @var array<int, int>|null
+     */
+    public readonly ?array $tag_ids;
+
+    /**
      * @param  string  $original_url  Destination URL; must be a valid URL (validated upstream).
      * @param  int  $user_id  Authenticated user ID.
      * @param  string|null  $title  Human-readable label.
@@ -88,6 +103,7 @@ class CreateLinkDTO
      * @param  string|null  $utm_campaign  UTM campaign parameter.
      * @param  string|null  $utm_term  UTM term parameter.
      * @param  string|null  $utm_content  UTM content parameter.
+     * @param  array<int, int>|null  $tag_ids  Candidate tag IDs to attach; null means none provided.
      */
     public function __construct(
         string $original_url,
@@ -103,7 +119,8 @@ class CreateLinkDTO
         ?string $utm_medium = null,
         ?string $utm_campaign = null,
         ?string $utm_term = null,
-        ?string $utm_content = null
+        ?string $utm_content = null,
+        ?array $tag_ids = null
     ) {
         $this->original_url = $original_url;
         $this->user_id = $user_id;
@@ -119,6 +136,7 @@ class CreateLinkDTO
         $this->utm_campaign = $utm_campaign;
         $this->utm_term = $utm_term;
         $this->utm_content = $utm_content;
+        $this->tag_ids = $tag_ids;
     }
 
     /**
@@ -149,7 +167,10 @@ class CreateLinkDTO
             utm_medium: $request->input('utm_medium') ?: null,
             utm_campaign: $request->input('utm_campaign') ?: null,
             utm_term: $request->input('utm_term') ?: null,
-            utm_content: $request->input('utm_content') ?: null
+            utm_content: $request->input('utm_content') ?: null,
+            tag_ids: $request->has('tag_ids')
+                ? array_map('intval', $request->input('tag_ids', []))
+                : null
         );
     }
 
@@ -160,6 +181,12 @@ class CreateLinkDTO
      * provided do not overwrite model defaults. `custom_slug` is remapped to the
      * `slug` key expected by the `links` table; when null, the service layer generates
      * a unique slug before calling {@see \App\Repositories\LinkRepository::create()}.
+     *
+     * `tag_ids` is deliberately excluded — tags are a many-to-many relation
+     * (`links.tags()`), not a `links` table column, so including it here would
+     * either be dropped silently by Eloquent's mass-assignment or throw. The
+     * service layer reads `$linkDTO->tag_ids` directly and syncs it via
+     * `$link->tags()->sync()` after the row is created.
      *
      * @return array<string, mixed> Associative array with non-null link attributes.
      */

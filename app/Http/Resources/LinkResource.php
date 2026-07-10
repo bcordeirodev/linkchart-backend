@@ -39,6 +39,10 @@ class LinkResource extends JsonResource
             'utm_campaign' => $this->utm_campaign,
             'utm_term' => $this->utm_term,
             'utm_content' => $this->utm_content,
+            // Present as [] when the relation was eager-loaded (even if the link
+            // has no tags); the key is simply absent if 'tags' was never loaded
+            // (whenLoaded returns a MissingValue, which json_encode drops).
+            'tags' => TagResource::collection($this->whenLoaded('tags')),
         ];
     }
 
