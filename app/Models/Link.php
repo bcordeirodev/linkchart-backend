@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Cache;
 
@@ -54,6 +55,7 @@ use Illuminate\Support\Facades\Cache;
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\User|null        $user    Owning user; null for anonymous links.
  * @property-read \App\Models\LinkPreview|null $preview Open Graph / favicon metadata fetched asynchronously.
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Tag> $tags User-defined tags attached to this link.
  *
  * Note: the clicks() relationship method and the $clicks int column share the same name.
  * Always access the click-event collection via $link->clicks() (the relationship method)
@@ -120,6 +122,18 @@ class Link extends Model
     public function preview()
     {
         return $this->hasOne(LinkPreview::class);
+    }
+
+    /**
+     * User-defined tags attached to this link (belongsToMany Tag via link_tag).
+     *
+     * Not included in the cache-invalidation relevance list in booted() below —
+     * tags do not affect the public redirect hot path, only the authenticated
+     * dashboard view, so syncing tags never needs to bust the slug cache.
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class);
     }
 
     /**
