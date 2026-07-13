@@ -1,0 +1,68 @@
+# Stack da WEB (nginx + php-fpm). Sem estado — e a stack que faz blue/green.
+#
+# Subida por scripts/deploy.sh, uma cor por vez:
+#   IMAGE_TAG=<sha> COLOR=green APP_PORT=8001 \
+#     docker compose -p linkchartapi-green -f docker-compose.app.yml up -d
+#
+# blue = :8000   green = :8001
+# A cor ativa e a que estiver no upstream `backend_app` de
+# /etc/nginx/conf.d/upstreams.conf (unica fonte de verdade).
+#
+# ⚠️ O alias `linkchartapi` em `linkcharts-network` NAO e cosmetico: e por ele
+# que o FRONTEND encontra a API (API_URL=http://linkchartapi:80). Esse caminho
+# NAO passa pelo nginx do host — entao a troca de upstream sozinha nao o cobre.
+# As duas cores carregam o alias durante o overlap (ambas saudaveis) e a antiga
+# so e desligada apos o periodo de drenagem. Se este alias sumir, o site perde
+# a API mesmo com o nginx apontando certo.
+#
+# As redes sao EXTERNAS: quem as cria e a stack infra (projeto `linkchartapi`),
+# dai o nome explicito `linkchartapi_linkchartnet`.
+
+services:
+  app:
+    image: ghcr.io/bcordeirodev/linkchart-backend:${IMAGE_TAG:?IMAGE_TAG obrigatorio}
+    container_name: linkchartapi-${COLOR:?COLOR obrigatorio}
+    restart: unless-stopped
+    ports:
+      # So em 127.0.0.1: quem termina TLS e serve a internet e o nginx do host.
+      - "127.0.0.1:${APP_PORT:?APP_PORT obrigatorio}:80"
+    volumes:
+      - ./storage/logs:/var/www/storage/logs
+      - ./storage/app:/var/www/storage/app
+      - ./.env.production:/var/www/.env
+      - /var/log/nginx:/var/log/nginx
+    environment:
+      - CONTAINER_ROLE=web
+      - DB_HOST=linkchartdb
+      - REDIS_HOST=linkchartredis
+      - DB_CONNECTION=pgsql
+      - DB_DATABASE=linkchartprod
+      - DB_USERNAME=linkchartuser
+      - DB_PASSWORD=linkchartpassword123
+      - REDIS_CLIENT=phpredis
+      - REDIS_PASSWORD=linkchartredis123
+      - OTEL_PHP_AUTOLOAD_ENABLED=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+      - OTEL_EXPORTER_OTLP_HEADERS=
+    networks:
+      linkchartnet:
+      linkcharts-network:
+        aliases:
+          - linkchartapi
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+networks:
+  linkchartnet:
+    external: true
+    name: linkchartapi_linkchartnet
+  linkcharts-network:
+    external: true
