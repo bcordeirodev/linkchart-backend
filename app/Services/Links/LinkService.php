@@ -8,6 +8,7 @@ use App\DTOs\CreateLinkDTO;
 use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
+use App\Models\Tag;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
@@ -67,7 +68,8 @@ class LinkService implements LinkServiceInterface
      * LinkRepositoryInterface::create().
      *
      * @param  CreateLinkDTO  $linkDTO  Validated input DTO.
-     * @return Link The newly created model (ready to pass to LinkResource).
+     * @return Link The newly created model (ready to pass to LinkResource), with the
+     *              `tags` relation eager-loaded.
      *
      * @throws \InvalidArgumentException If URL is invalid or slug is already taken.
      */
@@ -97,6 +99,15 @@ class LinkService implements LinkServiceInterface
 
         $link = $this->linkRepository->create($data);
 
+        if ($linkDTO->tag_ids !== null) {
+            $this->syncLinkTags($link, $linkDTO->tag_ids, $linkDTO->user_id);
+        } else {
+            // No tag_ids sent: still eager-load the (empty) relation so
+            // LinkResource always serialises a `tags` array, never a
+            // missing key, for a freshly created link.
+            $link->load('tags');
+        }
+
         \App\Logging\AppLogger::linkCreated($link, false);
 
         return $link;
@@ -111,7 +122,8 @@ class LinkService implements LinkServiceInterface
      *
      * @param  string  $id  Link primary key (stringified int).
      * @param  UpdateLinkDTO  $linkDTO  Validated input DTO.
-     * @return Link|null Updated model, or null if not found.
+     * @return Link|null Updated model with the `tags` relation eager-loaded, or
+     *                   null if not found.
      *
      * @throws \InvalidArgumentException If no data to update or URL is invalid.
      */
@@ -126,7 +138,21 @@ class LinkService implements LinkServiceInterface
             throw new \InvalidArgumentException('URL inválida fornecida.');
         }
 
-        return $this->linkRepository->update($id, $linkDTO->toArray(), auth()->guard('api')->id());
+        $userId = auth()->guard('api')->id();
+
+        $link = $this->linkRepository->update($id, $linkDTO->toArray(), $userId);
+
+        if (! $link) {
+            return null;
+        }
+
+        if ($linkDTO->hasTagIds()) {
+            $this->syncLinkTags($link, $linkDTO->tag_ids ?? [], $userId);
+        } else {
+            $link->load('tags');
+        }
+
+        return $link;
     }
 
     /**
@@ -212,5 +238,32 @@ class LinkService implements LinkServiceInterface
         } while ($this->linkRepository->slugExists($slug));
 
         return $slug;
+    }
+
+    /**
+     * Sync a link's tags to exactly the subset of the given IDs that belong to $userId.
+     *
+     * Any id in $tagIds that does not belong to $userId (a foreign or
+     * non-existent tag) is silently dropped rather than raising a validation
+     * error — this keeps tag attachment forgiving of stale client state
+     * (e.g. a tag the user just deleted in another tab) while still
+     * preventing a user from attaching another user's private tag to their
+     * link. `sync()` fully replaces the link's tag set with the filtered
+     * list, matching the "tag_ids is a complete replacement, not a merge"
+     * contract documented on {@see \App\DTOs\UpdateLinkDTO::$tag_ids}.
+     * Always eager-loads the `tags` relation on $link afterwards so the
+     * caller's LinkResource serialisation reflects the new tag list without
+     * an extra round trip.
+     *
+     * @param  Link  $link  The link whose tags pivot will be synced.
+     * @param  array<int, int>  $tagIds  Candidate tag IDs (may include foreign or non-existent IDs).
+     * @param  int  $userId  Owner whose tags are allowed to be attached.
+     */
+    private function syncLinkTags(Link $link, array $tagIds, int $userId): void
+    {
+        $ownedTagIds = Tag::where('user_id', $userId)->whereIn('id', $tagIds)->pluck('id')->all();
+
+        $link->tags()->sync($ownedTagIds);
+        $link->load('tags');
     }
 }

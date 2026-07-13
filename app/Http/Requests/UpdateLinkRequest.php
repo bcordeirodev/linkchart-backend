@@ -77,6 +77,12 @@ class UpdateLinkRequest extends FormRequest
             'utm_campaign' => 'sometimes|nullable|string|max:100',
             'utm_term' => 'sometimes|nullable|string|max:100',
             'utm_content' => 'sometimes|nullable|string|max:100',
+
+            // Tags — ownership of each id is verified (and silently filtered)
+            // in LinkService, not here; this only bounds the shape/size. When
+            // present, tag_ids fully replaces the link's tag set (sync, not merge).
+            'tag_ids' => 'sometimes|nullable|array|max:5',
+            'tag_ids.*' => 'integer',
         ];
     }
 
@@ -97,6 +103,10 @@ class UpdateLinkRequest extends FormRequest
             'starts_in.date' => 'A data de início deve ser uma data válida.',
             'starts_in.after_or_equal' => 'A data de início deve ser no presente ou futuro.',
             'starts_in.before' => 'A data de início deve ser anterior à data de expiração.',
+
+            'tag_ids.array' => 'As tags devem ser enviadas como uma lista.',
+            'tag_ids.max' => 'Um link pode ter no máximo 5 tags.',
+            'tag_ids.*.integer' => 'Cada tag deve ser um identificador numérico válido.',
         ];
     }
 
@@ -171,13 +181,19 @@ class UpdateLinkRequest extends FormRequest
 
     /**
      * Verifica se há dados para atualizar.
+     *
+     * `tag_ids` is included here even though it is excluded from
+     * {@see \App\DTOs\UpdateLinkDTO::toArray()} mass-assignment (tags are a
+     * relation, synced separately) — otherwise a request that sends only
+     * `tag_ids` would be rejected as "no data to update" before ever
+     * reaching {@see \App\Services\Links\LinkService::updateLink()}.
      */
     public function hasDataToUpdate(): bool
     {
         $updateableFields = [
             'original_url', 'title', 'slug', 'description', 'expires_at',
             'starts_in', 'is_active', 'utm_source', 'utm_medium',
-            'utm_campaign', 'utm_term', 'utm_content',
+            'utm_campaign', 'utm_term', 'utm_content', 'tag_ids',
         ];
 
         foreach ($updateableFields as $field) {
