@@ -60,8 +60,15 @@ COPY docker/php/opcache-prod.ini /usr/local/etc/php/conf.d/opcache.ini
 COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY docker/nginx/prod.conf /etc/nginx/conf.d/default.conf
 
-# Configurar Supervisor para produção
-COPY docker/supervisor/supervisord-prod.conf /etc/supervisor/conf.d/supervisord.conf
+# Supervisor: dois perfis na mesma imagem.
+#   web    (CMD default)  -> php-fpm + nginx        -> docker-compose.app.yml
+#   worker (command:)     -> filas + scheduler      -> docker-compose.worker.yml
+# O servico `worker` sobrescreve o `command:` no compose. Nao ha entrypoint.
+#
+# Separados porque o deploy da web e blue/green: se as filas morassem no mesmo
+# container, o overlap entre as duas cores rodaria DOIS schedulers.
+COPY docker/supervisor/supervisord-web.conf /etc/supervisor/conf.d/supervisord-web.conf
+COPY docker/supervisor/supervisord-worker.conf /etc/supervisor/conf.d/supervisord-worker.conf
 
 # PHP-FPM precisa rodar como `www` (mesmo user dos workers do supervisord
 # e do owner de /var/www/storage). A imagem base usa `www-data` por padrão
@@ -112,5 +119,6 @@ RUN mkdir -p /var/www/storage/framework/cache/data \
 # Expor porta
 EXPOSE 80
 
-# Comando de inicialização
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Comando de inicialização — perfil WEB por padrão.
+# O container `worker` sobrescreve com supervisord-worker.conf via `command:`.
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord-web.conf"]
