@@ -158,23 +158,34 @@ docker exec linkchartapi-dev vendor/bin/phpunit
 
 ## Deploy
 
-Production runs on a single VPS (DigitalOcean) using Docker Compose.
+Production runs on a single VPS (DigitalOcean). **Pushing to `main` does not deploy** — it only runs CI. Deploys are intentional and triggered by a tag.
 
-- **Trigger:** push to `main` triggers `.github/workflows/deploy-production.yml`.
-- **Pipeline:**
-  1. Run `validate` job (same as `ci.yml`: `php artisan test` + `vendor/bin/pint --test`).
-  2. Rsync repo to VPS (`.env.production` is excluded from rsync so server-side secrets persist).
-  3. Run `scripts/deploy.sh` on the VPS:
-     - Inject `SENDGRID_API_KEY` from GitHub Secrets into `.env.production`.
-     - `docker compose -f docker-compose.prod.yml down --timeout 60`.
-     - Build (or `--no-cache` if `FORCE_REBUILD=true`).
-     - Start containers.
-     - Wait for PostgreSQL (`pg_isready` loop, 120 s timeout).
-     - Wait for Redis (`PING` loop, 60 s timeout).
-     - Clear and warm Laravel cache (`php artisan optimize:clear` + `php artisan optimize`).
-     - `php artisan migrate --force`.
-     - Health check loop (`/health`, 5 attempts).
-     - Prune unused Docker images.
+```bash
+git tag v2.1.0 && git push origin v2.1.0            # build + deploy
+gh workflow run "Release (backend)" -f ref=v2.0.0   # rollback / manual deploy
+```
+
+- **Trigger:** tag `v*` (or `workflow_dispatch`) runs `.github/workflows/release.yml`.
+- **The image is built on the GitHub runner** and pushed to GHCR (`ghcr.io/bcordeirodev/linkchart-backend:<sha>`). The VPS never compiles — it only pulls. (It is a 2 vCPU / 3.8 GB box: building there used to starve the live app and caused a ~2.5 min outage on every deploy.)
+- **Blue/green cutover, zero downtime.** `scripts/deploy.sh` starts the idle colour (`8000` = blue, `8001` = green) *outside* nginx, warms it (`config:cache`, `route:cache`), runs migrations, and health-checks it. Only then does it rewrite `/etc/nginx/conf.d/upstreams.conf` and `nginx -s reload` (graceful). **If the new colour fails its health check, the deploy aborts and the old one keeps serving.**
+
+### Three stacks, split by lifecycle
+
+| Compose file | Project (`-p`) | Lifecycle |
+| --- | --- | --- |
+| `docker-compose.infra.yml` | **`linkchartapi`** | Postgres, Redis, Alloy, exporters — started once, **never touched by a deploy** |
+| `docker-compose.app.yml` | `linkchartapi-{blue,green}` | web (nginx + php-fpm) — blue/green |
+| `docker-compose.worker.yml` | `linkchartapi-worker` | queues + scheduler — **single instance** |
+
+> ⚠️ The infra stack **must** be started with `-p linkchartapi`. Docker volumes are scoped by Compose project name (`linkchartapi_postgres_data`); any other `-p` creates **new, empty volumes** and the database appears wiped.
+
+> ⚠️ Queues live in their own container. Two web colours running at once would run **two schedulers** and double-fire `LinkHealthCheckJob` and `clicks:anonymize-ips`.
+
+### Migrations must be backward-compatible
+
+With blue/green, `migrate` runs **while the old code is still serving traffic**. Add the new column → deploy → only remove the old one in the *next* release. Never rename or drop in one shot. `tests/Unit/MigrationSafetyTest.php` fails the build on `dropColumn`/`renameColumn`/`drop`/`rename` inside `up()`.
+
+For a genuinely destructive migration, mark it `@offline-migration` and run the release with `migration_mode: offline` (stops the app, migrates, restarts — ~20 s of downtime).
 
 - **Production cache strategy:** both `config:cache` and `route:cache` are active in production. `env()` calls outside `config/` return `null` after cache — always read env via `config('namespace.key')`.
 

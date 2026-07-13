@@ -3,7 +3,7 @@
 # Link Charts — backend pre-push hook (versionado)
 #
 # Roda os mesmos checks que o GitHub Actions executa em ci.yml e no job
-# `validate` de deploy-production.yml, dentro do container Docker.
+# `validate` de ci.yml, dentro do container Docker.
 #
 # Ativação: rode uma vez `bash scripts/setup-hooks.sh` no repo (configura
 # core.hooksPath para apontar pra scripts/hooks).
