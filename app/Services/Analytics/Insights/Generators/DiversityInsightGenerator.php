@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 
@@ -22,11 +23,14 @@ class DiversityInsightGenerator implements InsightGeneratorInterface
      *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to the query below.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $countries = Click::where('link_id', $linkId)
+        $countries = $filters->applyToQuery(
+            Click::where('link_id', $linkId)
+        )
             ->whereNotNull('country')
             ->where('country', '!=', 'localhost')
             ->distinct('country')

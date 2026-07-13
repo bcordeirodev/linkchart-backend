@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -21,14 +22,16 @@ class DeviceInsightGenerator implements InsightGeneratorInterface
      * localisation via react-i18next.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  int  $totalClicks  Total click count for the link.
+     * @param  int  $totalClicks  Total click count for the link, already filtered.
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to the query below.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $top = DB::table('clicks')
+        $top = $filters->applyToQuery(
+            DB::table('clicks')->where('link_id', $linkId)
+        )
             ->selectRaw('device, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('device')
             ->groupBy('device')
             ->orderBy('clicks', 'desc')

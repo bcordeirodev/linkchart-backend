@@ -108,7 +108,7 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
             ];
         }
 
-        $insights = $this->registry->generate($linkId, $totalClicks);
+        $insights = $this->registry->generate($linkId, $totalClicks, $filters);
 
         return [
             'insights' => $insights,
