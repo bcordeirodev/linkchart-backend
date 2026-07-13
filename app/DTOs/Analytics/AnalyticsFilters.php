@@ -22,14 +22,15 @@ readonly class AnalyticsFilters
     public readonly ?Carbon $dateTo;
 
     /**
-     * Channel values that `getTrafficSourceAnalysis()` (InsightsAnalyticsService)
-     * and `categorizeClickSource()` (LinkTrackingService) map 1:1 to themselves.
-     * Any `click_source` outside this set — including `'unknown'` — is folded
-     * into the derived `'other'` bucket by those same methods' `match(...)`
-     * `default` arm. Kept in sync manually; if that `match(...)` list changes,
-     * this constant must change with it.
+     * Channel values that map 1:1 to themselves in the traffic-source
+     * breakdown. Any `click_source` outside this set — including `'unknown'`
+     * — is folded into the derived `'other'` bucket. This is the single
+     * source of truth for that grouping:
+     * `InsightsAnalyticsService::getTrafficSourceAnalysis()` checks
+     * membership against this constant instead of duplicating the list, and
+     * `applyChannel()` below uses it to build the `'other'` query branch.
      */
-    private const NAMED_CHANNELS = ['social', 'search', 'direct', 'email', 'referral'];
+    public const NAMED_CHANNELS = ['social', 'search', 'direct', 'email', 'referral'];
 
     public function __construct(
         public readonly bool $excludeBots = false,
@@ -119,8 +120,8 @@ readonly class AnalyticsFilters
     {
         return new static(
             excludeBots: $this->excludeBots,
-            dateFrom: $this->dateFrom?->toDateTimeString(),
-            dateTo: $this->dateTo?->toDateTimeString(),
+            dateFrom: $this->dateFrom?->toIso8601String(),
+            dateTo: $this->dateTo?->toIso8601String(),
             country: $this->country,
             device: $this->device,
             channel: $this->channel,
