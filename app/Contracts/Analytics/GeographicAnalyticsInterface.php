@@ -45,9 +45,13 @@ interface GeographicAnalyticsInterface
      * ]
      * ```
      *
+     * The continent scope travels inside `$filters` (`AnalyticsFilters::$continent`,
+     * applied via `applyDimensions()`) instead of as a loose argument. This keeps it
+     * inside `AnalyticsFilters::cacheKey()` and lets it compose with the `country`
+     * drill-down filter without a separate parameter to keep in sync.
+     *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion, drill-down dimensions incl. continent). Null = no filter applied.
      * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array<string, mixed> Geographic analytics payload as described above.
      *
@@ -56,7 +60,6 @@ interface GeographicAnalyticsInterface
     public function getLinkGeographicAnalytics(
         int $linkId,
         ?AnalyticsFilters $filters = null,
-        ?string $continent = null,
         int $minClicks = 0
     ): array;
 }

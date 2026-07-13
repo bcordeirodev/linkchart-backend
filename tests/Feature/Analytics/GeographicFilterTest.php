@@ -85,6 +85,33 @@ class GeographicFilterTest extends TestCase
     }
 
     /**
+     * The `country` filter must scope the geographic payload to that country only,
+     * and must not conflict with the DTO's continent handling.
+     */
+    public function test_country_filter_scopes_the_payload(): void
+    {
+        Click::factory()->count(3)->create([
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
+            'continent' => 'SA',
+        ]);
+        Click::factory()->count(7)->create([
+            'link_id' => $this->link->id,
+            'country' => 'United States',
+            'continent' => 'NA',
+        ]);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/geographic?country=Brazil");
+
+        $response->assertOk();
+
+        $countries = collect($response->json('data.top_countries'));
+        $this->assertCount(1, $countries);
+        $this->assertSame('Brazil', $countries->first()['country']);
+    }
+
+    /**
      * Without any filters all clicks must appear in geographic results.
      */
     public function test_no_filters_returns_all_data(): void

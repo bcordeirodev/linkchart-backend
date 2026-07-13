@@ -71,9 +71,12 @@ interface LinkAnalyticsOrchestratorInterface
      * Delegates directly to {@see \App\Contracts\Analytics\GeographicAnalyticsInterface::getLinkGeographicAnalytics()}.
      * See that interface for the full return shape.
      *
+     * The continent scope travels inside `$filters` (`AnalyticsFilters::$continent`)
+     * instead of as a loose argument, so it participates in `AnalyticsFilters::cacheKey()`
+     * and cannot silently conflict with the `country` drill-down filter.
+     *
      * @param  int  $linkId  ID of the link to analyse.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion, drill-down dimensions incl. continent). Null = no filter applied.
      * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array<string, mixed> Geographic analytics payload.
      *
@@ -82,7 +85,6 @@ interface LinkAnalyticsOrchestratorInterface
     public function getLinkGeographicAnalytics(
         int $linkId,
         ?AnalyticsFilters $filters = null,
-        ?string $continent = null,
         int $minClicks = 0
     ): array;
 
