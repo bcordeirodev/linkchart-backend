@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\TagController;
@@ -80,6 +81,9 @@ Route::middleware(['api.auth:api'])->group(function () {
     Route::get('/email-verification-status', [AuthController::class, 'checkEmailVerificationStatus']); // ✅ NOVO: Status de verificação
     Route::post('/resend-verification-email', [AuthController::class, 'resendVerificationEmail'])
         ->middleware('throttle:resend-verification');      // ✅ NOVO: Reenviar email (rate-limited)
+
+    // === ONBOARDING (marca tour/dicas como já vistos, por conta) ===
+    Route::post('/onboarding/seen', [OnboardingController::class, 'seen']);
 });
 
 /**

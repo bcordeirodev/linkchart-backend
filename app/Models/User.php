@@ -17,10 +17,10 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * in AppServiceProvider::boot() via User::observe(UserObserver::class).
  *
  * Fillable: name, email, password, email_verified, email_verified_at,
- *           email_verification_sent_at, auth0_sub.
+ *           email_verification_sent_at, auth0_sub, onboarding.
  *
  * Casts: email_verified_at → datetime, email_verification_sent_at → datetime,
- *        email_verified → boolean, password → hashed.
+ *        email_verified → boolean, password → hashed, onboarding → array.
  *
  * Hidden (serialization): password, remember_token.
  *
@@ -33,6 +33,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property bool $email_verified Whether the user has confirmed their e-mail address.
  * @property \Illuminate\Support\Carbon|null $email_verified_at Timestamp of successful verification; null until verified.
  * @property \Illuminate\Support\Carbon|null $email_verification_sent_at Timestamp of the most recent verification e-mail dispatch; used for resend rate-limiting (2-minute window).
+ * @property array<string, string>|null $onboarding Dismissed onboarding flags, keyed by flag name (see self::ONBOARDING_KEYS) and mapped to the ISO-8601 instant of dismissal; null until the user dismisses their first.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Link>                        $links
@@ -57,6 +58,18 @@ class User extends Authenticatable implements JWTSubject
         'email_verified_at',
         'email_verification_sent_at',
         'auth0_sub',
+        'onboarding',
+    ];
+
+    /**
+     * Onboarding flags the API accepts. A key absent from this list is rejected
+     * with 422, so a compromised or stale client cannot bloat the JSON column
+     * with arbitrary keys.
+     *
+     * @var list<string>
+     */
+    public const ONBOARDING_KEYS = [
+        'links.tour',
     ];
 
     /**
@@ -101,7 +114,40 @@ class User extends Authenticatable implements JWTSubject
             'email_verification_sent_at' => 'datetime',
             'email_verified' => 'boolean',
             'password' => 'hashed',
+            'onboarding' => 'array',
         ];
+    }
+
+    /**
+     * Whether the user already dismissed the given onboarding flag.
+     *
+     * @param  string  $key  One of self::ONBOARDING_KEYS (e.g. 'links.tour').
+     */
+    public function hasSeenOnboarding(string $key): bool
+    {
+        return isset($this->onboarding[$key]);
+    }
+
+    /**
+     * Records that the user dismissed the given onboarding flag, stamping the
+     * moment it happened. Idempotent: re-marking an already-seen flag keeps the
+     * original timestamp, so the first-seen date stays meaningful.
+     *
+     * @param  string  $key  One of self::ONBOARDING_KEYS (e.g. 'links.tour').
+     */
+    public function markOnboardingSeen(string $key): void
+    {
+        if ($this->hasSeenOnboarding($key)) {
+            return;
+        }
+
+        // Reassign the whole array: mutating $this->onboarding[$key] in place
+        // does not mark the attribute dirty on an 'array'-cast column.
+        $this->onboarding = array_merge($this->onboarding ?? [], [
+            $key => now()->toIso8601String(),
+        ]);
+
+        $this->save();
     }
 
     /**
