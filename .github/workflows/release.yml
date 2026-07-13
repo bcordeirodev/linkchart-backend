@@ -1,0 +1,170 @@
+name: Release (backend)
+
+# Deploy INTENCIONAL: dispara por tag `v*` ou manualmente. Push em `main` roda
+# apenas o ci.yml — merge deixou de significar deploy.
+#
+# A imagem e construida AQUI (runner) e publicada no GHCR. O droplet
+# (2 vCPU / 3,8 GB) so faz `docker pull` + swap blue/green: nunca mais compila
+# enquanto serve trafego, e a stack infra (postgres/redis) nao e mais derrubada.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag ou SHA para deployar (use para rollback, ex.: v2.0.0)"
+        required: true
+        type: string
+      migration_mode:
+        description: "online = migra com o codigo antigo servindo (padrao). offline = para a app, migra e sobe (so para migration destrutiva marcada com @offline-migration)"
+        required: false
+        default: "online"
+        type: choice
+        options:
+          - online
+          - offline
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-backend
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/bcordeirodev/linkchart-backend
+  DEPLOY_HOST: 134.209.33.182
+  PROJECT_PATH: /var/www/linkchartapi
+
+jobs:
+  # ==========================================================================
+  # Build da imagem NO RUNNER — nunca no droplet de producao
+  # ==========================================================================
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Resolver a tag da imagem
+        id: meta
+        run: |
+          SHA=$(git rev-parse --short=12 HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "git_tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "git_tag=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Imagem sera publicada como: $SHA"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build e push da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.meta.outputs.sha }}
+            ${{ env.IMAGE }}:latest
+            ${{ steps.meta.outputs.git_tag && format('{0}:{1}', env.IMAGE, steps.meta.outputs.git_tag) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ==========================================================================
+  # Deploy — o droplet so faz pull + swap blue/green
+  # ==========================================================================
+  deploy:
+    name: Deploy (blue/green)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
+
+    environment:
+      name: production
+      url: https://api.linkcharts.com.br
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: ssh-keyscan -H ${{ env.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      # So os artefatos de deploy — o codigo-fonte nao vai mais para o servidor
+      # (quem roda e a imagem). Diretorios sao sincronizados COMO diretorio:
+      # arquivos listados individualmente sao copiados achatados pelo rsync.
+      - name: Enviar composes, scripts e config do Alloy
+        run: |
+          rsync -az \
+            docker-compose.infra.yml \
+            docker-compose.app.yml \
+            docker-compose.worker.yml \
+            root@${{ env.DEPLOY_HOST }}:${{ env.PROJECT_PATH }}/
+          rsync -az scripts/ \
+            root@${{ env.DEPLOY_HOST }}:${{ env.PROJECT_PATH }}/scripts/
+          rsync -az ops/ \
+            root@${{ env.DEPLOY_HOST }}:${{ env.PROJECT_PATH }}/ops/
+          rsync -az docker/scripts/ \
+            root@${{ env.DEPLOY_HOST }}:${{ env.PROJECT_PATH }}/docker/scripts/
+
+      # Login EFEMERO: o GITHUB_TOKEN morre com o job, entao o droplet nao
+      # guarda credencial de longa duracao para o registry.
+      - name: Login no GHCR a partir do servidor
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh root@${{ env.DEPLOY_HOST }} \
+            "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+
+      - name: Executar o swap blue/green
+        run: |
+          ssh root@${{ env.DEPLOY_HOST }} \
+            "chmod +x ${{ env.PROJECT_PATH }}/scripts/deploy.sh && \
+             IMAGE_TAG='${{ needs.build.outputs.image_tag }}' \
+             MIGRATION_MODE='${{ inputs.migration_mode || 'online' }}' \
+             SENDGRID_API_KEY='${{ secrets.SENDGRID_API_KEY }}' \
+             GOOGLE_SAFE_BROWSING_KEY='${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}' \
+             OTEL_EXPORTER_OTLP_HEADERS='${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}' \
+             PG_MONITORING_PASSWORD='${{ secrets.PG_MONITORING_PASSWORD }}' \
+             GCLOUD_OTLP_ENDPOINT='${{ secrets.GCLOUD_OTLP_ENDPOINT }}' \
+             GCLOUD_OTLP_USER='${{ secrets.GCLOUD_OTLP_USER }}' \
+             GCLOUD_OTLP_PASS='${{ secrets.GCLOUD_OTLP_PASS }}' \
+             APP_VERSION='${{ needs.build.outputs.image_tag }}' \
+             ${{ env.PROJECT_PATH }}/scripts/deploy.sh"
+
+      - name: Logout do GHCR
+        if: always()
+        run: ssh root@${{ env.DEPLOY_HOST }} "docker logout ghcr.io" || true
+
+      - name: Health check publico (de fora do servidor)
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 https://api.linkcharts.com.br/health || echo 000)
+            if [ "$code" = "200" ]; then
+              echo "Deploy confirmado (HTTP 200)"
+              exit 0
+            fi
+            echo "tentativa $i: HTTP $code — nova tentativa em 5s"
+            sleep 5
+          done
+          echo "Health check publico falhou"
+          exit 1
