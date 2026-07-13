@@ -1,11 +1,16 @@
-name: 🧪 CI
-# Nota: Laravel Pint executa no CI em modo --test (verifica formatação sem alterar arquivos).
+name: CI (backend)
+# Gate de qualidade. NUNCA faz deploy — quem publica é o release.yml, disparado
+# por tag `v*`.
+#
+# Nota: Laravel Pint executa em modo --test (verifica formatação sem alterar).
+# O MigrationSafetyTest roda dentro de `php artisan test` e reprova migration
+# destrutiva no up() (o deploy é blue/green: migrations rodam com o código
+# antigo ainda servindo).
 
 on:
   pull_request:
   push:
-    branches-ignore:
-      - main  # push em main dispara deploy-production.yml, que já roda os mesmos checks
+    branches: ["**"] # inclui main: ela não deploya mais, então precisa de CI aqui
 
 jobs:
   validate:

@@ -1,4 +1,4 @@
-name: Uptime (external probe)
+name: Uptime (produção — api + frontend)
 
 # External uptime safety net: runs OUTSIDE the droplet (GitHub infra), so it
 # catches a full outage (droplet/nginx/Alloy down) that the in-cluster exporters
