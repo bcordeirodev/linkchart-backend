@@ -2,6 +2,8 @@
 
 namespace App\Services\Analytics\Insights;
 
+use App\DTOs\Analytics\AnalyticsFilters;
+
 /**
  * Strategy registry for insight generators.
  *
@@ -37,14 +39,15 @@ class InsightGeneratorRegistry
      * was not met (e.g. not enough data).
      *
      * @param  int  $linkId  Link primary key.
-     * @param  int  $totalClicks  Pre-computed total click count (avoids redundant queries).
+     * @param  int  $totalClicks  Pre-computed filtered total click count.
+     * @param  AnalyticsFilters  $filters  Active filter state, forwarded to every generator.
      * @return array<int, array<string, mixed>> All non-null insight payloads.
      */
-    public function generate(int $linkId, int $totalClicks): array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): array
     {
         $insights = [];
         foreach ($this->generators as $gen) {
-            $insight = $gen->generate($linkId, $totalClicks);
+            $insight = $gen->generate($linkId, $totalClicks, $filters);
             if ($insight !== null) {
                 $insights[] = $insight;
             }

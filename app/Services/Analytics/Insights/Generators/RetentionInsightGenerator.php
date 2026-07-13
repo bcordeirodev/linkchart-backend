@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 
@@ -26,17 +27,22 @@ class RetentionInsightGenerator implements InsightGeneratorInterface
      *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to both queries below.
      * @return array<string, mixed>|null Includes extra key: data_points (array with retention breakdown).
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $total = Click::where('link_id', $linkId)->distinct('ip')->count('ip');
+        $total = $filters->applyToQuery(
+            Click::where('link_id', $linkId)
+        )->distinct('ip')->count('ip');
 
         if ($total === 0) {
             return null;
         }
 
-        $return = Click::where('link_id', $linkId)
+        $return = $filters->applyToQuery(
+            Click::where('link_id', $linkId)
+        )
             ->where('is_return_visitor', true)
             ->distinct('ip')
             ->count('ip');

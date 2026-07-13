@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -23,13 +24,18 @@ class SecurityInsightGenerator implements InsightGeneratorInterface
      *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to the query below. The
+     *                                     `HAVING COUNT(*) > 50` counts within the filtered window,
+     *                                     which is intentional: an IP with 60 clicks over a year is
+     *                                     not an anomaly for today's window.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $n = DB::table('clicks')
+        $n = $filters->applyToQuery(
+            DB::table('clicks')->where('link_id', $linkId)
+        )
             ->selectRaw('ip, COUNT(*) as c')
-            ->where('link_id', $linkId)
             ->groupBy('ip')
             ->havingRaw('COUNT(*) > 50')
             ->get()
