@@ -289,10 +289,9 @@ class InsightsAnalyticsService implements \App\Contracts\Analytics\InsightsAnaly
         $channelData = [];
 
         foreach ($sourceData as $source) {
-            $channel = match ($source->source) {
-                'social', 'search', 'direct', 'email', 'referral' => $source->source,
-                default => 'other',
-            };
+            $channel = in_array($source->source, AnalyticsFilters::NAMED_CHANNELS, true)
+                ? $source->source
+                : 'other';
 
             if (! isset($channelData[$channel])) {
                 $channelData[$channel] = [
