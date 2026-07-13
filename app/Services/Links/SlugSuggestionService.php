@@ -39,6 +39,29 @@ class SlugSuggestionService
 
     private const MAX_LENGTH = 100;
 
+    /**
+     * Cap for a *derived* base slug. Far below {@see MAX_LENGTH} (which is only
+     * the hard ceiling a user-typed slug must respect): an og:title can run for
+     * a whole sentence, and a 100-character slug defeats the purpose of a short
+     * link. The cut lands on a word boundary, never mid-word.
+     */
+    private const MAX_BASE_LENGTH = 48;
+
+    /**
+     * Connector words that must never *end* a suggested slug — a slug closing on
+     * "…-is-an" or "…-de" reads as if it got cut off. Covers both UI languages
+     * (en + pt-BR). Only the tail is trimmed, so these words still survive in the
+     * middle of a slug.
+     */
+    private const TRAILING_STOPWORDS = [
+        // en
+        'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'is',
+        'of', 'on', 'or', 'the', 'to', 'with',
+        // pt-BR
+        'com', 'da', 'das', 'de', 'do', 'dos', 'e', 'em', 'na', 'no', 'o',
+        'os', 'para', 'por', 'um', 'uma',
+    ];
+
     /** Characters reserved for the `-token` collision suffix (hyphen + 4 chars). */
     private const TOKEN_RESERVE = 5;
 
@@ -153,8 +176,14 @@ class SlugSuggestionService
      */
     private function normalize(string $value): ?string
     {
-        $slug = Str::slug($value);
-        $slug = substr($slug, 0, self::MAX_LENGTH);
+        // Turn every separator run into a space *before* slugifying. Str::slug
+        // deletes punctuation rather than splitting on it, so "anthropics/claude"
+        // would otherwise collapse into the non-word "anthropicsclaude".
+        $words = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value) ?? $value;
+
+        $slug = Str::slug($words);
+        $slug = $this->truncateAtWordBoundary($slug, self::MAX_BASE_LENGTH);
+        $slug = $this->trimTrailingStopwords($slug);
         $slug = trim($slug, '-');
 
         if (strlen($slug) < self::MIN_LENGTH) {
@@ -166,6 +195,48 @@ class SlugSuggestionService
         }
 
         return $slug;
+    }
+
+    /**
+     * Cut a hyphenated slug down to at most $max characters without splitting a
+     * word: drop the trailing partial segment. A single first word longer than
+     * $max is kept as-is (hard-cut) — there is no boundary to fall back to.
+     *
+     * @param  string  $slug  An already-slugified (hyphen-separated) string.
+     * @param  int  $max  Maximum length in characters.
+     * @return string The truncated slug.
+     */
+    private function truncateAtWordBoundary(string $slug, int $max): string
+    {
+        if (strlen($slug) <= $max) {
+            return $slug;
+        }
+
+        $cut = substr($slug, 0, $max);
+        $lastHyphen = strrpos($cut, '-');
+
+        return $lastHyphen === false || $lastHyphen === 0
+            ? $cut
+            : substr($cut, 0, $lastHyphen);
+    }
+
+    /**
+     * Drop trailing connector words (see {@see TRAILING_STOPWORDS}) so a
+     * truncated title doesn't leave the slug hanging on "…-is-an". The first
+     * segment is always kept, even if it is itself a stopword.
+     *
+     * @param  string  $slug  An already-slugified (hyphen-separated) string.
+     * @return string The slug without trailing connector words.
+     */
+    private function trimTrailingStopwords(string $slug): string
+    {
+        $parts = explode('-', $slug);
+
+        while (count($parts) > 1 && in_array(end($parts), self::TRAILING_STOPWORDS, true)) {
+            array_pop($parts);
+        }
+
+        return implode('-', $parts);
     }
 
     /**

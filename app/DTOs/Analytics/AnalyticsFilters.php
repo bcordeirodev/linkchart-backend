@@ -21,6 +21,17 @@ readonly class AnalyticsFilters
 
     public readonly ?Carbon $dateTo;
 
+    /**
+     * Channel values that map 1:1 to themselves in the traffic-source
+     * breakdown. Any `click_source` outside this set — including `'unknown'`
+     * — is folded into the derived `'other'` bucket. This is the single
+     * source of truth for that grouping:
+     * `InsightsAnalyticsService::getTrafficSourceAnalysis()` checks
+     * membership against this constant instead of duplicating the list, and
+     * `applyChannel()` below uses it to build the `'other'` query branch.
+     */
+    public const NAMED_CHANNELS = ['social', 'search', 'direct', 'email', 'referral'];
+
     public function __construct(
         public readonly bool $excludeBots = false,
         ?string $dateFrom = null,
@@ -95,6 +106,30 @@ readonly class AnalyticsFilters
     }
 
     /**
+     * Returns a copy of this filter state with the continent dimension cleared.
+     *
+     * The continent breakdown is the continent *selector*: it owns that dimension,
+     * so it must keep showing every continent even while one is selected (the
+     * frontend highlights the active slice via `activeContinentCode`). It still
+     * honours every other dimension — filtering by device must show the continent
+     * split of that device's clicks.
+     *
+     * @return static New instance identical to this one except `continent` is null.
+     */
+    public function withoutContinent(): static
+    {
+        return new static(
+            excludeBots: $this->excludeBots,
+            dateFrom: $this->dateFrom?->toIso8601String(),
+            dateTo: $this->dateTo?->toIso8601String(),
+            country: $this->country,
+            device: $this->device,
+            channel: $this->channel,
+            continent: null,
+        );
+    }
+
+    /**
      * Apply the channel filter.
      *
      * `direct` is a COALESCE bucket, not a stored value: `click_source` is nullable
@@ -102,6 +137,12 @@ readonly class AnalyticsFilters
      * as "direct" (see InsightsAnalyticsService::getTrafficSourceAnalysis). A plain
      * equality would silently drop those rows, so the user would click a bar reading
      * "490 cliques" and land on a page showing fewer.
+     *
+     * `other` is the same kind of derived bucket, just at the opposite end: it is
+     * whatever `click_source` is NOT one of the named channels (see NAMED_CHANNELS),
+     * including values like `'unknown'`. A plain equality (`click_source = 'other'`)
+     * matches zero rows, since `'other'` is never actually stored — it would send
+     * the user from a bar reading "N cliques" to a page showing none.
      *
      * @param  mixed  $query  An active query builder for the clicks table.
      * @param  string  $prefix  Table qualifier for joined queries.
@@ -113,6 +154,13 @@ readonly class AnalyticsFilters
             return $query->where(function ($q) use ($prefix) {
                 $q->where($prefix.'click_source', 'direct')
                     ->orWhereNull($prefix.'click_source');
+            });
+        }
+
+        if ($this->channel === 'other') {
+            return $query->where(function ($q) use ($prefix) {
+                $q->whereNotNull($prefix.'click_source')
+                    ->whereNotIn($prefix.'click_source', self::NAMED_CHANNELS);
             });
         }
 

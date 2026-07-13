@@ -131,4 +131,54 @@ class AnalyticsFiltersTest extends TestCase
         $this->assertStringContainsString('"clicks"."created_at"', $sql);
         $this->assertStringContainsString('"clicks"."is_bot"', $sql);
     }
+
+    /**
+     * Regression test: `withoutContinent()` used to round-trip dates through
+     * `toDateTimeString()`, which drops the UTC offset. A client sending an
+     * ISO-8601 timestamp with an explicit offset (`+02:00`) would see the
+     * continent breakdown query shift by that offset relative to every other
+     * panel, since those keep applying the filters directly (offset intact).
+     */
+    public function test_without_continent_preserves_timestamp_with_timezone_offset(): void
+    {
+        $filters = new AnalyticsFilters(
+            dateFrom: '2026-01-05T13:00:00+02:00',
+            dateTo: '2026-01-06T13:00:00+02:00',
+        );
+
+        $result = $filters->withoutContinent();
+
+        $this->assertSame($filters->dateFrom->getTimestamp(), $result->dateFrom->getTimestamp());
+        $this->assertSame($filters->dateTo->getTimestamp(), $result->dateTo->getTimestamp());
+    }
+
+    /**
+     * `withoutContinent()` must clear only the `continent` dimension — every
+     * other field (bot exclusion, both dates, and the three drill-down
+     * dimensions) must survive the clone unchanged. Dates are compared by
+     * timestamp rather than string to stay meaningful regardless of how the
+     * round-trip serialises them internally.
+     */
+    public function test_without_continent_clears_continent_and_preserves_all_other_fields(): void
+    {
+        $filters = new AnalyticsFilters(
+            excludeBots: true,
+            dateFrom: '2026-01-05T13:00:00+02:00',
+            dateTo: '2026-01-06T13:00:00+02:00',
+            country: 'Brazil',
+            device: 'mobile',
+            channel: 'social',
+            continent: 'SA',
+        );
+
+        $result = $filters->withoutContinent();
+
+        $this->assertNull($result->continent);
+        $this->assertTrue($result->excludeBots);
+        $this->assertSame($filters->dateFrom->getTimestamp(), $result->dateFrom->getTimestamp());
+        $this->assertSame($filters->dateTo->getTimestamp(), $result->dateTo->getTimestamp());
+        $this->assertSame('Brazil', $result->country);
+        $this->assertSame('mobile', $result->device);
+        $this->assertSame('social', $result->channel);
+    }
 }

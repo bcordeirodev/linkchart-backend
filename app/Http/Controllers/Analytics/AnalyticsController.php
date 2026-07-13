@@ -84,7 +84,12 @@ class AnalyticsController extends BaseController
      *
      * Response shape: { success: true, data: GeographicData, meta: GeographicMeta }
      *
-     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, continent, min_clicks.
+     * `continent` (like `country`, `device`, `channel`) is read entirely through
+     * `AnalyticsFilters::fromRequest()` — it is no longer extracted as a loose
+     * argument, so it now participates in the orchestrator's cache key and never
+     * conflicts with the `country` drill-down filter.
+     *
+     * @param  Request  $request  Query params: date_from, date_to, exclude_bots, country, device, channel, continent, min_clicks.
      */
     public function getGeographicAnalytics(Request $request, int $linkId): JsonResponse
     {
@@ -95,10 +100,9 @@ class AnalyticsController extends BaseController
             }
 
             $filters = AnalyticsFilters::fromRequest($request);
-            $continent = $request->query('continent') ?: null;
             $minClicks = max(0, (int) $request->query('min_clicks', 0));
 
-            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks);
+            $payload = $this->analyticsService->getLinkGeographicAnalytics($linkId, $filters, $minClicks);
 
             return response()->json([
                 'success' => true,
