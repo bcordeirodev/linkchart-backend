@@ -59,4 +59,76 @@ class AnalyticsFiltersTest extends TestCase
 
         $this->assertInstanceOf(\Illuminate\Database\Eloquent\Builder::class, $result);
     }
+
+    public function test_from_request_parses_categorical_dimensions(): void
+    {
+        $request = Request::create('/', 'GET', [
+            'country' => 'Brazil',
+            'device' => 'mobile',
+            'channel' => 'social',
+            'continent' => 'SA',
+        ]);
+
+        $filters = AnalyticsFilters::fromRequest($request);
+
+        $this->assertSame('Brazil', $filters->country);
+        $this->assertSame('mobile', $filters->device);
+        $this->assertSame('social', $filters->channel);
+        $this->assertSame('SA', $filters->continent);
+    }
+
+    public function test_cache_key_changes_with_each_dimension(): void
+    {
+        $base = new AnalyticsFilters;
+
+        $this->assertNotSame($base->cacheKey(), (new AnalyticsFilters(country: 'Brazil'))->cacheKey());
+        $this->assertNotSame($base->cacheKey(), (new AnalyticsFilters(device: 'mobile'))->cacheKey());
+        $this->assertNotSame($base->cacheKey(), (new AnalyticsFilters(channel: 'social'))->cacheKey());
+        $this->assertNotSame($base->cacheKey(), (new AnalyticsFilters(continent: 'SA'))->cacheKey());
+    }
+
+    public function test_channel_direct_also_matches_null_click_source(): void
+    {
+        $sql = (new AnalyticsFilters(channel: 'direct'))
+            ->applyToQuery(\App\Models\Click::query())
+            ->toSql();
+
+        $this->assertStringContainsString('is null', strtolower($sql));
+    }
+
+    public function test_channel_other_than_direct_is_a_plain_equality(): void
+    {
+        $sql = (new AnalyticsFilters(channel: 'social'))
+            ->applyToQuery(\App\Models\Click::query())
+            ->toSql();
+
+        $this->assertStringNotContainsString('is null', strtolower($sql));
+        $this->assertStringContainsString('click_source', $sql);
+    }
+
+    public function test_apply_dimensions_omits_the_date_range(): void
+    {
+        $filters = new AnalyticsFilters(
+            excludeBots: true,
+            dateFrom: '2026-01-01',
+            dateTo: '2026-01-31',
+            device: 'mobile',
+        );
+
+        $sql = $filters->applyDimensions(\App\Models\Click::query())->toSql();
+
+        $this->assertStringNotContainsString('created_at', $sql);
+        $this->assertStringContainsString('device', $sql);
+        $this->assertStringContainsString('is_bot', $sql);
+    }
+
+    public function test_prefix_qualifies_columns_for_joined_queries(): void
+    {
+        $sql = (new AnalyticsFilters(excludeBots: true, dateFrom: '2026-01-01'))
+            ->applyToQuery(\App\Models\Click::query(), 'clicks.')
+            ->toSql();
+
+        $this->assertStringContainsString('"clicks"."created_at"', $sql);
+        $this->assertStringContainsString('"clicks"."is_bot"', $sql);
+    }
 }
