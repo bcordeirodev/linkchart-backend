@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Links;
 
 use App\Contracts\Services\LinkServiceInterface;
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\DTOs\CreateLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Http\Controllers\BaseController;
@@ -272,6 +273,13 @@ class LinkController extends BaseController
      *   - date_from (string, ISO datetime, filters created_at >=)
      *   - date_to (string, ISO datetime, filters created_at <=)
      *   - exclude_bots (bool, default false)
+     *   - country, device, channel, continent (drill-down dimensions, same
+     *     semantics as the analytics endpoints — see AnalyticsFilters)
+     *
+     * Filters are parsed via AnalyticsFilters::fromRequest() and applied with
+     * applyToQuery() so this list always matches the same scope as the charts
+     * on the same screen. `channel=direct` is a COALESCE bucket that also
+     * matches rows with a NULL click_source (see AnalyticsFilters::applyChannel).
      *
      * Each item in data includes social_platform (nullable, added 2026-05-19)
      * and quality_tier (nullable, added Phase 3) so the frontend can render
@@ -316,26 +324,13 @@ class LinkController extends BaseController
                 : 'created_at';
             $sortDir = strtolower((string) $request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
-            // Date range filter (sent as "yyyy-MM-dd HH:mm:ss" strings by the frontend)
-            $dateFrom = $request->input('date_from');
-            $dateTo = $request->input('date_to');
+            // Filtros compartilhados com os gráficos — a aba Cliques precisa
+            // enxergar exatamente o mesmo recorte que os painéis da mesma tela.
+            $filters = AnalyticsFilters::fromRequest($request);
 
-            // Bot exclusion filter — defaults to false (show all) for the clicks tab
-            $excludeBots = filter_var($request->input('exclude_bots', false), FILTER_VALIDATE_BOOLEAN);
-
-            $query = \App\Models\Click::where('link_id', $link->id)->with('utm');
-
-            if ($dateFrom) {
-                $query->where('created_at', '>=', $dateFrom);
-            }
-
-            if ($dateTo) {
-                $query->where('created_at', '<=', $dateTo);
-            }
-
-            if ($excludeBots) {
-                $query->where('is_bot', false);
-            }
+            $query = $filters->applyToQuery(
+                \App\Models\Click::where('link_id', $link->id)->with('utm')
+            );
 
             if ($search !== '') {
                 $needle = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
@@ -417,9 +412,9 @@ class LinkController extends BaseController
                     'sort_by' => $sortBy,
                     'sort_dir' => $sortDir,
                     'search' => $search,
-                    'date_from' => $dateFrom,
-                    'date_to' => $dateTo,
-                    'exclude_bots' => $excludeBots,
+                    'date_from' => $filters->dateFrom?->toDateTimeString(),
+                    'date_to' => $filters->dateTo?->toDateTimeString(),
+                    'exclude_bots' => $filters->excludeBots,
                 ],
             ]);
         } catch (\Exception $e) {
