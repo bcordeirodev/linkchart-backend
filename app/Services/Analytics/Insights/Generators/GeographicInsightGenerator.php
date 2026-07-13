@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -21,14 +22,16 @@ class GeographicInsightGenerator implements InsightGeneratorInterface
      * localisation via react-i18next.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  int  $totalClicks  Total click count for percentage calculation.
+     * @param  int  $totalClicks  Total click count for percentage calculation, already filtered.
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to the query below.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $top = DB::table('clicks')
+        $top = $filters->applyToQuery(
+            DB::table('clicks')->where('link_id', $linkId)
+        )
             ->selectRaw('country, COUNT(*) as clicks')
-            ->where('link_id', $linkId)
             ->whereNotNull('country')
             ->where('country', '!=', 'localhost')
             ->groupBy('country')
