@@ -58,4 +58,25 @@ class ClicksListFilterTest extends TestCase
         $response->assertOk();
         $this->assertCount(5, $response->json('data'));
     }
+
+    /**
+     * `other` é bucket derivado, não um valor armazenado: getTrafficSourceAnalysis()
+     * (InsightsAnalyticsService) e categorizeClickSource() (LinkTrackingService)
+     * agrupam ali todo click_source fora de social/search/direct/email/referral
+     * — incluindo 'unknown'. A UI mostra "N cliques" nessa barra a partir dessa
+     * mesma agregação; `?channel=other` precisa devolver exatamente essas linhas,
+     * não zero.
+     */
+    public function test_channel_other_includes_unnamed_click_sources(): void
+    {
+        Click::factory()->count(4)->create(['link_id' => $this->link->id, 'click_source' => 'social']);
+        Click::factory()->count(2)->create(['link_id' => $this->link->id, 'click_source' => 'unknown']);
+        Click::factory()->count(3)->create(['link_id' => $this->link->id, 'click_source' => 'qr_code']);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/link/{$this->link->id}/clicks-list?channel=other");
+
+        $response->assertOk();
+        $this->assertCount(5, $response->json('data'));
+    }
 }
