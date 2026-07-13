@@ -45,6 +45,44 @@ class SuggestSlugTest extends TestCase
         $response->assertJsonPath('data.og_title', 'Cat - Wikipedia');
     }
 
+    /**
+     * A long og:title must not become a long slug — a 100-char slug defeats the
+     * purpose of a shortener. The base is capped and cut on a word boundary, so
+     * the slug never ends in a half-word.
+     */
+    public function test_long_title_is_capped_and_cut_on_a_word_boundary(): void
+    {
+        $this->fakePreviewTitle(
+            'GitHub - anthropics/claude-code: Claude Code is an agentic coding tool '.
+            'that lives in your terminal, understands your codebase, and helps you code faster'
+        );
+
+        $response = $this->getJson('/api/public/links/suggest-slug?url='.urlencode('https://github.com/anthropics/claude-code'));
+
+        $response->assertStatus(200);
+        $slug = $response->json('data.slug');
+
+        $this->assertLessThanOrEqual(48, strlen($slug), "Slug is too long to be useful: {$slug}");
+
+        // The old bug cut mid-word (…-terminal-under, from "understands"). Every
+        // hyphen-separated segment must be a whole word from the source title.
+        $titleWords = preg_split('/[^a-z0-9]+/i', strtolower(
+            'GitHub anthropics claude code Claude Code is an agentic coding tool '.
+            'that lives in your terminal understands your codebase and helps you code faster'
+        ));
+        foreach (explode('-', $slug) as $segment) {
+            $this->assertContains($segment, $titleWords, "Slug segment '{$segment}' is a truncated word in: {$slug}");
+        }
+
+        // …and it must not trail off on a connector word ("…-code-is-an"), which
+        // reads as if the slug itself got cut short.
+        $this->assertNotContains(
+            (string) last(explode('-', $slug)),
+            ['is', 'an', 'a', 'the', 'of', 'and', 'to', 'in'],
+            "Slug ends on a connector word: {$slug}"
+        );
+    }
+
     public function test_taken_base_gets_short_random_token_not_a_counter(): void
     {
         $this->fakePreviewTitle('Cat - Wikipedia');
