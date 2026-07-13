@@ -85,6 +85,33 @@ class GeographicFilterTest extends TestCase
     }
 
     /**
+     * The `country` filter must scope the geographic payload to that country only,
+     * and must not conflict with the DTO's continent handling.
+     */
+    public function test_country_filter_scopes_the_payload(): void
+    {
+        Click::factory()->count(3)->create([
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
+            'continent' => 'SA',
+        ]);
+        Click::factory()->count(7)->create([
+            'link_id' => $this->link->id,
+            'country' => 'United States',
+            'continent' => 'NA',
+        ]);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/geographic?country=Brazil");
+
+        $response->assertOk();
+
+        $countries = collect($response->json('data.top_countries'));
+        $this->assertCount(1, $countries);
+        $this->assertSame('Brazil', $countries->first()['country']);
+    }
+
+    /**
      * Without any filters all clicks must appear in geographic results.
      */
     public function test_no_filters_returns_all_data(): void
@@ -100,5 +127,74 @@ class GeographicFilterTest extends TestCase
 
         $response->assertOk();
         $this->assertNotEmpty($response->json('data'));
+    }
+
+    /**
+     * Regression test: the continents donut is the continent *selector* — the
+     * frontend's ContinentBreakdown draws every continent and highlights the
+     * active one via `activeContinentCode`. Applying the continent filter to
+     * this breakdown collapses it to a single 100% slice and defeats that
+     * highlight. `?continent=NA` must still return every continent (NA and
+     * SA here), with percentages computed over the combined total.
+     */
+    public function test_continents_breakdown_ignores_the_continent_filter(): void
+    {
+        Click::factory()->count(10)->create([
+            'link_id' => $this->link->id,
+            'country' => 'United States',
+            'continent' => 'NA',
+        ]);
+        Click::factory()->count(6)->create([
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
+            'continent' => 'SA',
+        ]);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/geographic?continent=NA");
+
+        $response->assertOk();
+
+        $continents = collect($response->json('data.continents'))->keyBy('continent_code');
+        $this->assertCount(2, $continents);
+
+        $this->assertSame(10, $continents['NA']['clicks']);
+        $this->assertSame(62.5, $continents['NA']['percentage']);
+
+        $this->assertSame(6, $continents['SA']['clicks']);
+        $this->assertSame(37.5, $continents['SA']['percentage']);
+    }
+
+    /**
+     * The continents breakdown must still honour every other drill-down
+     * dimension — it only special-cases `continent` itself. Filtering by
+     * `device=mobile` must scope the continent split to mobile clicks only.
+     */
+    public function test_continents_breakdown_honours_other_dimensions(): void
+    {
+        Click::factory()->count(3)->create([
+            'link_id' => $this->link->id,
+            'country' => 'United States',
+            'continent' => 'NA',
+            'device' => 'mobile',
+        ]);
+        Click::factory()->count(9)->create([
+            'link_id' => $this->link->id,
+            'country' => 'Brazil',
+            'continent' => 'SA',
+            'device' => 'desktop',
+        ]);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/geographic?device=mobile");
+
+        $response->assertOk();
+
+        $continents = collect($response->json('data.continents'))->keyBy('continent_code');
+        $this->assertCount(1, $continents);
+        $this->assertSame(3, $continents['NA']['clicks']);
+        // assertEquals, not assertSame: json_encode(100.0) serialises as `100`,
+        // which json_decode() reads back as the int 100, not the float 100.0.
+        $this->assertEquals(100.0, $continents['NA']['percentage']);
     }
 }

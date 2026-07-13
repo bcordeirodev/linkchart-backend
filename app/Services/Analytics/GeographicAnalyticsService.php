@@ -36,20 +36,25 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * Returns empty data arrays when no clicks exist (link must exist or
      * ModelNotFoundException is thrown via Link::findOrFail).
      *
+     * The continent scope travels inside `$filters` (`AnalyticsFilters::$continent`)
+     * instead of as a loose argument — `baseQuery()` applies it via
+     * `AnalyticsFilters::applyToQuery()`/`applyDimensions()`, so it composes
+     * correctly with the `country` drill-down filter and participates in the
+     * orchestrator's cache key.
+     *
      * @param  int  $linkId  Link primary key.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion, drill-down dimensions incl. continent). Null = no filter applied.
      * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array{data: array{heatmap_data: array, top_countries: array, top_states: array, top_cities: array, continents: array}, meta: array}
      *
      * @throws \Illuminate\Database\Eloquent\ModelNotFoundException If link does not exist.
      */
-    public function getLinkGeographicAnalytics(int $linkId, ?AnalyticsFilters $filters = null, ?string $continent = null, int $minClicks = 0): array
+    public function getLinkGeographicAnalytics(int $linkId, ?AnalyticsFilters $filters = null, int $minClicks = 0): array
     {
         $link = Link::findOrFail($linkId);
         $filters ??= new AnalyticsFilters;
 
-        if (! $this->baseQuery($linkId, $filters, $continent)->exists()) {
+        if (! $this->baseQuery($linkId, $filters)->exists()) {
             return [
                 'data' => [
                     'heatmap_data' => [],
@@ -58,45 +63,42 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
                     'top_cities' => [],
                     'continents' => [],
                 ],
-                'meta' => $this->buildGeographicMeta($link, [], $linkId, $filters, $continent),
+                'meta' => $this->buildGeographicMeta($link, [], $linkId, $filters),
             ];
         }
 
-        [$heatmap, $heatmapCapped, $totalLocationsAvailable] = $this->getHeatmapData($linkId, $filters, $continent);
+        [$heatmap, $heatmapCapped, $totalLocationsAvailable] = $this->getHeatmapData($linkId, $filters);
 
         return [
             'data' => [
                 'heatmap_data' => $heatmap,
-                'top_countries' => $this->filterByMinClicks($this->getTopCountriesOptimized($linkId, $filters, $continent), $minClicks),
-                'top_states' => $this->filterByMinClicks($this->getTopStatesOptimized($linkId, $filters, $continent), $minClicks),
-                'top_cities' => $this->filterByMinClicks($this->getTopCitiesOptimized($linkId, $filters, $continent), $minClicks),
+                'top_countries' => $this->filterByMinClicks($this->getTopCountriesOptimized($linkId, $filters), $minClicks),
+                'top_states' => $this->filterByMinClicks($this->getTopStatesOptimized($linkId, $filters), $minClicks),
+                'top_cities' => $this->filterByMinClicks($this->getTopCitiesOptimized($linkId, $filters), $minClicks),
                 'continents' => $this->getTopContinents($linkId, $filters),
             ],
-            'meta' => $this->buildGeographicMeta($link, $heatmap, $linkId, $filters, $continent, $heatmapCapped, $totalLocationsAvailable),
+            'meta' => $this->buildGeographicMeta($link, $heatmap, $linkId, $filters, $heatmapCapped, $totalLocationsAvailable),
         ];
     }
 
     /**
-     * Build a base Eloquent query for geographic clicks, applying filters and continent scope.
+     * Build a base Eloquent query for geographic clicks, applying filters (incl. continent).
      *
      * Excludes clicks with null, empty, or 'localhost' country values — these
      * are produced by LinkTrackingService when the request IP cannot be resolved.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
-     * @param  ?string  $continent  ISO 2-letter code, or null for all continents.
+     * @param  AnalyticsFilters  $filters  Date-range, bot-exclusion and drill-down (incl. continent) constraints.
      * @return \Illuminate\Database\Eloquent\Builder Scoped Eloquent builder on the clicks table.
      */
-    private function baseQuery(int $linkId, AnalyticsFilters $filters, ?string $continent = null): \Illuminate\Database\Eloquent\Builder
+    private function baseQuery(int $linkId, AnalyticsFilters $filters): \Illuminate\Database\Eloquent\Builder
     {
-        $query = $filters->applyToQuery(
+        return $filters->applyToQuery(
             Click::where('link_id', $linkId)
                 ->whereNotNull('country')
                 ->where('country', '!=', 'localhost')
                 ->where('country', '!=', '')
         );
-
-        return $query->when($continent, fn ($q) => $q->where('continent', $continent));
     }
 
     /**
@@ -123,14 +125,13 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * the total number of distinct location groups before the cap is applied.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
-     * @param  ?string  $continent  Continent scope, or null for all continents.
+     * @param  AnalyticsFilters  $filters  Date-range, bot-exclusion and drill-down (incl. continent) constraints.
      * @return array{0: array<int, array{lat: float, lng: float, city: string, country: string, clicks: int, iso_code: ?string, currency: ?string, state_name: ?string, continent: ?string, timezone: ?string, last_click: ?string}>, 1: bool, 2: int}
      *                                                                                                                                                                                                                                                 Tuple of [heatmap rows, heatmap_capped flag, total_locations_available].
      */
-    private function getHeatmapData(int $linkId, AnalyticsFilters $filters, ?string $continent = null): array
+    private function getHeatmapData(int $linkId, AnalyticsFilters $filters): array
     {
-        $baseGeoQuery = $this->baseQuery($linkId, $filters, $continent)
+        $baseGeoQuery = $this->baseQuery($linkId, $filters)
             ->toBase()
             ->whereNotNull('latitude')
             ->whereNotNull('longitude');
@@ -174,13 +175,12 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * Return the top 10 countries by click count, respecting filters.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
-     * @param  ?string  $continent  Continent scope, or null for all continents.
+     * @param  AnalyticsFilters  $filters  Date-range, bot-exclusion and drill-down (incl. continent) constraints.
      * @return array<int, array{country: string, iso_code: ?string, currency: ?string, clicks: int}>
      */
-    private function getTopCountriesOptimized(int $linkId, AnalyticsFilters $filters, ?string $continent = null): array
+    private function getTopCountriesOptimized(int $linkId, AnalyticsFilters $filters): array
     {
-        return $this->baseQuery($linkId, $filters, $continent)
+        return $this->baseQuery($linkId, $filters)
             ->toBase()
             ->selectRaw('country, iso_code, currency, COUNT(*) as clicks')
             ->groupBy('country', 'iso_code', 'currency')
@@ -193,13 +193,12 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * Return the top 10 states/regions by click count, respecting filters.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
-     * @param  ?string  $continent  Continent scope, or null for all continents.
+     * @param  AnalyticsFilters  $filters  Date-range, bot-exclusion and drill-down (incl. continent) constraints.
      * @return array<int, array{country: string, state: ?string, state_name: ?string, clicks: int}>
      */
-    private function getTopStatesOptimized(int $linkId, AnalyticsFilters $filters, ?string $continent = null): array
+    private function getTopStatesOptimized(int $linkId, AnalyticsFilters $filters): array
     {
-        return $this->baseQuery($linkId, $filters, $continent)
+        return $this->baseQuery($linkId, $filters)
             ->toBase()
             ->selectRaw('country, state, state_name, COUNT(*) as clicks')
             ->whereNotNull('state')
@@ -218,13 +217,12 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * count. This is a portable approximation of PostgreSQL's `MODE() WITHIN GROUP`.
      *
      * @param  int  $linkId  Link primary key.
-     * @param  AnalyticsFilters  $filters  Date-range and bot-exclusion constraints.
-     * @param  ?string  $continent  Continent scope, or null for all continents.
+     * @param  AnalyticsFilters  $filters  Date-range, bot-exclusion and drill-down (incl. continent) constraints.
      * @return array<int, array{city: string, country: string, state: ?string, clicks: int, most_common_postal_code: ?string}>
      */
-    private function getTopCitiesOptimized(int $linkId, AnalyticsFilters $filters, ?string $continent = null): array
+    private function getTopCitiesOptimized(int $linkId, AnalyticsFilters $filters): array
     {
-        $rows = $this->baseQuery($linkId, $filters, $continent)
+        $rows = $this->baseQuery($linkId, $filters)
             ->toBase()
             ->selectRaw('city, country, state, COUNT(*) as clicks')
             ->whereNotNull('city')
@@ -233,9 +231,9 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
             ->limit(10)
             ->get();
 
-        return $rows->map(function ($r) use ($linkId, $filters, $continent) {
+        return $rows->map(function ($r) use ($linkId, $filters) {
             // Resolve the most common postal code for this (city, country, state) group.
-            $postalQuery = $this->baseQuery($linkId, $filters, $continent)
+            $postalQuery = $this->baseQuery($linkId, $filters)
                 ->toBase()
                 ->selectRaw('postal_code, COUNT(*) as cnt')
                 ->whereNotNull('city')
@@ -262,8 +260,14 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
     /**
      * Return continent breakdown with click counts and percentages.
      *
-     * Note: continent filter is intentionally NOT applied here — continents is always
-     * a global breakdown to show the full picture even when scoping by a single continent.
+     * Note: the continent filter is intentionally NOT applied here — this
+     * breakdown is the continent *selector* the frontend's ContinentBreakdown
+     * draws as a donut and highlights via `activeContinentCode`, so it must
+     * always show every continent, even while one is selected, or the
+     * highlight loses its meaning (see `AnalyticsFilters::withoutContinent()`).
+     * Every other dimension (country, device, channel, bots, dates) is still
+     * honoured — filtering by device must show the continent split of that
+     * device's clicks.
      *
      * The `continent` column stores 2-letter ISO codes as emitted by the
      * torann/geoip package (NA, SA, EU, AS, AF, OC, AN). No server-side name
@@ -276,7 +280,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      */
     private function getTopContinents(int $linkId, AnalyticsFilters $filters): array
     {
-        $results = $filters->applyToQuery(
+        $results = $filters->withoutContinent()->applyToQuery(
             Click::where('link_id', $linkId)
                 ->whereNotNull('continent')
                 ->where('continent', '!=', '')
@@ -320,8 +324,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      * @param  Link  $link  Link model instance.
      * @param  array  $heatmap  Pre-computed heatmap rows (may be capped at 500).
      * @param  int  $linkId  Link primary key (for fresh DB queries).
-     * @param  AnalyticsFilters  $filters  Active date-range / bot-exclusion filters.
-     * @param  ?string  $continent  Active continent scope, or null for all.
+     * @param  AnalyticsFilters  $filters  Active date-range, bot-exclusion and drill-down (incl. continent) filters.
      * @param  bool  $heatmapCapped  Whether the heatmap hit the 500-row cap.
      * @param  int  $totalLocationsAvailable  Total distinct location groups before the cap.
      */
@@ -330,11 +333,10 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
         array $heatmap,
         int $linkId,
         AnalyticsFilters $filters,
-        ?string $continent = null,
         bool $heatmapCapped = false,
         int $totalLocationsAvailable = 0,
     ): array {
-        $base = fn () => $this->baseQuery($linkId, $filters, $continent);
+        $base = fn () => $this->baseQuery($linkId, $filters);
 
         $clicks = array_column($heatmap, 'clicks');
 

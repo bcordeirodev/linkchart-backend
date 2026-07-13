@@ -113,20 +113,22 @@ class LinkAnalyticsOrchestrator implements LinkAnalyticsOrchestratorInterface
     /**
      * Delegates to GeographicAnalyticsService::getLinkGeographicAnalytics.
      *
+     * The continent scope travels inside `$filters` (`AnalyticsFilters::$continent`)
+     * instead of as a loose argument, so `$filters->cacheKey()` alone is enough to
+     * key the cache entry — no separate continent component is needed.
+     *
      * @param  int  $linkId  Link primary key.
-     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
-     * @param  ?string  $continent  ISO 2-letter continent code ('NA','SA','EU','AS','AF','OC'), or null for all continents.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion, drill-down dimensions incl. continent). Null = no filter applied.
      * @param  int  $minClicks  Omit rows where clicks < $minClicks from aggregated results.
      * @return array<string, mixed>
      */
     public function getLinkGeographicAnalytics(
         int $linkId,
         ?AnalyticsFilters $filters = null,
-        ?string $continent = null,
         int $minClicks = 0
     ): array {
-        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey(), (string) $continent, (string) $minClicks],
-            fn () => $this->geographic->getLinkGeographicAnalytics($linkId, $filters, $continent, $minClicks));
+        return $this->remember(__FUNCTION__, $linkId, [($filters ?? new AnalyticsFilters)->cacheKey(), (string) $minClicks],
+            fn () => $this->geographic->getLinkGeographicAnalytics($linkId, $filters, $minClicks));
     }
 
     /**

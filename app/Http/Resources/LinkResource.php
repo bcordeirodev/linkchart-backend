@@ -28,6 +28,10 @@ class LinkResource extends JsonResource
             'updated_at' => $this->updated_at->format('d/m/Y H:i:s'),
             'is_expired' => $this->isExpired(),
             'is_active_valid' => $this->isActiveAndNotExpired(),
+            // Seeded by SeedDemoLinkJob on signup. Exposed so the UI can label it
+            // as an example — its 1247 clicks are synthetic, and a new user who
+            // can't tell that would read the analytics as real traffic.
+            'is_demo' => (bool) $this->is_demo,
             'short_url' => $this->getShortedUrl(),
             'shorted_url' => $this->getShortedUrl(), // Mantido para compatibilidade
             // Denormalised counter column (Link::$clicks), kept current by
