@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 
@@ -24,15 +25,24 @@ class EngagementInsightGenerator implements InsightGeneratorInterface
      *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @param  AnalyticsFilters  $filters  Active filter state. Only dimensions (country/device/
+     *                                     channel/continent) and bot exclusion are applied via
+     *                                     applyDimensions() — this generator owns its own 7d vs
+     *                                     previous-7d window, so date_from/date_to must NOT be
+     *                                     layered on top or the comparison loses its meaning.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $recent = Click::where('link_id', $linkId)
+        $recent = $filters->applyDimensions(
+            Click::where('link_id', $linkId)
+        )
             ->where('created_at', '>=', now()->subDays(7))
             ->count();
 
-        $old = Click::where('link_id', $linkId)
+        $old = $filters->applyDimensions(
+            Click::where('link_id', $linkId)
+        )
             ->where('created_at', '<', now()->subDays(7))
             ->where('created_at', '>=', now()->subDays(14))
             ->count();

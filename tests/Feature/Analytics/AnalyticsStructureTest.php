@@ -76,7 +76,7 @@ class AnalyticsStructureTest extends TestCase
         Click::factory()->count(10)->create(['link_id' => $link->id, 'country' => 'Brazil']);
 
         $registry = app(InsightGeneratorRegistry::class);
-        $insights = $registry->generate($link->id, 10);
+        $insights = $registry->generate($link->id, 10, new AnalyticsFilters);
 
         $this->assertIsArray($insights);
         foreach ($insights as $insight) {
