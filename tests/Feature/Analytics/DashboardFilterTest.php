@@ -4,6 +4,7 @@ namespace Tests\Feature\Analytics;
 
 use App\Models\Click;
 use App\Models\Link;
+use App\Models\LinkUtm;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -110,5 +111,59 @@ class DashboardFilterTest extends TestCase
 
         $response->assertOk();
         $this->assertNull($response->json('data.summary.clicks_variation_pct'));
+    }
+
+    /**
+     * O painel de UTM usava whereDate(), que trunca para a data e ignora a hora.
+     * Com um filtro intradiário (preset de 1h/24h) ele incluía cliques desde as
+     * 00:00 daquele dia, divergindo de todos os painéis vizinhos.
+     */
+    public function test_utm_panel_honours_intraday_date_from(): void
+    {
+        $link = $this->link;
+
+        // Clique às 02:00 de hoje — FORA de uma janela que começa às 12:00
+        $early = Click::factory()->create([
+            'link_id' => $link->id,
+            'created_at' => today()->setHour(2),
+        ]);
+        LinkUtm::create([
+            'click_id' => $early->id,
+            'utm_source' => 'newsletter',
+        ]);
+
+        $dateFrom = today()->setHour(12)->format('Y-m-d H:i:s');
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/dashboard?date_from={$dateFrom}");
+
+        $response->assertOk();
+        $this->assertSame([], $response->json('data.summary.utm_top_sources') ?? []);
+    }
+
+    /**
+     * A comparação com o período anterior (clicks_variation_pct) precisa honrar
+     * o drill-down por dimensão. Sem aplicar `applyDimensions` na query de
+     * `$previousClicks`, um filtro de país compararia o país filtrado contra o
+     * mundo inteiro no período anterior, inflando artificialmente a variação.
+     */
+    public function test_clicks_variation_pct_honours_country_drilldown(): void
+    {
+        $link = $this->link;
+
+        // Período anterior [2026-01-04, 2026-02-01): 1 clique BR (dentro do filtro), 5 US (fora do filtro).
+        Click::factory()->create(['link_id' => $link->id, 'country' => 'BR', 'created_at' => '2026-01-15 12:00:00']);
+        Click::factory()->count(5)->create(['link_id' => $link->id, 'country' => 'US', 'created_at' => '2026-01-15 12:00:00']);
+
+        // Período atual [2026-02-01, 2026-03-01]: 2 cliques BR.
+        Click::factory()->count(2)->create(['link_id' => $link->id, 'country' => 'BR', 'created_at' => '2026-02-10 12:00:00']);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/dashboard?date_from=2026-02-01&date_to=2026-03-01&country=BR");
+
+        $response->assertOk();
+        $this->assertEquals(2, $response->json('data.summary.total_clicks'));
+        // 2 vs 1 (apenas BR no período anterior) = +100%. Sem o fix seria 2 vs 6 = -66,7%.
+        $this->assertEquals(100.0, $response->json('data.summary.clicks_variation_pct'));
     }
 }

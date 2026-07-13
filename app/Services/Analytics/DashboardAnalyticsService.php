@@ -255,9 +255,13 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      *
      * The current window is `[start, end]` (filter date range, or since the
      * link's creation when unfiltered). The comparison window is the same length
-     * directly before `start`. Returns null when the prior window has zero
-     * clicks — there is no meaningful baseline to compare against, so the
-     * frontend renders the hero KPI without a variation pill.
+     * directly before `start`, and honours the active drill-down (country, device,
+     * channel, continent, bot exclusion) via `AnalyticsFilters::applyDimensions()` —
+     * without it, filtering by country would compare that country's current window
+     * against the whole link's previous window. Only the date range is NOT reapplied
+     * here, since this query defines its own (shifted) window. Returns null when the
+     * prior window has zero clicks — there is no meaningful baseline to compare
+     * against, so the frontend renders the hero KPI without a variation pill.
      *
      * @param  Link  $link  The link being analysed.
      * @param  AnalyticsFilters  $filters  Active filter constraints.
@@ -271,11 +275,11 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
         $windowSeconds = max(1, (int) $start->diffInSeconds($end));
         $previousStart = $start->copy()->subSeconds($windowSeconds);
 
-        $previousClicks = Click::where('link_id', $link->id)
-            ->where('created_at', '>=', $previousStart)
-            ->where('created_at', '<', $start)
-            ->when($filters->excludeBots, fn ($q) => $q->where('is_bot', false))
-            ->count();
+        $previousClicks = $filters->applyDimensions(
+            Click::where('link_id', $link->id)
+                ->where('created_at', '>=', $previousStart)
+                ->where('created_at', '<', $start)
+        )->count();
 
         if ($previousClicks === 0) {
             return null;
@@ -679,8 +683,9 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
      * so that percentages remain accurate when there are more than 5 UTM sources.
      *
      * Note: this method uses the Query Builder (not Eloquent) because the JOIN cannot
-     * be expressed cleanly through `baseQuery()`. Filter constraints are re-applied
-     * manually here to mirror what `AnalyticsFilters::applyToQuery()` does.
+     * be expressed cleanly through `baseQuery()`. Filter constraints are applied via
+     * `AnalyticsFilters::applyToQuery()` with the `clicks.` prefix — the JOIN means
+     * `created_at`, `is_bot`, `country`, etc. must be qualified or the SQL is ambiguous.
      *
      * @param  int  $linkId  Link primary key.
      * @param  AnalyticsFilters  $filters  Active filter constraints.
@@ -693,15 +698,7 @@ class DashboardAnalyticsService implements \App\Contracts\Analytics\DashboardAna
             ->where('clicks.link_id', $linkId)
             ->whereNotNull('link_utms.utm_source');
 
-        if ($filters->dateFrom) {
-            $baseUtmQuery->whereDate('clicks.created_at', '>=', $filters->dateFrom);
-        }
-        if ($filters->dateTo) {
-            $baseUtmQuery->whereDate('clicks.created_at', '<=', $filters->dateTo);
-        }
-        if ($filters->excludeBots) {
-            $baseUtmQuery->where('clicks.is_bot', false);
-        }
+        $baseUtmQuery = $filters->applyToQuery($baseUtmQuery, 'clicks.');
 
         $totalUtmClicks = (clone $baseUtmQuery)->count();
 
