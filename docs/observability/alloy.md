@@ -24,7 +24,7 @@ PGPASSWORD=CHANGE_ME_DB_PASSWORD psql -h 127.0.0.1 -p 5432 \
 
 Store the chosen password as the **`PG_MONITORING_PASSWORD`** secret in the
 GitHub `production` environment. The `deploy.sh` script reads this secret and
-injects it into `.env` for `docker-compose.prod.yml` interpolation.
+injects it into `.env` for `docker-compose.infra.yml` interpolation.
 
 > **If you skip this step:** `pg_up` will be `0`, all Postgres dashboards will
 > be empty, and `postgres_exporter` logs will show authentication errors.
@@ -33,7 +33,7 @@ injects it into `.env` for `docker-compose.prod.yml` interpolation.
 
 ## What runs
 
-Three containers are added to `docker-compose.prod.yml` under the `linkchartnet`
+Three containers are added to `docker-compose.infra.yml` under the `linkchartnet`
 internal network. None of them publish ports to the host — Alloy reaches the
 exporters by Docker DNS name.
 
@@ -60,7 +60,7 @@ As of Phase 2, the application container (`linkchartapi`) exports OTLP
 internal Docker network only) instead of directly to Grafana Cloud.
 
 This is achieved by injecting two environment variables into the `app` service
-in `docker-compose.prod.yml`:
+in `docker-compose.infra.yml`:
 
 ```yaml
 - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
@@ -81,7 +81,7 @@ the container starts.
 ### Rollback
 
 Remove the two lines from the `app` service `environment` block in
-`docker-compose.prod.yml`:
+`docker-compose.infra.yml`:
 
 ```yaml
 - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
@@ -198,16 +198,16 @@ environment instead.
 ```bash
 ssh root@134.209.33.182 \
   'cd /var/www/linkchartapi && \
-   docker compose -f docker-compose.prod.yml stop alloy postgres_exporter redis_exporter'
+   docker compose -p linkchartapi -f docker-compose.infra.yml stop alloy postgres_exporter redis_exporter'
 ```
 
 To remove them entirely (e.g. while debugging):
 
 ```bash
-docker compose -f docker-compose.prod.yml rm -f alloy postgres_exporter redis_exporter
+docker compose -p linkchartapi -f docker-compose.infra.yml rm -f alloy postgres_exporter redis_exporter
 ```
 
-Re-enable by running a new deploy (triggers `deploy-production.yml`).
+Re-enable with `docker compose -p linkchartapi -f docker-compose.infra.yml up -d` (a stack infra nao e mais tocada por deploys).
 
 ---
 
@@ -236,7 +236,7 @@ prometheus.exporter.unix "host" {
 ```
 
 The `/rootfs` bind-mount (`/:/rootfs:ro,rslave`) is already declared in
-`docker-compose.prod.yml` for this purpose. To verify the paths are present:
+`docker-compose.infra.yml` for this purpose. To verify the paths are present:
 
 ```bash
 grep rootfs_path ops/observability/alloy/config.alloy

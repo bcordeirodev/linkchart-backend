@@ -13,7 +13,7 @@ flowchart LR
   Sched[php artisan schedule:work<br/>LinkHealthCheckJob hourly] -->|enqueue| RD
 ```
 
-The system follows a classic layered approach: the Next.js frontend communicates exclusively with the Laravel API through Nginx (which terminates TLS and handles load balancing). Laravel owns all business logic and delegates persistence to PostgreSQL for relational data and Redis for high-frequency operations. In development the entire stack runs via `docker-compose up -d`; production mirrors this layout on a single VPS using `docker-compose.prod.yml`.
+The system follows a classic layered approach: the Next.js frontend communicates exclusively with the Laravel API through Nginx (which terminates TLS and handles load balancing). Laravel owns all business logic and delegates persistence to PostgreSQL for relational data and Redis for high-frequency operations. In development the entire stack runs via `docker-compose up -d`; production runs on a single VPS split into three stacks by lifecycle: `docker-compose.infra.yml` (Postgres, Redis, Alloy — never touched by a deploy), `docker-compose.app.yml` (web, blue/green) and `docker-compose.worker.yml` (queues + scheduler).
 
 Redis serves a dual role: application cache (slug lookups cached for 10 minutes via `Link::findActiveBySlugCached()`) and the job queue consumed by `php artisan queue:work` workers. Using a single Redis instance for both concerns keeps the infrastructure surface small; `predis/predis` is the client library. The 8 log channels described in CLAUDE.md (`redirect`, `tracking`, `jobs`, `auth`, `audit`, `http`, `app`, `errors`) all write through the standard Laravel logging stack and land on the host filesystem under `storage/logs/`.
 
