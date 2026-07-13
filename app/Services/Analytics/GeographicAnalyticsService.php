@@ -260,8 +260,14 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
     /**
      * Return continent breakdown with click counts and percentages.
      *
-     * Note: continent filter is intentionally NOT applied here — continents is always
-     * a global breakdown to show the full picture even when scoping by a single continent.
+     * Note: the continent filter is intentionally NOT applied here — this
+     * breakdown is the continent *selector* the frontend's ContinentBreakdown
+     * draws as a donut and highlights via `activeContinentCode`, so it must
+     * always show every continent, even while one is selected, or the
+     * highlight loses its meaning (see `AnalyticsFilters::withoutContinent()`).
+     * Every other dimension (country, device, channel, bots, dates) is still
+     * honoured — filtering by device must show the continent split of that
+     * device's clicks.
      *
      * The `continent` column stores 2-letter ISO codes as emitted by the
      * torann/geoip package (NA, SA, EU, AS, AF, OC, AN). No server-side name
@@ -274,7 +280,7 @@ class GeographicAnalyticsService implements \App\Contracts\Analytics\GeographicA
      */
     private function getTopContinents(int $linkId, AnalyticsFilters $filters): array
     {
-        $results = $filters->applyToQuery(
+        $results = $filters->withoutContinent()->applyToQuery(
             Click::where('link_id', $linkId)
                 ->whereNotNull('continent')
                 ->where('continent', '!=', '')

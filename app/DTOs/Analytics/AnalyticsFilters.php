@@ -95,6 +95,30 @@ readonly class AnalyticsFilters
     }
 
     /**
+     * Returns a copy of this filter state with the continent dimension cleared.
+     *
+     * The continent breakdown is the continent *selector*: it owns that dimension,
+     * so it must keep showing every continent even while one is selected (the
+     * frontend highlights the active slice via `activeContinentCode`). It still
+     * honours every other dimension — filtering by device must show the continent
+     * split of that device's clicks.
+     *
+     * @return static New instance identical to this one except `continent` is null.
+     */
+    public function withoutContinent(): static
+    {
+        return new static(
+            excludeBots: $this->excludeBots,
+            dateFrom: $this->dateFrom?->toDateTimeString(),
+            dateTo: $this->dateTo?->toDateTimeString(),
+            country: $this->country,
+            device: $this->device,
+            channel: $this->channel,
+            continent: null,
+        );
+    }
+
+    /**
      * Apply the channel filter.
      *
      * `direct` is a COALESCE bucket, not a stored value: `click_source` is nullable
