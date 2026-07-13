@@ -1,0 +1,53 @@
+# Stack do WORKER: filas + scheduler. INSTANCIA UNICA.
+#
+#   IMAGE_TAG=<sha> docker compose -p linkchartapi-worker \
+#     -f docker-compose.worker.yml up -d --force-recreate
+#
+# Nao serve HTTP e NAO entra no blue/green: e recriado de forma simples. Durante
+# a troca os jobs apenas aguardam no Redis — sem impacto para o usuario.
+#
+# ⚠️ NUNCA rodar duas instancias: dois schedulers duplicariam os jobs agendados
+# (LinkHealthCheckJob de hora em hora, clicks:anonymize-ips diario as 04:10).
+# Foi exatamente por isso que as filas sairam do container da web quando ele
+# passou a ter duas cores no ar ao mesmo tempo.
+
+services:
+  worker:
+    image: ghcr.io/bcordeirodev/linkchart-backend:${IMAGE_TAG:?IMAGE_TAG obrigatorio}
+    container_name: linkchartapi-worker
+    restart: unless-stopped
+    # Sobrescreve o CMD da imagem (que e o perfil web).
+    command:
+      [
+        "/usr/bin/supervisord",
+        "-c",
+        "/etc/supervisor/conf.d/supervisord-worker.conf",
+      ]
+    volumes:
+      - ./storage/logs:/var/www/storage/logs
+      - ./storage/app:/var/www/storage/app
+      - ./.env.production:/var/www/.env
+    environment:
+      - CONTAINER_ROLE=worker
+      - DB_HOST=linkchartdb
+      - REDIS_HOST=linkchartredis
+      - DB_CONNECTION=pgsql
+      - DB_DATABASE=linkchartprod
+      - DB_USERNAME=linkchartuser
+      - DB_PASSWORD=CHANGE_ME_DB_PASSWORD
+      - REDIS_CLIENT=phpredis
+      - REDIS_PASSWORD=CHANGE_ME_REDIS_PASSWORD
+      - OTEL_PHP_AUTOLOAD_ENABLED=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4318
+      - OTEL_EXPORTER_OTLP_HEADERS=
+    networks:
+      - linkchartnet
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+
+networks:
+  linkchartnet:
+    external: true
+    name: linkchartapi_linkchartnet
