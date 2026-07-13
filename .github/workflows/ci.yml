@@ -1,4 +1,4 @@
-name: 🧪 CI
+name: CI (backend)
 # Nota: Laravel Pint executa no CI em modo --test (verifica formatação sem alterar arquivos).
 
 on:
