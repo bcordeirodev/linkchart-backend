@@ -4,6 +4,7 @@ use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
+use App\Http\Controllers\Links\TagController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -101,6 +102,14 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
         Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
         Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkSummaryAnalytics'])->where('id', '[0-9]+'); // moved to AnalyticsController
+    });
+
+    // === GERENCIAMENTO DE TAGS (RESTful API) ===
+    Route::prefix('tags')->controller(TagController::class)->group(function () {
+        Route::get('/', 'index');
+        Route::post('/', 'store');
+        Route::put('/{id}', 'update')->where('id', '[0-9]+');
+        Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');
     });
 
     // === META-DADOS DE LINKS (sparkline, trend, preview, health, url-meta) ===
