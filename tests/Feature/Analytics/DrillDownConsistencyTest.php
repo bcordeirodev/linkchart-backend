@@ -343,4 +343,191 @@ class DrillDownConsistencyTest extends TestCase
         // anteriores => ~7,1%, abaixo do limiar de 20% que dispara o insight.
         $this->assertEquals(200.0, $engagement['description_params']['rate']);
     }
+
+    /**
+     * DiversityInsightGenerator só dispara com mais de 5 países distintos.
+     * Sem filtro, o link atinge 8 países (acima do limiar); filtrando por
+     * `country=Brazil`, o recorte cai para 1 único país e o insight precisa
+     * desaparecer. Se um refactor futuro trocar o `applyToQuery()` do
+     * gerador pela query global, ele voltaria a contar os 8 países mesmo sob
+     * o filtro — a ausência do insight é a asserção que pega essa regressão,
+     * já que o gerador não produz percentual (só um número absoluto de
+     * países, que nenhum outro teste desta classe verifica).
+     */
+    public function test_diversity_insight_disappears_when_the_country_filter_narrows_to_one_country(): void
+    {
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        // 7 países fora do filtro, 1 clique cada — soma ao Brasil para ficar
+        // acima do limiar de 5 quando não há filtro algum.
+        foreach (['Germany', 'France', 'Italy', 'Spain', 'Portugal', 'Japan', 'Canada'] as $country) {
+            Click::factory()->create([
+                'link_id' => $link->id,
+                'country' => $country,
+                'is_bot' => false,
+            ]);
+        }
+
+        // Único país dentro do filtro.
+        Click::factory()->count(3)->create([
+            'link_id' => $link->id,
+            'country' => 'Brazil',
+            'is_bot' => false,
+        ]);
+
+        $unfiltered = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/insights")
+            ->assertOk();
+
+        $filtered = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/insights?country=Brazil")
+            ->assertOk();
+
+        $diversityUnfiltered = collect($unfiltered->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.diversity.international.title');
+        $this->assertNotNull($diversityUnfiltered, 'Sem filtro, 8 países deveriam disparar o insight de diversidade.');
+        $this->assertSame(8, $diversityUnfiltered['description_params']['countries']);
+
+        $diversityFiltered = collect($filtered->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.diversity.international.title');
+        $this->assertNull(
+            $diversityFiltered,
+            'Com country=Brazil o recorte tem 1 único país; o insight de diversidade não deveria existir.'
+        );
+    }
+
+    /**
+     * SecurityInsightGenerator só dispara quando um IP ultrapassa 50 cliques
+     * DENTRO do recorte filtrado. O mesmo IP aparece em dois países: 51
+     * cliques no Brasil (cruza o limiar isoladamente) e 20 na Alemanha (fica
+     * abaixo). Filtrando por Alemanha, o insight não pode aparecer — se o
+     * filtro por país for removido do gerador, a contagem global do IP (71)
+     * cruzaria o limiar e o insight vazaria para o recorte errado.
+     */
+    public function test_security_insight_ip_threshold_respects_the_country_filter(): void
+    {
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        Click::factory()->count(51)->create([
+            'link_id' => $link->id,
+            'ip' => '10.0.0.1',
+            'country' => 'Brazil',
+            'is_bot' => false,
+        ]);
+
+        Click::factory()->count(20)->create([
+            'link_id' => $link->id,
+            'ip' => '10.0.0.1',
+            'country' => 'Germany',
+            'is_bot' => false,
+        ]);
+
+        $brazil = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/insights?country=Brazil")
+            ->assertOk();
+
+        $germany = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/insights?country=Germany")
+            ->assertOk();
+
+        $securityBrazil = collect($brazil->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.security.suspicious.title');
+        $this->assertNotNull($securityBrazil, 'No Brasil o IP tem 51 cliques, deveria disparar o alerta de segurança.');
+        $this->assertSame(1, $securityBrazil['description_params']['count']);
+
+        $securityGermany = collect($germany->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.security.suspicious.title');
+        $this->assertNull(
+            $securityGermany,
+            'Na Alemanha o mesmo IP tem só 20 cliques; sem o filtro por país vazaria o total global (71) e disparia indevidamente.'
+        );
+    }
+
+    /**
+     * TemporalInsightGenerator reporta o horário de pico agrupando pelas
+     * horas dos cliques. Fora do filtro (Alemanha), o pico é às 3h com 20
+     * cliques — mais que qualquer hora dentro do filtro. Dentro do filtro
+     * (Brasil), o pico real é às 14h (8 cliques). Se o `applyToQuery()` for
+     * removido do gerador, o pico reportado sob country=Brazil viraria 3h,
+     * dominado pelos cliques da Alemanha.
+     */
+    public function test_temporal_insight_peak_hour_respects_the_country_filter(): void
+    {
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        // Fora do filtro: pico às 3h, mais cliques que qualquer hora do Brasil.
+        Click::factory()->count(20)->create([
+            'link_id' => $link->id,
+            'country' => 'Germany',
+            'is_bot' => false,
+            'created_at' => now()->setTime(3, 0, 0),
+        ]);
+
+        // Dentro do filtro: pico real às 14h.
+        Click::factory()->count(8)->create([
+            'link_id' => $link->id,
+            'country' => 'Brazil',
+            'is_bot' => false,
+            'created_at' => now()->setTime(14, 0, 0),
+        ]);
+        Click::factory()->count(2)->create([
+            'link_id' => $link->id,
+            'country' => 'Brazil',
+            'is_bot' => false,
+            'created_at' => now()->setTime(5, 0, 0),
+        ]);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/insights?country=Brazil")
+            ->assertOk();
+
+        $temporal = collect($response->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.temporal.peakHour.title');
+
+        $this->assertNotNull($temporal, 'O insight de horário de pico deveria existir.');
+        $this->assertEquals(
+            14,
+            $temporal['description_params']['hour'],
+            'Sem o filtro por país o pico reportado seria 3h (dominado pelos cliques da Alemanha).'
+        );
+    }
+
+    /**
+     * PerformanceInsightGenerator reporta o tempo médio de resposta. Fora do
+     * filtro (Alemanha), os cliques são lentos (900ms); dentro do filtro
+     * (Brasil), são rápidos (100ms). Se o filtro por país for removido do
+     * gerador, a média misturaria os dois grupos (~740ms) e tanto o valor
+     * quanto o título (bom vs. lento) mudariam sob country=Brazil.
+     */
+    public function test_performance_insight_average_response_time_respects_the_country_filter(): void
+    {
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        Click::factory()->count(20)->create([
+            'link_id' => $link->id,
+            'country' => 'Germany',
+            'is_bot' => false,
+            'response_time' => 900,
+        ]);
+
+        Click::factory()->count(5)->create([
+            'link_id' => $link->id,
+            'country' => 'Brazil',
+            'is_bot' => false,
+            'response_time' => 100,
+        ]);
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$link->id}/insights?country=Brazil")
+            ->assertOk();
+
+        $performance = collect($response->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.performance.good.title');
+
+        $this->assertNotNull(
+            $performance,
+            'Filtrado por Brasil a média é 100ms (boa performance); sem o filtro viraria ~740ms e o título mudaria para "lento".'
+        );
+        $this->assertEquals(100.0, $performance['description_params']['avg']);
+    }
 }
