@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use App\Services\Analytics\Support\SqlDateExpr;
 use Illuminate\Support\Facades\DB;
@@ -23,15 +24,17 @@ class TemporalInsightGenerator implements InsightGeneratorInterface
      *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to the query below.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
         $expr = SqlDateExpr::hourOfDay();
 
-        $peak = DB::table('clicks')
+        $peak = $filters->applyToQuery(
+            DB::table('clicks')->where('link_id', $linkId)
+        )
             ->selectRaw("{$expr} as hour, COUNT(*) as clicks")
-            ->where('link_id', $linkId)
             ->groupByRaw($expr)
             ->orderBy('clicks', 'desc')
             ->first();

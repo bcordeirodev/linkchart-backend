@@ -116,4 +116,50 @@ class InsightsFilterTest extends TestCase
         $response->assertOk();
         $this->assertEquals(4, $response->json('data.analytics_data.quality.total_clicks'));
     }
+
+    /**
+     * Reproduz o bug: os geradores calculavam o numerador sobre TODOS os cliques
+     * do link enquanto o denominador ($totalClicks) já vinha filtrado, produzindo
+     * percentuais inflados — e acima de 100% quando o total filtrado era menor
+     * que o numerador global.
+     */
+    public function test_device_insight_percentage_respects_the_date_filter(): void
+    {
+        // 10 cliques mobile FORA da janela
+        Click::factory()->count(10)->create([
+            'link_id' => $this->link->id,
+            'device' => 'mobile',
+            'created_at' => now()->subDays(30),
+        ]);
+
+        // Dentro da janela: 2 mobile + 2 desktop => mobile = 50% de 4
+        Click::factory()->count(2)->create([
+            'link_id' => $this->link->id,
+            'device' => 'mobile',
+            'created_at' => now()->subHour(),
+        ]);
+        Click::factory()->count(2)->create([
+            'link_id' => $this->link->id,
+            'device' => 'desktop',
+            'created_at' => now()->subHour(),
+        ]);
+
+        $dateFrom = now()->subDay()->format('Y-m-d H:i:s');
+
+        $response = $this->actingAs($this->user, 'api')
+            ->getJson("/api/analytics/link/{$this->link->id}/insights?date_from={$dateFrom}");
+
+        $response->assertOk();
+
+        $device = collect($response->json('data.insights'))
+            ->firstWhere('title_key', 'insights.generators.device.dominant.title');
+
+        $this->assertNotNull($device, 'O insight de dispositivo deveria existir.');
+
+        // Antes da correção: 12 mobile / 4 totais = 300%.
+        // assertEquals (não assertSame): o valor passa por json_encode/decode via
+        // $response->json(), que colapsa floats "redondos" (50.0) para int (50) —
+        // mesmo padrão usado em DashboardFilterTest::test_clicks_variation_pct_compares_to_previous_window.
+        $this->assertEquals(50.0, $device['description_params']['pct']);
+    }
 }

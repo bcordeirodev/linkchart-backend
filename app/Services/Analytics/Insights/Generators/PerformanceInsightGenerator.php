@@ -2,6 +2,7 @@
 
 namespace App\Services\Analytics\Insights\Generators;
 
+use App\DTOs\Analytics\AnalyticsFilters;
 use App\Services\Analytics\Insights\InsightGeneratorInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -22,12 +23,14 @@ class PerformanceInsightGenerator implements InsightGeneratorInterface
      *
      * @param  int  $linkId  Link primary key.
      * @param  int  $totalClicks  Total click count (unused; kept for interface compatibility).
+     * @param  AnalyticsFilters  $filters  Active filter state, applied to the query below.
      * @return array<string, mixed>|null
      */
-    public function generate(int $linkId, int $totalClicks): ?array
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array
     {
-        $avg = (float) DB::table('clicks')
-            ->where('link_id', $linkId)
+        $avg = (float) $filters->applyToQuery(
+            DB::table('clicks')->where('link_id', $linkId)
+        )
             ->whereNotNull('response_time')
             ->avg('response_time');
 

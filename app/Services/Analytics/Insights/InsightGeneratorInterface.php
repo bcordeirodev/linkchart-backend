@@ -2,6 +2,8 @@
 
 namespace App\Services\Analytics\Insights;
 
+use App\DTOs\Analytics\AnalyticsFilters;
+
 /**
  * Contract for a single insight generator in the Strategy pattern.
  *
@@ -29,8 +31,12 @@ interface InsightGeneratorInterface
      * Some generators include additional keys (e.g. data_points in RetentionInsightGenerator).
      *
      * @param  int  $linkId  Link primary key.
-     * @param  int  $totalClicks  Pre-computed total click count for the link.
+     * @param  int  $totalClicks  Pre-computed total click count for the link, already filtered.
+     * @param  AnalyticsFilters  $filters  Active filter state. MUST be applied to every
+     *                                     query the generator builds: $totalClicks is the
+     *                                     filtered denominator, so an unfiltered numerator
+     *                                     yields percentages above 100%.
      * @return array<string, mixed>|null Insight payload, or null if condition not met.
      */
-    public function generate(int $linkId, int $totalClicks): ?array;
+    public function generate(int $linkId, int $totalClicks, AnalyticsFilters $filters): ?array;
 }
