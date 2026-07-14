@@ -112,6 +112,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'email_verification_sent_at' => 'datetime',
+            'welcome_email_sent_at' => 'datetime',
             'email_verified' => 'boolean',
             'password' => 'hashed',
             'onboarding' => 'array',
