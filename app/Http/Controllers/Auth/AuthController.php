@@ -814,6 +814,17 @@ class AuthController extends Controller
                         ], 409);
                     }
 
+                    // NOTE: this legacy-account-linking branch never triggers a welcome
+                    // email. update() fires the `updated` model event, not `created`, so
+                    // UserObserver::created never dispatches SendWelcomeEmailJob here; and
+                    // if this local email/password account was never verified, verifyEmail()
+                    // is never reached either — this person is signing in via Google, not
+                    // clicking the verification link. Result: welcome_email_sent_at stays
+                    // NULL forever and this account never gets a welcome email.
+                    // Currently unreachable from the deployed frontend: Auth0 rejects sign-in
+                    // for an unverified database-connection user before the flow ever reaches
+                    // this backend endpoint. Documented here so it isn't rediscovered as a
+                    // mystery if that Auth0-side guard is ever relaxed.
                     $user->update(['auth0_sub' => $sub]);
                 } else {
                     // 3. First-time user — create the account.

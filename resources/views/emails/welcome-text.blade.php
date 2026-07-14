@@ -1,4 +1,7 @@
-Olá, {{ $user_name }}!
+{{-- Plain-text body: {!! !!} is intentional here, not a XSS oversight. There is no
+     HTML context to inject into, and {{ }} would HTML-escape the name (e.g. "Ana &
+     João" -> "Ana &amp; João") in a body that is never parsed as HTML. --}}
+Olá, {!! $user_name !!}!
 
 Sua conta no Link Charts está pronta. Aqui você encurta links e acompanha cada
 clique — de onde veio, em que dispositivo e se foi gente ou robô.

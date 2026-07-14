@@ -15,6 +15,17 @@ class SendWelcomeEmailJobTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * This class exercises the job's real behavior (direct `handle()` calls, and one
+     * real dispatch through the sync queue to observe `Job::fail()`), so it opts out
+     * of the base `TestCase`'s default onboarding-job fake — see
+     * {@see \Tests\TestCase::$fakeOnboardingJobs}. That means `UserObserver::created`
+     * still fires `SendWelcomeEmailJob` inline for every factory user here, which is
+     * exactly why every test below creates the user unverified first (see the
+     * per-test comments) instead of using a plain verified `User::factory()->create()`.
+     */
+    protected bool $fakeOnboardingJobs = false;
+
     /** Usuário Auth0 é verificado por construção — o e-mail sai. */
     public function test_sends_email_to_verified_user(): void
     {

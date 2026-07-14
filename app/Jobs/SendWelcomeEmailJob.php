@@ -40,6 +40,12 @@ use Throwable;
  * That means a real SendGrid failure (bad key, quota, network) permanently loses that user's
  * welcome email — the `jobs` log entry is the only record.
  *
+ * Because that failure is silent by design, `jobs.log` has to be able to tell the four
+ * `handle()` exit paths apart. Every `AppLogger::jobSucceeded` call below (all four are
+ * logged as "succeeded" since none of them throw) carries an `outcome` context value —
+ * one of the `OUTCOME_*` constants — so a real send can be distinguished from a skip and,
+ * among skips, the reason is recorded too.
+ *
  * @see \App\Models\Observers\UserObserver
  * @see \App\Services\EmailVerificationService::verifyEmail()
  * @see \App\Jobs\SeedDemoLinkJob
@@ -47,6 +53,18 @@ use Throwable;
 class SendWelcomeEmailJob implements ShouldQueue
 {
     use Dispatchable, HasLogContext, InteractsWithQueue, Queueable, SerializesModels;
+
+    /** The email was actually sent via SendGrid. */
+    public const OUTCOME_SENT = 'sent';
+
+    /** No-op: the user row no longer exists (deleted between dispatch and execution). */
+    public const OUTCOME_SKIPPED_USER_MISSING = 'skipped_user_missing';
+
+    /** No-op: the user's email is not verified yet. */
+    public const OUTCOME_SKIPPED_UNVERIFIED = 'skipped_unverified';
+
+    /** No-op: another dispatch or retry already claimed `welcome_email_sent_at`. */
+    public const OUTCOME_SKIPPED_ALREADY_CLAIMED = 'skipped_already_claimed';
 
     public int $tries = 3;
 
@@ -69,8 +87,18 @@ class SendWelcomeEmailJob implements ShouldQueue
         try {
             $user = User::find($this->userId);
 
-            if (! $user || ! $user->hasVerifiedEmail()) {
-                AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
+            if (! $user) {
+                AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
+                    'outcome' => self::OUTCOME_SKIPPED_USER_MISSING,
+                ]);
+
+                return;
+            }
+
+            if (! $user->hasVerifiedEmail()) {
+                AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
+                    'outcome' => self::OUTCOME_SKIPPED_UNVERIFIED,
+                ]);
 
                 return;
             }
@@ -82,7 +110,9 @@ class SendWelcomeEmailJob implements ShouldQueue
                 ->update(['welcome_email_sent_at' => now()]);
 
             if ($claimed === 0) {
-                AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
+                AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
+                    'outcome' => self::OUTCOME_SKIPPED_ALREADY_CLAIMED,
+                ]);
 
                 return;
             }
@@ -115,7 +145,9 @@ class SendWelcomeEmailJob implements ShouldQueue
                 return;
             }
 
-            AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
+            AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
+                'outcome' => self::OUTCOME_SENT,
+            ]);
         } catch (Throwable $e) {
             AppLogger::jobFailed(static::class, $e, $this->attempts());
             throw $e;
