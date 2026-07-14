@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -31,8 +32,13 @@ use Throwable;
  * Delivery is AT MOST ONCE, not at least once. `welcome_email_sent_at` is claimed in a
  * single conditional UPDATE before the SendGrid call, so a retry (tries = 3) following a
  * successful send cannot deliver a duplicate. The trade-off is deliberate: for a welcome
- * email, dropping one is better than sending three. A genuine failure is recorded by
- * `AppLogger::jobFailed`.
+ * email, dropping one is better than sending three.
+ *
+ * A genuine failure is recorded by `AppLogger::jobFailed` and the job is marked failed via
+ * `$this->fail()` — it is deliberately NOT retried. The claim was already taken before the
+ * send, so a retry could never deliver anyway; retrying would only produce noisy no-op runs.
+ * That means a real SendGrid failure (bad key, quota, network) permanently loses that user's
+ * welcome email — the `jobs` log entry is the only record.
  *
  * @see \App\Models\Observers\UserObserver
  * @see \App\Services\EmailVerificationService::verifyEmail()
@@ -86,13 +92,28 @@ class SendWelcomeEmailJob implements ShouldQueue
                 'links_url' => rtrim(config('app.frontend_url', config('app.url')), '/').'/links',
             ];
 
-            $emailService->sendEmailViaSendGridAPI(
+            $result = $emailService->sendEmailViaSendGridAPI(
                 $user->email,
                 'Bem-vindo ao Link Charts!',
                 view('emails.welcome', $data)->render(),
                 view('emails.welcome-text', $data)->render(),
                 $user->name,
             );
+
+            // sendEmailViaSendGridAPI() catches its own exceptions and returns
+            // ['success' => false, ...] instead of throwing, so a genuine SendGrid
+            // failure must be inspected explicitly — otherwise it would fall through
+            // to jobSucceeded() below despite no email having been delivered.
+            if (! ($result['success'] ?? false)) {
+                $e = new RuntimeException(
+                    'SendGrid recusou o envio das boas-vindas: '.($result['error'] ?? 'motivo desconhecido')
+                );
+
+                AppLogger::jobFailed(static::class, $e, $this->attempts());
+                $this->fail($e);
+
+                return;
+            }
 
             AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000);
         } catch (Throwable $e) {
