@@ -18,11 +18,17 @@ class SendWelcomeEmailJobTest extends TestCase
     /** Usuário Auth0 é verificado por construção — o e-mail sai. */
     public function test_sends_email_to_verified_user(): void
     {
-        $user = User::factory()->create([
+        // Cria não-verificado e só depois liga o auth0_sub: como o UserObserver
+        // agora também despacha SendWelcomeEmailJob em `created` (Task 3), criar
+        // já-verificado faria esse dispatch automático (síncrono, QUEUE_CONNECTION=sync)
+        // reivindicar welcome_email_sent_at antes deste teste rodar o job manualmente —
+        // o handle() abaixo veria o claim já feito e nunca chamaria o mock.
+        // update() dispara `updated`, não `created`, então o observer não reage de novo.
+        $user = User::factory()->unverified()->create([
             'name' => 'Ana Souza',
             'email' => 'ana@example.com',
-            'auth0_sub' => 'google-oauth2|123',
         ]);
+        $user->update(['auth0_sub' => 'google-oauth2|123']);
 
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldReceive('sendEmailViaSendGridAPI')
@@ -59,7 +65,11 @@ class SendWelcomeEmailJobTest extends TestCase
     /** O claim atômico impede que um retry reenvie o e-mail. */
     public function test_sends_at_most_once_across_runs(): void
     {
-        $user = User::factory()->create(['auth0_sub' => 'google-oauth2|456']);
+        // Ver comentário em test_sends_email_to_verified_user: criar já-verificado
+        // deixaria o dispatch automático do UserObserver reivindicar
+        // welcome_email_sent_at antes deste teste chamar handle() manualmente.
+        $user = User::factory()->unverified()->create();
+        $user->update(['auth0_sub' => 'google-oauth2|456']);
 
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldReceive('sendEmailViaSendGridAPI')
@@ -97,7 +107,12 @@ class SendWelcomeEmailJobTest extends TestCase
      */
     public function test_marks_job_as_failed_without_retry_when_sendgrid_rejects(): void
     {
-        $user = User::factory()->create(['auth0_sub' => 'google-oauth2|789']);
+        // Ver comentário em test_sends_email_to_verified_user: criar já-verificado
+        // deixaria o dispatch automático do UserObserver reivindicar
+        // welcome_email_sent_at (e disparar seu próprio JobFailed, fora da janela do
+        // listener abaixo) antes do dispatch() manual deste teste.
+        $user = User::factory()->unverified()->create();
+        $user->update(['auth0_sub' => 'google-oauth2|789']);
 
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldReceive('sendEmailViaSendGridAPI')
