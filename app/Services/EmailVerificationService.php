@@ -131,7 +131,8 @@ class EmailVerificationService
      * and returns type=already_verified.
      *
      * Side effects: updates users.email_verified_at; updates token as used;
-     * logs via AppLogger::authEmailVerified.
+     * dispatches SendWelcomeEmailJob (second trigger point — the job itself decides
+     * whether to send); logs via AppLogger::authEmailVerified.
      *
      * @param  string  $token  Raw token string from the verification link.
      * @return array<string, mixed> Keys: success (bool), message (string), type (string, absent on internal errors), user (User, optional), error (string, optional).
