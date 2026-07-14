@@ -6,6 +6,8 @@ use App\Jobs\SendWelcomeEmailJob;
 use App\Models\User;
 use App\Services\EmailService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Support\Facades\Event;
 use Mockery;
 use Tests\TestCase;
 
@@ -79,5 +81,47 @@ class SendWelcomeEmailJobTest extends TestCase
         (new SendWelcomeEmailJob(999999))->handle($emailService);
 
         $this->assertSame(0, User::whereNotNull('welcome_email_sent_at')->count());
+    }
+
+    /**
+     * Quando o SendGrid recusa o envio (`sendEmailViaSendGridAPI` retorna
+     * `success => false` em vez de lançar), o job não pode reportar sucesso: ele precisa
+     * se marcar como falho e NÃO ser reenfileirado (at-most-once — a claim já foi feita).
+     *
+     * `$this->fail()` só tem efeito real quando o job carrega uma instância de queue
+     * `Job` (via `setJob()`); chamar `->handle()` diretamente deixa `$this->fail()` em
+     * no-op silencioso. Por isso este teste dispara via `dispatch()`: o
+     * `QUEUE_CONNECTION=sync` forçado em `phpunit.xml` executa a fila de forma síncrona,
+     * mas ainda popula um `SyncJob` real — o mesmo caminho de um worker de produção —
+     * permitindo observar o evento `JobFailed` real disparado por `Job::fail()`.
+     */
+    public function test_marks_job_as_failed_without_retry_when_sendgrid_rejects(): void
+    {
+        $user = User::factory()->create(['auth0_sub' => 'google-oauth2|789']);
+
+        $emailService = Mockery::mock(EmailService::class);
+        $emailService->shouldReceive('sendEmailViaSendGridAPI')
+            ->once()
+            ->andReturn(['success' => false, 'error' => 'chave de API inválida']);
+        $this->app->instance(EmailService::class, $emailService);
+
+        $failedEvent = null;
+        Event::listen(JobFailed::class, function (JobFailed $event) use (&$failedEvent): void {
+            $failedEvent = $event;
+        });
+
+        SendWelcomeEmailJob::dispatch($user->id);
+
+        $this->assertNotNull(
+            $failedEvent,
+            'O job deveria se marcar como falho (evento JobFailed) quando o SendGrid recusa o envio.'
+        );
+        $this->assertSame(SendWelcomeEmailJob::class, $failedEvent->job->resolveName());
+        $this->assertStringContainsString('chave de API inválida', $failedEvent->exception->getMessage());
+
+        // O claim (welcome_email_sent_at) já tinha sido feito antes do envio — a falha
+        // não o libera nem dispara um retry, então a linha permanece marcada como enviada
+        // mesmo o e-mail nunca tendo saído. Esse é o trade-off at-most-once deliberado.
+        $this->assertNotNull($user->fresh()->welcome_email_sent_at);
     }
 }
