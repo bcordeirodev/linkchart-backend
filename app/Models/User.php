@@ -100,6 +100,10 @@ class User extends Authenticatable implements JWTSubject
     protected $hidden = [
         'password',
         'remember_token',
+        // Internal at-most-once guard for SendWelcomeEmailJob (see that class's docblock).
+        // No security impact (it's the user's own data), but it's not API surface anyone
+        // asked for — keep it out of `register`/`me`/etc. responses.
+        'welcome_email_sent_at',
     ];
 
     /**
@@ -112,6 +116,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'email_verification_sent_at' => 'datetime',
+            'welcome_email_sent_at' => 'datetime',
             'email_verified' => 'boolean',
             'password' => 'hashed',
             'onboarding' => 'array',
