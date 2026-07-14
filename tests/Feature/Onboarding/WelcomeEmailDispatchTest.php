@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Onboarding;
 
+use App\Jobs\SeedDemoLinkJob;
 use App\Jobs\SendWelcomeEmailJob;
 use App\Models\EmailVerificationToken;
 use App\Models\User;
@@ -24,6 +25,11 @@ class WelcomeEmailDispatchTest extends TestCase
         Queue::assertPushed(
             SendWelcomeEmailJob::class,
             fn (SendWelcomeEmailJob $job) => $job->userId === $user->id
+        );
+
+        Queue::assertPushed(
+            SeedDemoLinkJob::class,
+            fn (SeedDemoLinkJob $job) => $job->userId === $user->id
         );
     }
 
