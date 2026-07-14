@@ -3,6 +3,7 @@
 namespace App\Models\Observers;
 
 use App\Jobs\SeedDemoLinkJob;
+use App\Jobs\SendWelcomeEmailJob;
 use App\Models\User;
 
 /**
@@ -11,17 +12,20 @@ use App\Models\User;
  * Registered in App\Providers\AppServiceProvider::boot() via:
  *     User::observe(UserObserver::class);
  *
- * Currently only reacts to `created`, which dispatches SeedDemoLinkJob
- * to seed a demo link for the new user. The observer has no other
- * lifecycle reactions.
+ * Only reacts to `created`, which fans out the onboarding side effects: seeding a
+ * demo link and enqueueing the welcome email. The observer does not decide whether
+ * the email actually goes out — SendWelcomeEmailJob guards on `hasVerifiedEmail()`,
+ * so an unverified email/password signup is enqueued here and simply returns without
+ * sending, then gets a second dispatch once the user verifies.
  */
 class UserObserver
 {
     /**
-     * Dispatch SeedDemoLinkJob to create a demo link for the newly registered user.
+     * Fan out onboarding side effects for the newly registered user.
      */
     public function created(User $user): void
     {
         SeedDemoLinkJob::dispatch($user->id);
+        SendWelcomeEmailJob::dispatch($user->id);
     }
 }

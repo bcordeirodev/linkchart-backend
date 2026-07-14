@@ -311,12 +311,19 @@ final class AppLogger
         self::write('jobs', 'info', self::JOB_STARTED, ['job' => $jobClass, 'payload' => $payload]);
     }
 
-    public static function jobSucceeded(string $jobClass, float $durationMs): void
+    /**
+     * @param  array<string,mixed>  $context  Extra fields merged into the log line — e.g.
+     *                                        an `outcome` value for jobs whose "succeeded"
+     *                                        exit actually covers several distinct cases
+     *                                        (sent vs. skipped for various reasons) that
+     *                                        would otherwise be indistinguishable in `jobs.log`.
+     */
+    public static function jobSucceeded(string $jobClass, float $durationMs, array $context = []): void
     {
         self::write('jobs', 'info', self::JOB_SUCCEEDED, [
             'job' => $jobClass,
             'duration_ms' => round($durationMs, 2),
-        ]);
+        ] + $context);
     }
 
     public static function jobFailed(string $jobClass, Throwable $e, int $attempt): void

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendWelcomeEmailJob;
 use App\Logging\AppLogger;
 use App\Models\EmailVerificationToken;
 use App\Models\User;
@@ -130,7 +131,8 @@ class EmailVerificationService
      * and returns type=already_verified.
      *
      * Side effects: updates users.email_verified_at; updates token as used;
-     * logs via AppLogger::authEmailVerified.
+     * dispatches SendWelcomeEmailJob (second trigger point — the job itself decides
+     * whether to send); logs via AppLogger::authEmailVerified.
      *
      * @param  string  $token  Raw token string from the verification link.
      * @return array<string, mixed> Keys: success (bool), message (string), type (string, absent on internal errors), user (User, optional), error (string, optional).
@@ -178,6 +180,12 @@ class EmailVerificationService
             // Marcar email como verificado
             $user->markEmailAsVerified();
             $verificationToken->markAsUsed();
+
+            // Segundo ponto de disparo das boas-vindas: o usuário de e-mail/senha
+            // nasce não-verificado, então o dispatch do UserObserver saiu sem enviar.
+            // Agora que hasVerifiedEmail() é true, o job entrega (uma vez só — o claim
+            // em welcome_email_sent_at protege contra duplicata).
+            SendWelcomeEmailJob::dispatch($user->id);
 
             AppLogger::authEmailVerified($user->id);
 
