@@ -6,6 +6,7 @@ use App\DTOs\CreateLinkDTO;
 use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -113,4 +114,41 @@ interface LinkServiceInterface
      * @return string A slug that does not yet exist in `links.slug`.
      */
     public function generateUniqueSlug(int $length = 6): string;
+
+    /**
+     * Return a paginated, filtered, and sorted list of the authenticated user's links.
+     *
+     * Opt-in counterpart to {@see self::getAllUserLinks()}, used by
+     * `GET /api/links` only when a `page` query parameter is present — the
+     * unparametrized call keeps returning the full unpaginated list for
+     * blue/green compatibility. Scopes the query by the authenticated
+     * API-guard user id, mirroring {@see self::getUserLink()}.
+     *
+     * @param  array{page: int, per_page: int, q?: string|null, status?: string|null, sort?: string|null, order?: string|null}  $filters  Validated query filters.
+     * @return LengthAwarePaginator<int, Link> Paginated links belonging to the authenticated user.
+     */
+    public function searchUserLinks(array $filters): LengthAwarePaginator;
+
+    /**
+     * Execute a bulk action (activate/deactivate/delete) over up to 50 links
+     * owned by the given user.
+     *
+     * Ids that do not belong to `$userId` (foreign or non-existent) are
+     * silently ignored — `affected` will simply be lower than `requested`,
+     * and the caller must not use this discrepancy to infer whether a
+     * specific foreign id exists (no existence leak).
+     *
+     * Implementations MUST iterate individual Eloquent models rather than
+     * issuing a mass `whereIn()->update()`/`->delete()`: mass operations skip
+     * Eloquent model events, which would leave `Link::findActiveBySlugCached()`
+     * stale for every affected slug — a regression in the public redirect hot
+     * path (`GET /r/{slug}`).
+     *
+     * @param  int  $userId  ID of the user who must own the affected links.
+     * @param  string  $action  One of 'activate', 'deactivate', 'delete'.
+     * @param  array<int, int>  $ids  1–50 candidate link ids.
+     * @return array{affected: int, requested: int} Count of links actually
+     *                                              owned/affected vs. ids requested.
+     */
+    public function bulkAction(int $userId, string $action, array $ids): array;
 }

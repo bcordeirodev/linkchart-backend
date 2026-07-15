@@ -10,6 +10,7 @@ use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
 use App\Models\Tag;
 use App\Models\UserSubdomain;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
@@ -58,6 +59,54 @@ class LinkService implements LinkServiceInterface
     public function getUserLink(string $id): ?Link
     {
         return $this->linkRepository->findByIdAndUser($id, auth()->guard('api')->id());
+    }
+
+    /**
+     * Returns a paginated, filtered, and sorted list of the authenticated user's links.
+     *
+     * Delegates to LinkRepositoryInterface::searchByUser() scoped by
+     * auth()->guard('api')->id(), the same authenticated-user resolution used
+     * by getAllUserLinks() and getUserLink().
+     *
+     * @param  array{page: int, per_page: int, q?: string|null, status?: string|null, sort?: string|null, order?: string|null}  $filters  Validated query filters.
+     * @return LengthAwarePaginator<int, Link>
+     */
+    public function searchUserLinks(array $filters): LengthAwarePaginator
+    {
+        return $this->linkRepository->searchByUser(auth()->guard('api')->id(), $filters);
+    }
+
+    /**
+     * Executes a bulk action (activate/deactivate/delete) over the given user's links.
+     *
+     * Iterates via Eloquent on purpose: mass operations (`whereIn()->update()`/
+     * `->delete()`) do NOT fire model events and would leave the cache in
+     * Link::findActiveBySlugCached() stale — a direct regression on the
+     * `/r/{slug}` hot path. The 50-id cap enforced by the controller keeps
+     * this loop cheap. Ids that do not belong to `$userId` are excluded by the
+     * `whereIn('id', $ids)` + `where('user_id', $userId)` scoping and are
+     * simply absent from `$links`, so `affected` naturally comes out lower
+     * than `requested` without any explicit existence check (no leak of
+     * whether a foreign id exists).
+     *
+     * @param  int  $userId  ID of the user who must own the affected links.
+     * @param  string  $action  One of 'activate', 'deactivate', 'delete'.
+     * @param  array<int, int>  $ids  1–50 candidate link ids.
+     * @return array{affected: int, requested: int}
+     */
+    public function bulkAction(int $userId, string $action, array $ids): array
+    {
+        $links = Link::where('user_id', $userId)->whereIn('id', $ids)->get();
+
+        foreach ($links as $link) {
+            match ($action) {
+                'activate' => $link->update(['is_active' => true]),
+                'deactivate' => $link->update(['is_active' => false]),
+                'delete' => $link->delete(),
+            };
+        }
+
+        return ['affected' => $links->count(), 'requested' => count($ids)];
     }
 
     /**
