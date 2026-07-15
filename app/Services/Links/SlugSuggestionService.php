@@ -48,19 +48,33 @@ class SlugSuggestionService
     private const MAX_BASE_LENGTH = 48;
 
     /**
-     * Connector words that must never *end* a suggested slug — a slug closing on
-     * "…-is-an" or "…-de" reads as if it got cut off. Covers both UI languages
-     * (en + pt-BR). Only the tail is trimmed, so these words still survive in the
-     * middle of a slug.
+     * Connector / filler words that carry no identity in a slug — articles,
+     * prepositions, conjunctions, possessives and common question words, in both
+     * UI languages (en + pt-BR). Used two ways: dropped *anywhere* when a title is
+     * shortened to its keywords (see {@see shortenToSignificantWords}), and
+     * trimmed from the *tail* of a URL-derived slug (see
+     * {@see trimTrailingStopwords}) so it never reads as if it got cut off.
      */
-    private const TRAILING_STOPWORDS = [
-        // en
+    private const STOPWORDS = [
+        // en — articles, prepositions, conjunctions
         'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'from', 'in', 'is',
-        'of', 'on', 'or', 'the', 'to', 'with',
-        // pt-BR
+        'of', 'on', 'or', 'the', 'to', 'with', 'are', 'was', 'be',
+        // en — possessives, demonstratives, question/filler words
+        'my', 'your', 'his', 'her', 'its', 'our', 'their', 'this', 'that',
+        'these', 'those', 'what', 'how', 'you',
+        // pt-BR — articles, prepositions, conjunctions
         'com', 'da', 'das', 'de', 'do', 'dos', 'e', 'em', 'na', 'no', 'o',
-        'os', 'para', 'por', 'um', 'uma',
+        'os', 'para', 'por', 'um', 'uma', 'as',
+        // pt-BR — possessives, question/filler words
+        'que', 'como', 'se', 'seu', 'sua', 'seus', 'suas', 'meu', 'minha',
+        'meus', 'minhas', 'ao', 'aos', 'ou',
     ];
+
+    /**
+     * Maximum number of significant words kept when a title is shortened to a
+     * slug. A shortener slug should read like a short name, not a whole sentence.
+     */
+    private const MAX_WORDS = 3;
 
     /** Characters reserved for the `-token` collision suffix (hyphen + 4 chars). */
     private const TOKEN_RESERVE = 5;
@@ -136,7 +150,10 @@ class SlugSuggestionService
     private function deriveBase(string $url, ?string $ogTitle): ?string
     {
         if ($ogTitle) {
-            $fromTitle = $this->normalize($ogTitle);
+            // A title is prose — shorten it to its first few keywords. A URL path
+            // (below) is already slug-like, so it is kept whole (only length- and
+            // tail-trimmed) to respect what the destination site chose.
+            $fromTitle = $this->normalize($ogTitle, limitWords: true);
             if ($fromTitle !== null) {
                 return $fromTitle;
             }
@@ -173,8 +190,14 @@ class SlugSuggestionService
     /**
      * Normalize an arbitrary string into a public-safe slug, or null when the
      * result is too short or a reserved word.
+     *
+     * @param  string  $value  The raw source string (title, path segment, host).
+     * @param  bool  $limitWords  When true, the value is treated as prose and
+     *                            shortened to its first {@see MAX_WORDS} significant
+     *                            words (stopwords dropped anywhere). When false it is
+     *                            kept whole, only length- and tail-trimmed.
      */
-    private function normalize(string $value): ?string
+    private function normalize(string $value, bool $limitWords = false): ?string
     {
         // Turn every separator run into a space *before* slugifying. Str::slug
         // deletes punctuation rather than splitting on it, so "anthropics/claude"
@@ -182,6 +205,11 @@ class SlugSuggestionService
         $words = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value) ?? $value;
 
         $slug = Str::slug($words);
+
+        if ($limitWords) {
+            $slug = $this->shortenToSignificantWords($slug);
+        }
+
         $slug = $this->truncateAtWordBoundary($slug, self::MAX_BASE_LENGTH);
         $slug = $this->trimTrailingStopwords($slug);
         $slug = trim($slug, '-');
@@ -195,6 +223,28 @@ class SlugSuggestionService
         }
 
         return $slug;
+    }
+
+    /**
+     * Reduce a slugified title to its first {@see MAX_WORDS} significant words,
+     * dropping {@see STOPWORDS} wherever they appear. If every word is a stopword
+     * (e.g. a title like "The One"), the original words are used so the result is
+     * never empty — the caller's reserved/min-length checks still apply.
+     *
+     * @param  string  $slug  An already-slugified (hyphen-separated) string.
+     * @return string The slug reduced to at most MAX_WORDS words.
+     */
+    private function shortenToSignificantWords(string $slug): string
+    {
+        $parts = array_values(array_filter(explode('-', $slug), fn ($p) => $p !== ''));
+
+        $significant = array_values(
+            array_filter($parts, fn ($p) => ! in_array($p, self::STOPWORDS, true))
+        );
+
+        $words = ! empty($significant) ? $significant : $parts;
+
+        return implode('-', array_slice($words, 0, self::MAX_WORDS));
     }
 
     /**
@@ -221,9 +271,9 @@ class SlugSuggestionService
     }
 
     /**
-     * Drop trailing connector words (see {@see TRAILING_STOPWORDS}) so a
-     * truncated title doesn't leave the slug hanging on "…-is-an". The first
-     * segment is always kept, even if it is itself a stopword.
+     * Drop trailing connector words (see {@see STOPWORDS}) so a truncated title
+     * doesn't leave the slug hanging on "…-is-an". The first segment is always
+     * kept, even if it is itself a stopword.
      *
      * @param  string  $slug  An already-slugified (hyphen-separated) string.
      * @return string The slug without trailing connector words.
@@ -232,7 +282,7 @@ class SlugSuggestionService
     {
         $parts = explode('-', $slug);
 
-        while (count($parts) > 1 && in_array(end($parts), self::TRAILING_STOPWORDS, true)) {
+        while (count($parts) > 1 && in_array(end($parts), self::STOPWORDS, true)) {
             array_pop($parts);
         }
 

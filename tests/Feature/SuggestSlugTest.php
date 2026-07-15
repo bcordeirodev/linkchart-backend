@@ -64,6 +64,14 @@ class SuggestSlugTest extends TestCase
 
         $this->assertLessThanOrEqual(48, strlen($slug), "Slug is too long to be useful: {$slug}");
 
+        // A derived title slug keeps at most three significant words — a shortener
+        // slug should read like a name, not a sentence.
+        $this->assertLessThanOrEqual(
+            3,
+            count(explode('-', $slug)),
+            "Title slug should keep at most 3 words: {$slug}"
+        );
+
         // The old bug cut mid-word (…-terminal-under, from "understands"). Every
         // hyphen-separated segment must be a whole word from the source title.
         $titleWords = preg_split('/[^a-z0-9]+/i', strtolower(
@@ -81,6 +89,49 @@ class SuggestSlugTest extends TestCase
             ['is', 'an', 'a', 'the', 'of', 'and', 'to', 'in'],
             "Slug ends on a connector word: {$slug}"
         );
+    }
+
+    /**
+     * A multi-word title is trimmed to its first three significant words so the
+     * slug reads like a short name, not the whole page title.
+     */
+    public function test_title_is_shortened_to_three_significant_words(): void
+    {
+        $this->fakePreviewTitle('Zendaya Resort Beach Sport & Spa');
+
+        $response = $this->getJson('/api/public/links/suggest-slug?url='.urlencode('https://example.com/zendaya'));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.slug', 'zendaya-resort-beach');
+    }
+
+    /**
+     * Connector / stopwords are dropped wherever they appear, not only when they
+     * trail the slug — so "…: o que é e como tratar" collapses to its two content
+     * words. Covers both UI languages.
+     */
+    public function test_connector_words_are_dropped_anywhere(): void
+    {
+        $this->fakePreviewTitle('Sonambulismo: o que é e como tratar');
+
+        $response = $this->getJson('/api/public/links/suggest-slug?url='.urlencode('https://example.com/sono'));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.slug', 'sonambulismo-tratar');
+    }
+
+    /**
+     * Possessive/filler words (pt "seu", en "your") are stopwords too, so they
+     * don't eat one of the three keyword slots.
+     */
+    public function test_possessive_filler_is_dropped_before_counting_words(): void
+    {
+        $this->fakePreviewTitle('Barbearia Menegueti — Agende seu horário');
+
+        $response = $this->getJson('/api/public/links/suggest-slug?url='.urlencode('https://example.com/barbearia'));
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.slug', 'barbearia-menegueti-agende');
     }
 
     public function test_taken_base_gets_short_random_token_not_a_counter(): void
