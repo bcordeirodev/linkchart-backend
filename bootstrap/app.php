@@ -51,6 +51,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [\App\Http\Middleware\OtelTrace::class]);
         $middleware->api(append: [\App\Http\Middleware\OtelTrace::class]);
 
+        // Pyroscope continuous profiling (sampled) — terminable, so the profile
+        // export runs after the response is flushed. Inert unless
+        // PYROSCOPE_ENABLED=true (see config/pyroscope.php).
+        $middleware->web(append: [\App\Http\Middleware\PyroscopeSampling::class]);
+        $middleware->api(append: [\App\Http\Middleware\PyroscopeSampling::class]);
+
         $middleware->alias([
             'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
