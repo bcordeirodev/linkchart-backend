@@ -102,6 +102,10 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     Route::prefix('links')->controller(LinkController::class)->group(function () {
         Route::get('/', 'index');                                        // ✅ USADO: LinkService.all()
         Route::post('/', 'store');                                       // ✅ USADO: LinkService.save()
+        // Must stay registered before the /{id} wildcard below — "bulk-action"
+        // is not numeric so the [0-9]+ constraint would not collide, but the
+        // explicit ordering documents the invariant for future routes.
+        Route::post('/bulk-action', 'bulkAction');                       // ✅ NOVO: ações em massa (ativar/desativar/excluir)
         Route::get('/{id}', 'show')->where('id', '[0-9]+');            // ✅ USADO: LinkService.findOne()
         Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
         Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
