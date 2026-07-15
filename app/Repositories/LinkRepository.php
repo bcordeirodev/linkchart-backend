@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Contracts\Repositories\LinkRepositoryInterface;
 use App\Models\Link;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -167,5 +168,42 @@ class LinkRepository implements LinkRepositoryInterface
     public function slugExists(string $slug): bool
     {
         return Link::where('slug', $slug)->exists();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * Eager-loads the `tags` relation for parity with {@see self::getAllByUser()}
+     * so `LinkResource` serialises an identical per-item shape regardless of
+     * whether `GET /api/links` took the legacy or the paginated branch.
+     */
+    public function searchByUser(int $userId, array $filters): LengthAwarePaginator
+    {
+        $query = Link::with('tags')->where('user_id', $userId);
+
+        if (($q = $filters['q'] ?? null) !== null && $q !== '') {
+            $needle = mb_strtolower($q);
+            $query->where(function ($sub) use ($needle) {
+                $sub->whereRaw('LOWER(title) LIKE ?', ["%{$needle}%"])
+                    ->orWhereRaw('LOWER(original_url) LIKE ?', ["%{$needle}%"])
+                    ->orWhereRaw('LOWER(slug) LIKE ?', ["%{$needle}%"]);
+            });
+        }
+
+        match ($filters['status'] ?? null) {
+            'active' => $query->where('is_active', true)
+                ->where(fn ($s) => $s->whereNull('expires_at')->orWhere('expires_at', '>', now())),
+            'inactive' => $query->where('is_active', false),
+            'expired' => $query->where('expires_at', '<=', now()),
+            default => null,
+        };
+
+        $sort = in_array($filters['sort'] ?? null, ['created_at', 'clicks', 'title'], true)
+            ? $filters['sort']
+            : 'created_at';
+        $order = ($filters['order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+
+        return $query->orderBy($sort, $order)
+            ->paginate(perPage: $filters['per_page'], page: $filters['page']);
     }
 }

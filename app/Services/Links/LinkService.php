@@ -9,6 +9,7 @@ use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
 use App\Models\Tag;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
@@ -57,6 +58,21 @@ class LinkService implements LinkServiceInterface
     public function getUserLink(string $id): ?Link
     {
         return $this->linkRepository->findByIdAndUser($id, auth()->guard('api')->id());
+    }
+
+    /**
+     * Returns a paginated, filtered, and sorted list of the authenticated user's links.
+     *
+     * Delegates to LinkRepositoryInterface::searchByUser() scoped by
+     * auth()->guard('api')->id(), the same authenticated-user resolution used
+     * by getAllUserLinks() and getUserLink().
+     *
+     * @param  array{page: int, per_page: int, q?: string|null, status?: string|null, sort?: string|null, order?: string|null}  $filters  Validated query filters.
+     * @return LengthAwarePaginator<int, Link>
+     */
+    public function searchUserLinks(array $filters): LengthAwarePaginator
+    {
+        return $this->linkRepository->searchByUser(auth()->guard('api')->id(), $filters);
     }
 
     /**

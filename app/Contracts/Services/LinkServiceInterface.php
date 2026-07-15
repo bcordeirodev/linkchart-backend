@@ -6,6 +6,7 @@ use App\DTOs\CreateLinkDTO;
 use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -113,4 +114,18 @@ interface LinkServiceInterface
      * @return string A slug that does not yet exist in `links.slug`.
      */
     public function generateUniqueSlug(int $length = 6): string;
+
+    /**
+     * Return a paginated, filtered, and sorted list of the authenticated user's links.
+     *
+     * Opt-in counterpart to {@see self::getAllUserLinks()}, used by
+     * `GET /api/links` only when a `page` query parameter is present — the
+     * unparametrized call keeps returning the full unpaginated list for
+     * blue/green compatibility. Scopes the query by the authenticated
+     * API-guard user id, mirroring {@see self::getUserLink()}.
+     *
+     * @param  array{page: int, per_page: int, q?: string|null, status?: string|null, sort?: string|null, order?: string|null}  $filters  Validated query filters.
+     * @return LengthAwarePaginator<int, Link> Paginated links belonging to the authenticated user.
+     */
+    public function searchUserLinks(array $filters): LengthAwarePaginator;
 }
