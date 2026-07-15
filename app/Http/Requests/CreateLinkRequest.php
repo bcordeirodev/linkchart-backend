@@ -93,6 +93,13 @@ class CreateLinkRequest extends FormRequest
             // in LinkService, not here; this only bounds the shape/size.
             'tag_ids' => 'nullable|array|max:5',
             'tag_ids.*' => 'integer',
+
+            // Subdomain selection — ownership and active status are verified
+            // in LinkService::resolveShortDomain(), not here (only the shape
+            // is bounded). A null value is meaningful (forces the default
+            // domain) and must remain distinguishable from "field absent";
+            // see CreateLinkDTO::$subdomain_id_provided.
+            'subdomain_id' => 'nullable|integer',
         ];
     }
 

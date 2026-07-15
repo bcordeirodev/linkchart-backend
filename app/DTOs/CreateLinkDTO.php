@@ -89,6 +89,28 @@ class CreateLinkDTO
     public readonly ?array $tag_ids;
 
     /**
+     * Optional id of a {@see \App\Models\UserSubdomain} the caller wants this
+     * link's short URL to use. Ownership and active status are verified by
+     * {@see \App\Services\Links\LinkService::resolveShortDomain()}, not here.
+     * Null is meaningful on its own only combined with {@see self::$subdomain_id_provided}
+     * — see that property's docblock.
+     */
+    public readonly ?int $subdomain_id;
+
+    /**
+     * Whether the `subdomain_id` key was present in the incoming request at all,
+     * independent of its value. Distinguishes three cases consumed by
+     * {@see \App\Services\Links\LinkService::resolveShortDomain()}:
+     *
+     *   - Absent (`false`): fall back to the user's default (oldest active)
+     *     subdomain, preserving pre-multi-subdomain behavior.
+     *   - Present and an id (`true`, `$subdomain_id` set): use that subdomain.
+     *   - Present and explicitly `null` (`true`, `$subdomain_id` null): force
+     *     the default root domain (no subdomain), even if the user has one.
+     */
+    public readonly bool $subdomain_id_provided;
+
+    /**
      * @param  string  $original_url  Destination URL; must be a valid URL (validated upstream).
      * @param  int  $user_id  Authenticated user ID.
      * @param  string|null  $title  Human-readable label.
@@ -104,6 +126,8 @@ class CreateLinkDTO
      * @param  string|null  $utm_term  UTM term parameter.
      * @param  string|null  $utm_content  UTM content parameter.
      * @param  array<int, int>|null  $tag_ids  Candidate tag IDs to attach; null means none provided.
+     * @param  int|null  $subdomain_id  Id of the UserSubdomain to use; null means default/absent (see $subdomain_id_provided).
+     * @param  bool  $subdomain_id_provided  Whether `subdomain_id` was present in the request at all.
      */
     public function __construct(
         string $original_url,
@@ -120,7 +144,9 @@ class CreateLinkDTO
         ?string $utm_campaign = null,
         ?string $utm_term = null,
         ?string $utm_content = null,
-        ?array $tag_ids = null
+        ?array $tag_ids = null,
+        ?int $subdomain_id = null,
+        bool $subdomain_id_provided = false
     ) {
         $this->original_url = $original_url;
         $this->user_id = $user_id;
@@ -137,6 +163,8 @@ class CreateLinkDTO
         $this->utm_term = $utm_term;
         $this->utm_content = $utm_content;
         $this->tag_ids = $tag_ids;
+        $this->subdomain_id = $subdomain_id;
+        $this->subdomain_id_provided = $subdomain_id_provided;
     }
 
     /**
@@ -170,7 +198,11 @@ class CreateLinkDTO
             utm_content: $request->input('utm_content') ?: null,
             tag_ids: $request->has('tag_ids')
                 ? array_map('intval', $request->input('tag_ids', []))
-                : null
+                : null,
+            subdomain_id: $request->has('subdomain_id') && $request->input('subdomain_id') !== null
+                ? (int) $request->input('subdomain_id')
+                : null,
+            subdomain_id_provided: $request->has('subdomain_id')
         );
     }
 
@@ -187,6 +219,12 @@ class CreateLinkDTO
      * either be dropped silently by Eloquent's mass-assignment or throw. The
      * service layer reads `$linkDTO->tag_ids` directly and syncs it via
      * `$link->tags()->sync()` after the row is created.
+     *
+     * `subdomain_id` is also deliberately excluded — it identifies a
+     * UserSubdomain, not a `links` column. The service layer reads
+     * `$linkDTO->subdomain_id`/`$linkDTO->subdomain_id_provided` directly and
+     * resolves them to the `short_domain` string via
+     * {@see \App\Services\Links\LinkService::resolveShortDomain()}.
      *
      * @return array<string, mixed> Associative array with non-null link attributes.
      */
