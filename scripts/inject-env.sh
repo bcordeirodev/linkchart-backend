@@ -76,6 +76,29 @@ else
 fi
 echo "OpenTelemetry injetado"
 
+# ── Pyroscope (profiling contínuo, amostrado) → Grafana Cloud ────────────────
+# Reusa o MESMO token do OTLP (GCLOUD_OTLP_PASS) — sem segredo novo. PYROSCOPE_USER
+# é a instância do Pyroscope (basicAuthUser do datasource grafanacloud-profiles).
+# Amostra 2% dos requests; push roda no terminate() (fora do caminho do request).
+# Se o token não tiver escopo profiles:write, o push dá 401 (inofensivo: no-op).
+for pyro_kv in \
+    "PYROSCOPE_ENABLED=true" \
+    "PYROSCOPE_ENDPOINT=https://profiles-prod-017.grafana.net" \
+    "PYROSCOPE_USER=1700936" \
+    "PYROSCOPE_APP_NAME=linkcharts-backend" \
+    "PYROSCOPE_SAMPLE_RATE=0.02"; do
+    pyro_key="${pyro_kv%%=*}"
+    sed -i "/^${pyro_key}=/d" .env.production
+    printf '%s\n' "$pyro_kv" >> .env.production
+done
+if [ -n "${GCLOUD_OTLP_PASS:-}" ]; then
+    sed -i '/^PYROSCOPE_PASSWORD=/d' .env.production
+    printf 'PYROSCOPE_PASSWORD=%s\n' "$GCLOUD_OTLP_PASS" >> .env.production
+    echo "Pyroscope injetado (token reusado do OTLP)"
+else
+    echo "AVISO: GCLOUD_OTLP_PASS vazio — Pyroscope sem auth, push vai falhar"
+fi
+
 # ── Observabilidade — interpolacao do compose ────────────────────────────────
 # O compose le ./.env (raiz do projeto) para resolver ${VAR} nos yml. Este
 # bloco e DISTINTO do .env.production, que e bind-montado no container.
