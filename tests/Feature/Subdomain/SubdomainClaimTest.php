@@ -79,13 +79,25 @@ class SubdomainClaimTest extends TestCase
         ]);
     }
 
-    public function test_claim_returns_409_when_user_already_has_active_subdomain(): void
+    // NOTE: as of the multi-subdomain support (Task 3), a user having one active
+    // subdomain no longer blocks claiming another — it's allowed up to
+    // config('app.max_subdomains_per_user'). The former 409 SUBDOMAIN_ALREADY_ACTIVE
+    // behavior is superseded by SubdomainMultiTest::test_claim_respects_per_user_limit.
+
+    public function test_claim_allows_second_active_subdomain_up_to_limit(): void
     {
+        config(['app.domain' => 'linkcharts.com.br', 'app.max_subdomains_per_user' => 3]);
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         UserSubdomain::factory()->create(['user_id' => $user->id, 'subdomain' => 'acme']);
         $response = $this->actingAs($user, 'api')
-            ->postJson('/api/subdomain', ['subdomain' => 'beta']);
-        $response->assertStatus(409);
+            ->postJson('/api/subdomain', ['subdomain' => 'clientb']);
+        $response->assertCreated()->assertJsonPath('data.subdomain', 'clientb');
+        $this->assertDatabaseHas('user_subdomains', [
+            'user_id' => $user->id, 'subdomain' => 'acme', 'status' => 'active',
+        ]);
+        $this->assertDatabaseHas('user_subdomains', [
+            'user_id' => $user->id, 'subdomain' => 'clientb', 'status' => 'active',
+        ]);
     }
 
     public function test_claim_returns_422_when_subdomain_is_already_taken(): void
@@ -120,13 +132,20 @@ class SubdomainClaimTest extends TestCase
     {
         config(['app.domain' => 'linkcharts.com.br']);
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
-        UserSubdomain::factory()->inactive()->create(['user_id' => $user->id, 'subdomain' => 'olddomain']);
+        $old = UserSubdomain::factory()->inactive()->create(['user_id' => $user->id, 'subdomain' => 'olddomain']);
         $response = $this->actingAs($user, 'api')
             ->postJson('/api/subdomain', ['subdomain' => 'newdomain']);
         $response->assertCreated()->assertJsonPath('data.subdomain', 'newdomain');
         $this->assertDatabaseHas('user_subdomains', [
             'user_id' => $user->id, 'subdomain' => 'newdomain', 'status' => 'active',
         ]);
+        // Claiming always INSERTs a new row (never reuses/updates an inactive
+        // one) since a user may hold several rows now. The old released row
+        // must still exist untouched, proving it wasn't the one updated.
+        $this->assertDatabaseHas('user_subdomains', [
+            'id' => $old->id, 'subdomain' => 'olddomain', 'status' => 'inactive',
+        ]);
+        $this->assertDatabaseCount('user_subdomains', 2);
     }
 
     public function test_link_created_with_subdomain_gets_short_domain_set(): void
