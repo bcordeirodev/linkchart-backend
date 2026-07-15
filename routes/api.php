@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\TagController;
+use App\Http\Controllers\Reports\ReportsController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -139,6 +140,15 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{linkId}/insights', 'getBusinessInsights')->where('linkId', '[0-9]+');       // ✅ USADO: useInsightsData
         Route::get('/{linkId}/temporal', 'getTemporalAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useTemporalData
         Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useAudienceData
+    });
+
+    // === RELATÓRIOS AGREGADOS MULTI-LINK ===
+    Route::prefix('reports')->controller(ReportsController::class)->group(function () {
+        Route::get('/summary', 'summary');
+        Route::get('/timeseries', 'timeseries');
+        Route::get('/top-links', 'topLinks');
+        Route::get('/breakdown', 'breakdown');
+        Route::get('/export/clicks', 'exportClicks');
     });
 
     // === GERENCIAMENTO DE SUBDOMÍNIO ===
