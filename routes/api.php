@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Analytics\AnalyticsController;
+use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\Links\LinkController;
@@ -85,6 +86,9 @@ Route::middleware(['api.auth:api'])->group(function () {
 
     // === ONBOARDING (marca tour/dicas como já vistos, por conta) ===
     Route::post('/onboarding/seen', [OnboardingController::class, 'seen']);
+
+    // === EXCLUSÃO DE CONTA (LGPD — permitida mesmo sem email verificado) ===
+    Route::delete('/account', [AccountController::class, 'destroy']);
 });
 
 /**
