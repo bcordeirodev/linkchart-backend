@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
  * Routes overview (all under api.auth:api + verified middleware):
  *   GET    /api/links                   → index
  *   POST   /api/links                   → store
+ *   POST   /api/links/bulk-action        → bulkAction (registered before {id})
  *   GET    /api/links/{id}              → show
  *   PUT    /api/links/{id}              → update
  *   DELETE /api/links/{id}              → destroy
@@ -52,23 +53,121 @@ class LinkController extends BaseController
     /**
      * GET /api/links
      *
-     * Return all links belonging to the authenticated user, wrapped in a
-     * LinkResource collection.
+     * Return the authenticated user's links, wrapped in a LinkResource collection.
+     *
+     * Two response contracts, opt-in via the `page` query parameter, kept
+     * side-by-side for blue/green deploy compatibility (frontend and backend
+     * containers of different versions may serve traffic simultaneously):
+     *
+     *   - WITHOUT `page`: legacy behaviour, unchanged — returns the full list
+     *     of the user's links, newest first, no filtering/sorting/pagination.
+     *   - WITH `page`: paginated + filterable branch. Accepts:
+     *       page      int, >= 1
+     *       per_page  int, 1–50 (default 12)
+     *       q         string, max 255 — case-insensitive search over
+     *                 title, original_url, and slug
+     *       status    active|inactive|expired
+     *       sort      created_at|clicks|title (default created_at)
+     *       order     asc|desc (default desc)
+     *     Invalid params (e.g. per_page > 50) yield a 422 validation response.
+     *
+     * The per-item shape is identical in both branches — both ultimately
+     * serialise through LinkResource — only the envelope differs.
      *
      * Middleware: api.auth:api, verified
      * Auth: required
      * Owner check: yes — LinkService filters by auth user id.
      *
-     * Response shape: NormalizeApiResponse envelope: { data: LinkResource[] }
+     * Response shape:
+     *   - Legacy: NormalizeApiResponse envelope: { data: LinkResource[] }
+     *   - Paginated: NormalizeApiResponse envelope: { data: LinkResource[], meta: { current_page, per_page, total, last_page } }
+     *
+     * @param  Request  $request  Query string parameters described above.
+     *
+     * @throws \Illuminate\Validation\ValidationException When the paginated branch receives invalid filters.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            $links = $this->linkService->getAllUserLinks();
+            if (! $request->has('page')) {
+                $links = $this->linkService->getAllUserLinks();
 
-            return response()->json(LinkResource::collection($links));
+                return response()->json(LinkResource::collection($links));
+            }
+
+            $validated = $request->validate([
+                'page' => 'integer|min:1',
+                'per_page' => 'integer|min:1|max:50',
+                'q' => 'nullable|string|max:255',
+                'status' => 'nullable|in:active,inactive,expired',
+                'sort' => 'nullable|in:created_at,clicks,title',
+                'order' => 'nullable|in:asc,desc',
+            ]);
+            $validated['page'] = $validated['page'] ?? 1;
+            $validated['per_page'] = $validated['per_page'] ?? 12;
+
+            $paginator = $this->linkService->searchUserLinks($validated);
+
+            return response()->json([
+                'data' => LinkResource::collection($paginator->items()),
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar links.', $e);
+        }
+    }
+
+    /**
+     * POST /api/links/bulk-action
+     *
+     * Execute an action (activate/deactivate/delete) over up to 50 links
+     * owned by the authenticated user in a single request. Ids that belong
+     * to another user are silently ignored — the response never reveals
+     * whether a foreign id exists, only how many of the requested ids were
+     * actually affected.
+     *
+     * Registered BEFORE the `links/{id}` wildcard routes in routes/api.php so
+     * the literal "bulk-action" path segment cannot collide with the numeric
+     * `{id}` constraint.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — LinkService::bulkAction scopes by auth user id.
+     *
+     * Body: { action: "activate"|"deactivate"|"delete", ids: number[] } (1–50 ids)
+     * Response shape: NormalizeApiResponse envelope: { data: { affected: number, requested: number } }
+     *
+     * @param  Request  $request  JSON body described above.
+     *
+     * @throws \Illuminate\Validation\ValidationException When action/ids are missing or invalid.
+     */
+    public function bulkAction(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'action' => 'required|in:activate,deactivate,delete',
+                'ids' => 'required|array|min:1|max:50',
+                'ids.*' => 'integer',
+            ]);
+
+            $result = $this->linkService->bulkAction(
+                auth()->guard('api')->id(),
+                $validated['action'],
+                $validated['ids']
+            );
+
+            return response()->json(['data' => $result]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return $this->serverError('Erro ao executar ação em massa.', $e);
         }
     }
 
