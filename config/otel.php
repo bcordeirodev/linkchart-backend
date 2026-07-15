@@ -30,8 +30,13 @@ return [
     'environment' => env('APP_ENV', 'production'),
 
     'traces' => [
-        // Default sampler ratio for normal API requests/jobs.
-        'sampler_ratio' => (float) env('OTEL_TRACES_SAMPLER_RATIO', 1.0),
+        // Default sampler ratio for normal API requests/jobs. Kept at 0.1 (10%)
+        // — the PDO auto-instrumentation records a span PER query, so 100%
+        // sampling made DB spans (and their per-span cost) dominate the hot
+        // paths; 10% keeps a representative sample without that overhead. OTel
+        // PHP has no per-instrumentation sampler, so the trace sampler is the
+        // lever. Metrics/alerts are unaffected (not sampled).
+        'sampler_ratio' => (float) env('OTEL_TRACES_SAMPLER_RATIO', 0.1),
     ],
 
     // The redirect hot path is sampled far more aggressively to protect latency.

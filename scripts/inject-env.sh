@@ -62,7 +62,7 @@ for otel_kv in \
     "OTEL_ENABLED=true" \
     "OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-sa-east-1.grafana.net/otlp" \
     "OTEL_SERVICE_NAME=linkcharts-backend" \
-    "OTEL_TRACES_SAMPLER_RATIO=1.0" \
+    "OTEL_TRACES_SAMPLER_RATIO=0.1" \
     "OTEL_REDIRECT_SAMPLER_RATIO=0.05"; do
     otel_key="${otel_kv%%=*}"
     sed -i "/^${otel_key}=/d" .env.production
