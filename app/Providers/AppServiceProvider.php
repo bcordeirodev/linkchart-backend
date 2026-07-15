@@ -39,6 +39,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Contracts\Analytics\AudienceAnalyticsInterface::class, \App\Services\Analytics\AudienceAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\InsightsAnalyticsInterface::class, \App\Services\Analytics\InsightsAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface::class, \App\Services\Analytics\LinkAnalyticsOrchestrator::class);
+        $this->app->bind(\App\Contracts\Analytics\ReportsAnalyticsServiceInterface::class, \App\Services\Analytics\ReportsAnalyticsService::class);
     }
 
     public function boot(): void
