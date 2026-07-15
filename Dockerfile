@@ -46,6 +46,12 @@ RUN pecl install redis && docker-php-ext-enable redis
 # OpenTelemetry auto-instrumentation extension (Zend hooks), pinned for reproducible builds
 RUN pecl install opentelemetry-1.2.1 && docker-php-ext-enable opentelemetry
 
+# Excimer — low-overhead sampling profiler (Wikimedia). Feeds continuous
+# profiling to Grafana Pyroscope via App\Profiling\PyroscopeProfiler. Enabled
+# only when PYROSCOPE_ENABLED=true (kill switch); the profiler samples a small
+# fraction of requests and pushes after the response, so it's inert otherwise.
+RUN pecl install excimer && docker-php-ext-enable excimer
+
 # Remover dependências de build temporárias
 RUN apk del .build-deps
 

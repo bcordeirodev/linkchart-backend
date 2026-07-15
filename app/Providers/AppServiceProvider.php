@@ -40,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Contracts\Analytics\InsightsAnalyticsInterface::class, \App\Services\Analytics\InsightsAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface::class, \App\Services\Analytics\LinkAnalyticsOrchestrator::class);
         $this->app->bind(\App\Contracts\Analytics\ReportsAnalyticsServiceInterface::class, \App\Services\Analytics\ReportsAnalyticsService::class);
+
+        // Singleton so the same profiler instance spans the PyroscopeSampling
+        // middleware's handle() (start) and terminate() (flush/push).
+        $this->app->singleton(\App\Profiling\PyroscopeProfiler::class);
     }
 
     public function boot(): void
