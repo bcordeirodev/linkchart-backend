@@ -7,6 +7,7 @@ use App\DTOs\Analytics\AnalyticsFilters;
 use App\Services\Analytics\Support\SqlDateExpr;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -69,9 +70,7 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
         $totalClicks = (int) $totals->total_clicks;
 
         // Período efetivo: default últimos 30 dias quando não filtrado.
-        $from = $filters->dateFrom ?? Carbon::now()->subDays(30);
-        $to = $filters->dateTo ?? Carbon::now();
-        $days = max(1, (int) ceil($from->diffInHours($to) / 24));
+        [$from, $days] = $this->currentWindow($filters);
 
         return [
             'total_clicks' => $totalClicks,
@@ -97,21 +96,73 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
      */
     private function variationPct(int $userId, AnalyticsFilters $filters, int $currentClicks, Carbon $from, int $days): ?float
     {
-        $previousStart = $from->copy()->subDays($days);
-
-        $previousQuery = DB::table('clicks')
-            ->join('links', 'links.id', '=', 'clicks.link_id')
-            ->where('links.user_id', $userId)
-            ->where('links.is_demo', false)
-            ->whereBetween('clicks.created_at', [$previousStart, $from]);
-
-        $previousClicks = $filters->applyDimensions($previousQuery, 'clicks.')->count();
+        $previousClicks = $this->previousPeriodClicksByLink($userId, $filters, $from, $days)->sum();
 
         if ($previousClicks === 0) {
             return null;
         }
 
         return round((($currentClicks - $previousClicks) * 100) / $previousClicks, 1);
+    }
+
+    /**
+     * Resolves the active window's start instant and length in days.
+     *
+     * Default window (when the filter has no explicit date range) is the
+     * last 30 days — same default as {@see getSummary()}. Factored out so
+     * every method that needs a "previous period of equal length" comparison
+     * (`getSummary()`, `getLinkPerformance()`, `getInsights()`) computes it
+     * identically.
+     *
+     * @param  AnalyticsFilters  $filters  Active filter constraints.
+     * @return array{0: Carbon, 1: int} Tuple of [window start, window length in days].
+     */
+    private function currentWindow(AnalyticsFilters $filters): array
+    {
+        $from = $filters->dateFrom ?? Carbon::now()->subDays(30);
+        $to = $filters->dateTo ?? Carbon::now();
+        $days = max(1, (int) ceil($from->diffInHours($to) / 24));
+
+        return [$from, $days];
+    }
+
+    /**
+     * Returns per-link click counts for the period immediately preceding the
+     * active window, keyed by link id — the trend baseline shared by
+     * `variationPct()` (account-wide), `getLinkPerformance()` and
+     * `getInsights()`'s fastest-growing-link calculation.
+     *
+     * The comparison window has the same length as `[$from, $from + $days]`:
+     * `[$from - $days, $from]`. Honours every dimension filter (bot
+     * exclusion, country, device, channel, continent) via
+     * `applyDimensions()`, but NOT the date range — this query defines its
+     * own shifted window.
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  AnalyticsFilters  $filters  Active filter constraints (dimensions reapplied).
+     * @param  Carbon  $from  Start of the CURRENT window (the previous window ends here).
+     * @param  int  $days  Length of the current (and previous) window, in days.
+     * @param  array<int, int>  $linkIds  Restrict the comparison to these link IDs; empty = all.
+     * @return Collection<int, int> Map of link_id => click count in the previous window.
+     */
+    private function previousPeriodClicksByLink(int $userId, AnalyticsFilters $filters, Carbon $from, int $days, array $linkIds = []): Collection
+    {
+        $previousStart = $from->copy()->subDays($days);
+
+        $query = DB::table('clicks')
+            ->join('links', 'links.id', '=', 'clicks.link_id')
+            ->where('links.user_id', $userId)
+            ->where('links.is_demo', false)
+            ->whereBetween('clicks.created_at', [$previousStart, $from])
+            ->when($linkIds !== [], fn ($q) => $q->whereIn('links.id', $linkIds));
+
+        $query = $filters->applyDimensions($query, 'clicks.');
+
+        return $query
+            ->selectRaw('links.id as link_id, COUNT(*) as clicks')
+            ->groupBy('links.id')
+            ->pluck('clicks', 'link_id')
+            ->map(fn ($c) => (int) $c);
     }
 
     /** {@inheritDoc} */
@@ -175,5 +226,132 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
                 'clicks.navigation_context', 'clicks.quality_tier',
             ])
             ->orderBy('clicks.id');
+    }
+
+    /** {@inheritDoc} */
+    public function getLinkPerformance(int $userId, AnalyticsFilters $filters, int $limit = 10): array
+    {
+        $totalClicks = (clone $this->baseQuery($userId, $filters))->count();
+
+        if ($totalClicks === 0) {
+            return [];
+        }
+
+        $current = $this->baseQuery($userId, $filters)
+            ->selectRaw('links.id as link_id, links.title, links.slug, links.short_domain, COUNT(*) as clicks')
+            ->groupBy('links.id', 'links.title', 'links.slug', 'links.short_domain')
+            ->orderByDesc('clicks')
+            ->limit($limit)
+            ->get();
+
+        [$from, $days] = $this->currentWindow($filters);
+        $previousByLink = $this->previousPeriodClicksByLink($userId, $filters, $from, $days, $current->pluck('link_id')->all());
+
+        return $current->map(function ($r) use ($previousByLink, $totalClicks) {
+            $clicks = (int) $r->clicks;
+            $previous = $previousByLink[$r->link_id] ?? 0;
+
+            return [
+                'link_id' => $r->link_id,
+                'title' => $r->title,
+                'slug' => $r->slug,
+                'short_domain' => $r->short_domain,
+                'clicks' => $clicks,
+                'variation_pct' => $previous === 0 ? null : round((($clicks - $previous) * 100) / $previous, 1),
+                'share_pct' => round($clicks * 100 / $totalClicks, 1),
+            ];
+        })->all();
+    }
+
+    /** {@inheritDoc} */
+    public function getInsights(int $userId, AnalyticsFilters $filters): array
+    {
+        $totalClicks = (clone $this->baseQuery($userId, $filters))->count();
+
+        if ($totalClicks === 0) {
+            return [
+                ['key' => 'best_performing_link', 'value' => null, 'unit' => null, 'meta' => null],
+                ['key' => 'fastest_growing_link', 'value' => null, 'unit' => null, 'meta' => null],
+                ['key' => 'top3_concentration', 'value' => null, 'unit' => '%', 'meta' => null],
+                ['key' => 'account_growth', 'value' => null, 'unit' => '%', 'meta' => null],
+            ];
+        }
+
+        $perLink = $this->baseQuery($userId, $filters)
+            ->selectRaw('links.id as link_id, links.title, links.slug, COUNT(*) as clicks')
+            ->groupBy('links.id', 'links.title', 'links.slug')
+            ->orderByDesc('clicks')
+            ->get();
+
+        $best = $perLink->first();
+        $top3Clicks = (int) $perLink->take(3)->sum('clicks');
+
+        [$from, $days] = $this->currentWindow($filters);
+        $previousByLink = $this->previousPeriodClicksByLink($userId, $filters, $from, $days, $perLink->pluck('link_id')->all());
+
+        [$fastest, $fastestPct] = $this->fastestGrowingLink($perLink, $previousByLink);
+
+        $accountGrowth = $this->variationPct($userId, $filters, $totalClicks, $from, $days);
+
+        return [
+            [
+                'key' => 'best_performing_link',
+                'value' => $best->title ?: $best->slug,
+                'unit' => null,
+                'meta' => ['link_id' => $best->link_id, 'slug' => $best->slug, 'clicks' => (int) $best->clicks],
+            ],
+            [
+                'key' => 'fastest_growing_link',
+                'value' => $fastest ? ($fastest->title ?: $fastest->slug) : null,
+                'unit' => null,
+                'meta' => $fastest ? ['link_id' => $fastest->link_id, 'slug' => $fastest->slug, 'variation_pct' => $fastestPct] : null,
+            ],
+            [
+                'key' => 'top3_concentration',
+                'value' => round($top3Clicks * 100 / $totalClicks, 1),
+                'unit' => '%',
+                'meta' => null,
+            ],
+            [
+                'key' => 'account_growth',
+                'value' => $accountGrowth,
+                'unit' => '%',
+                'meta' => null,
+            ],
+        ];
+    }
+
+    /**
+     * Finds the link with the highest period-over-period growth among those
+     * that have a non-zero previous-period baseline.
+     *
+     * Links with zero previous-period clicks are skipped — with no
+     * baseline, a percentage growth figure would be either undefined (0 → 0)
+     * or misleadingly infinite (0 → N), so they are excluded from
+     * "fastest growing" rather than reported with a fabricated number.
+     *
+     * @param  Collection  $perLink  Rows from the current-window per-link query (each with `link_id`, `title`, `slug`, `clicks`).
+     * @param  Collection<int, int>  $previousByLink  Map of link_id => previous-window click count, from {@see previousPeriodClicksByLink()}.
+     * @return array{0: object|null, 1: float|null} Tuple of [winning row or null, its variation_pct or null].
+     */
+    private function fastestGrowingLink(Collection $perLink, Collection $previousByLink): array
+    {
+        $fastest = null;
+        $fastestPct = null;
+
+        foreach ($perLink as $row) {
+            $previous = $previousByLink[$row->link_id] ?? 0;
+            if ($previous === 0) {
+                continue;
+            }
+
+            $pct = round((($row->clicks - $previous) * 100) / $previous, 1);
+            if ($fastestPct === null || $pct > $fastestPct) {
+                $fastestPct = $pct;
+                $fastest = $row;
+            }
+        }
+
+        return [$fastest, $fastestPct];
     }
 }

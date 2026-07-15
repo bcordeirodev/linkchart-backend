@@ -156,6 +156,8 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/timeseries', 'timeseries');
         Route::get('/top-links', 'topLinks');
         Route::get('/breakdown', 'breakdown');
+        Route::get('/link-performance', 'linkPerformance');
+        Route::get('/insights', 'insights');
         Route::get('/export/clicks', 'exportClicks');
     });
 

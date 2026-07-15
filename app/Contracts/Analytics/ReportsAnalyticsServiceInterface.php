@@ -75,4 +75,37 @@ interface ReportsAnalyticsServiceInterface
      * @return Builder Query builder selecting: created_at, title, slug, country, city, device, browser, os, referer, navigation_context, quality_tier.
      */
     public function exportClicksQuery(int $userId, AnalyticsFilters $filters): Builder;
+
+    /**
+     * Returns the user's own, non-demo links ranked by clicks in the filter
+     * window — the portfolio "leaderboard". Unlike {@see getTopLinks()},
+     * each row also carries the variation vs. the immediately preceding
+     * period of equal length and this link's share of the user's TOTAL
+     * clicks in the window (not just among the returned rows).
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
+     * @param  int  $limit  Maximum number of links to return.
+     * @return array<int, array{link_id: int, title: ?string, slug: string, short_domain: ?string, clicks: int, variation_pct: ?float, share_pct: float}>
+     */
+    public function getLinkPerformance(int $userId, AnalyticsFilters $filters, int $limit = 10): array;
+
+    /**
+     * Returns portfolio-level (account-wide) computed insights — best
+     * performing link, fastest growing link, top-3 traffic concentration and
+     * overall account growth vs. the previous period. These are distinct
+     * from the per-link callouts in `InsightsAnalyticsService`: every value
+     * here only makes sense aggregated across the user's whole portfolio of
+     * links, not for a single one.
+     *
+     * Values are raw and language-agnostic — the frontend maps `key` to a
+     * localized label + icon. `value` is `null` when the insight cannot be
+     * computed (e.g. no clicks in the window, or no comparable previous
+     * period for the growth-based insights).
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
+     * @return array<int, array{key: string, value: string|int|float|null, unit: ?string, meta: ?array}>
+     */
+    public function getInsights(int $userId, AnalyticsFilters $filters): array;
 }

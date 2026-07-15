@@ -19,11 +19,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * {@see \App\Services\Analytics\LinkAnalyticsOrchestrator}.
  *
  * Routes (prefix /api/reports):
- *   GET /summary        → summary
- *   GET /timeseries     → timeseries
- *   GET /top-links      → topLinks
- *   GET /breakdown      → breakdown
- *   GET /export/clicks  → exportClicks
+ *   GET /summary           → summary
+ *   GET /timeseries        → timeseries
+ *   GET /top-links         → topLinks
+ *   GET /breakdown         → breakdown
+ *   GET /link-performance  → linkPerformance
+ *   GET /insights          → insights
+ *   GET /export/clicks     → exportClicks
  */
 class ReportsController extends Controller
 {
@@ -107,6 +109,44 @@ class ReportsController extends Controller
         $dimension = $request->query('dimension');
 
         return $this->cached($request, "breakdown:{$dimension}", fn (int $userId, AnalyticsFilters $f) => $this->reports->getBreakdown($userId, $dimension, $f));
+    }
+
+    /**
+     * GET /api/reports/link-performance
+     *
+     * Returns the authenticated user's own, non-demo links ranked by clicks
+     * in the filter window — the portfolio leaderboard. Each row also
+     * carries the variation vs. the immediately preceding period of equal
+     * length and this link's share of the user's total clicks.
+     *
+     * Middleware: api.auth:api, verified
+     *
+     * @param  Request  $request  Incoming HTTP request; accepts date_from/date_to/exclude_bots/limit.
+     * @return JsonResponse Response shape: { data: [{link_id, title, slug, short_domain, clicks, variation_pct, share_pct}, ...] }.
+     */
+    public function linkPerformance(Request $request): JsonResponse
+    {
+        $limit = min(50, max(1, (int) $request->query('limit', 10)));
+
+        return $this->cached($request, "link-performance:{$limit}", fn (int $userId, AnalyticsFilters $f) => $this->reports->getLinkPerformance($userId, $f, $limit));
+    }
+
+    /**
+     * GET /api/reports/insights
+     *
+     * Returns portfolio-level (account-wide) computed insights — best
+     * performing link, fastest growing link, top-3 traffic concentration and
+     * overall account growth vs. the previous period. Values are raw and
+     * language-agnostic; the frontend maps `key` to a localized label + icon.
+     *
+     * Middleware: api.auth:api, verified
+     *
+     * @param  Request  $request  Incoming HTTP request; accepts date_from/date_to/exclude_bots.
+     * @return JsonResponse Response shape: { data: [{key, value, unit, meta}, ...] }.
+     */
+    public function insights(Request $request): JsonResponse
+    {
+        return $this->cached($request, 'insights', fn (int $userId, AnalyticsFilters $f) => $this->reports->getInsights($userId, $f));
     }
 
     /**
