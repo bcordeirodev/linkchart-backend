@@ -76,6 +76,39 @@ class LinkService implements LinkServiceInterface
     }
 
     /**
+     * Executes a bulk action (activate/deactivate/delete) over the given user's links.
+     *
+     * Iterates via Eloquent on purpose: mass operations (`whereIn()->update()`/
+     * `->delete()`) do NOT fire model events and would leave the cache in
+     * Link::findActiveBySlugCached() stale — a direct regression on the
+     * `/r/{slug}` hot path. The 50-id cap enforced by the controller keeps
+     * this loop cheap. Ids that do not belong to `$userId` are excluded by the
+     * `whereIn('id', $ids)` + `where('user_id', $userId)` scoping and are
+     * simply absent from `$links`, so `affected` naturally comes out lower
+     * than `requested` without any explicit existence check (no leak of
+     * whether a foreign id exists).
+     *
+     * @param  int  $userId  ID of the user who must own the affected links.
+     * @param  string  $action  One of 'activate', 'deactivate', 'delete'.
+     * @param  array<int, int>  $ids  1–50 candidate link ids.
+     * @return array{affected: int, requested: int}
+     */
+    public function bulkAction(int $userId, string $action, array $ids): array
+    {
+        $links = Link::where('user_id', $userId)->whereIn('id', $ids)->get();
+
+        foreach ($links as $link) {
+            match ($action) {
+                'activate' => $link->update(['is_active' => true]),
+                'deactivate' => $link->update(['is_active' => false]),
+                'delete' => $link->delete(),
+            };
+        }
+
+        return ['affected' => $links->count(), 'requested' => count($ids)];
+    }
+
+    /**
      * Creates a new shortened link for the authenticated user.
      *
      * Validates the URL via CreateLinkDTO::isValidUrl(). Generates a unique

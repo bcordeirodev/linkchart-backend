@@ -128,4 +128,27 @@ interface LinkServiceInterface
      * @return LengthAwarePaginator<int, Link> Paginated links belonging to the authenticated user.
      */
     public function searchUserLinks(array $filters): LengthAwarePaginator;
+
+    /**
+     * Execute a bulk action (activate/deactivate/delete) over up to 50 links
+     * owned by the given user.
+     *
+     * Ids that do not belong to `$userId` (foreign or non-existent) are
+     * silently ignored — `affected` will simply be lower than `requested`,
+     * and the caller must not use this discrepancy to infer whether a
+     * specific foreign id exists (no existence leak).
+     *
+     * Implementations MUST iterate individual Eloquent models rather than
+     * issuing a mass `whereIn()->update()`/`->delete()`: mass operations skip
+     * Eloquent model events, which would leave `Link::findActiveBySlugCached()`
+     * stale for every affected slug — a regression in the public redirect hot
+     * path (`GET /r/{slug}`).
+     *
+     * @param  int  $userId  ID of the user who must own the affected links.
+     * @param  string  $action  One of 'activate', 'deactivate', 'delete'.
+     * @param  array<int, int>  $ids  1–50 candidate link ids.
+     * @return array{affected: int, requested: int} Count of links actually
+     *                                              owned/affected vs. ids requested.
+     */
+    public function bulkAction(int $userId, string $action, array $ids): array;
 }

@@ -24,6 +24,7 @@ use Illuminate\Http\Request;
  * Routes overview (all under api.auth:api + verified middleware):
  *   GET    /api/links                   → index
  *   POST   /api/links                   → store
+ *   POST   /api/links/bulk-action        → bulkAction (registered before {id})
  *   GET    /api/links/{id}              → show
  *   PUT    /api/links/{id}              → update
  *   DELETE /api/links/{id}              → destroy
@@ -120,6 +121,53 @@ class LinkController extends BaseController
             throw $e;
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar links.', $e);
+        }
+    }
+
+    /**
+     * POST /api/links/bulk-action
+     *
+     * Execute an action (activate/deactivate/delete) over up to 50 links
+     * owned by the authenticated user in a single request. Ids that belong
+     * to another user are silently ignored — the response never reveals
+     * whether a foreign id exists, only how many of the requested ids were
+     * actually affected.
+     *
+     * Registered BEFORE the `links/{id}` wildcard routes in routes/api.php so
+     * the literal "bulk-action" path segment cannot collide with the numeric
+     * `{id}` constraint.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     * Owner check: yes — LinkService::bulkAction scopes by auth user id.
+     *
+     * Body: { action: "activate"|"deactivate"|"delete", ids: number[] } (1–50 ids)
+     * Response shape: NormalizeApiResponse envelope: { data: { affected: number, requested: number } }
+     *
+     * @param  Request  $request  JSON body described above.
+     *
+     * @throws \Illuminate\Validation\ValidationException When action/ids are missing or invalid.
+     */
+    public function bulkAction(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'action' => 'required|in:activate,deactivate,delete',
+                'ids' => 'required|array|min:1|max:50',
+                'ids.*' => 'integer',
+            ]);
+
+            $result = $this->linkService->bulkAction(
+                auth()->guard('api')->id(),
+                $validated['action'],
+                $validated['ids']
+            );
+
+            return response()->json(['data' => $result]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return $this->serverError('Erro ao executar ação em massa.', $e);
         }
     }
 
