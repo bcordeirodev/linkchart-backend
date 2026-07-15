@@ -3,6 +3,7 @@
 namespace App\Contracts\Analytics;
 
 use App\DTOs\Analytics\AnalyticsFilters;
+use Illuminate\Database\Query\Builder;
 
 /**
  * Contract for multi-link aggregated reports (the `/reports` module).
@@ -61,4 +62,17 @@ interface ReportsAnalyticsServiceInterface
      * @throws \InvalidArgumentException When `$dimension` is not whitelisted.
      */
     public function getBreakdown(int $userId, string $dimension, AnalyticsFilters $filters, int $limit = 10): array;
+
+    /**
+     * Returns the underlying query for the clicks CSV export — same
+     * user/is_demo scope and filters as every other aggregation, selecting
+     * only the columns safe to export.
+     *
+     * NEVER selects `clicks.ip` — the CSV export must stay LGPD-compliant.
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
+     * @return Builder Query builder selecting: created_at, title, slug, country, city, device, browser, os, referer, navigation_context, quality_tier.
+     */
+    public function exportClicksQuery(int $userId, AnalyticsFilters $filters): Builder;
 }

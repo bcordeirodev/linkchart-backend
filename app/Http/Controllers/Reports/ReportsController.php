@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Relatórios agregados multi-link do usuário autenticado (módulo `/reports`).
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\Cache;
  *   GET /timeseries     → timeseries
  *   GET /top-links      → topLinks
  *   GET /breakdown      → breakdown
+ *   GET /export/clicks  → exportClicks
  */
 class ReportsController extends Controller
 {
@@ -105,6 +107,47 @@ class ReportsController extends Controller
         $dimension = $request->query('dimension');
 
         return $this->cached($request, "breakdown:{$dimension}", fn (int $userId, AnalyticsFilters $f) => $this->reports->getBreakdown($userId, $dimension, $f));
+    }
+
+    /**
+     * GET /api/reports/export/clicks
+     *
+     * Streams the user's clicks (across all own, non-demo links) as CSV,
+     * chunked in batches of 1000 rows so the full result set is never
+     * materialized in memory. Same date_from/date_to/exclude_bots filters as
+     * the other endpoints. NOT cached — export is a one-off action, not a
+     * dashboard payload.
+     *
+     * LGPD: the `ip` column is intentionally never selected or written —
+     * see {@see \App\Contracts\Analytics\ReportsAnalyticsServiceInterface::exportClicksQuery}.
+     *
+     * Middleware: api.auth:api, verified
+     *
+     * @param  Request  $request  Incoming HTTP request; accepts date_from/date_to/exclude_bots.
+     * @return StreamedResponse `text/csv` download named `relatorio-cliques.csv`.
+     */
+    public function exportClicks(Request $request): StreamedResponse
+    {
+        $userId = $request->user()->id;
+        $filters = AnalyticsFilters::fromRequest($request);
+        $query = $this->reports->exportClicksQuery($userId, $filters);
+
+        return response()->streamDownload(function () use ($query) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['data', 'link', 'slug', 'pais', 'cidade', 'dispositivo', 'navegador', 'so', 'origem', 'contexto', 'qualidade']);
+
+            $query->chunk(1000, function ($rows) use ($out) {
+                foreach ($rows as $r) {
+                    fputcsv($out, [
+                        $r->created_at, $r->title, $r->slug, $r->country, $r->city,
+                        $r->device, $r->browser, $r->os, $r->referer,
+                        $r->navigation_context, $r->quality_tier,
+                    ]);
+                }
+            });
+
+            fclose($out);
+        }, 'relatorio-cliques.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     /**

@@ -164,4 +164,16 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
             'pct' => round($r->clicks * 100 / $total, 1),
         ])->all();
     }
+
+    /** {@inheritDoc} */
+    public function exportClicksQuery(int $userId, AnalyticsFilters $filters): Builder
+    {
+        return $this->baseQuery($userId, $filters)
+            ->select([
+                'clicks.created_at', 'links.title', 'links.slug', 'clicks.country', 'clicks.city',
+                'clicks.device', 'clicks.browser', 'clicks.os', 'clicks.referer',
+                'clicks.navigation_context', 'clicks.quality_tier',
+            ])
+            ->orderBy('clicks.id');
+    }
 }
