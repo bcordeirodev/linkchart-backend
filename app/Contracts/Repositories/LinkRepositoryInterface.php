@@ -3,6 +3,7 @@
 namespace App\Contracts\Repositories;
 
 use App\Models\Link;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -100,4 +101,19 @@ interface LinkRepositoryInterface
      * @return bool True if the slug is already in use.
      */
     public function slugExists(string $slug): bool;
+
+    /**
+     * Return a paginated, filtered, and sorted list of links owned by the given user.
+     *
+     * Opt-in counterpart to {@see self::getAllByUser()}, used by `GET /api/links`
+     * when a `page` query parameter is present. Case-insensitive search over
+     * `title`, `original_url`, and `slug` is implemented with `LOWER(...) LIKE`
+     * so it behaves identically on Postgres (production) and SQLite (tests) —
+     * Postgres `ILIKE` alone would not be portable to the SQLite test driver.
+     *
+     * @param  int  $userId  ID of the user who must own the returned links.
+     * @param  array{page: int, per_page: int, q?: string|null, status?: string|null, sort?: string|null, order?: string|null}  $filters  Validated query filters (see LinkController::index()).
+     * @return LengthAwarePaginator<int, Link> Paginated result set, `tags` relation eager-loaded per item.
+     */
+    public function searchByUser(int $userId, array $filters): LengthAwarePaginator;
 }

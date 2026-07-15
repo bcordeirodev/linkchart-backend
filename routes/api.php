@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\Analytics\AnalyticsController;
+use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\TagController;
+use App\Http\Controllers\Reports\ReportsController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -84,6 +86,9 @@ Route::middleware(['api.auth:api'])->group(function () {
 
     // === ONBOARDING (marca tour/dicas como já vistos, por conta) ===
     Route::post('/onboarding/seen', [OnboardingController::class, 'seen']);
+
+    // === EXCLUSÃO DE CONTA (LGPD — permitida mesmo sem email verificado) ===
+    Route::delete('/account', [AccountController::class, 'destroy']);
 });
 
 /**
@@ -102,6 +107,10 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     Route::prefix('links')->controller(LinkController::class)->group(function () {
         Route::get('/', 'index');                                        // ✅ USADO: LinkService.all()
         Route::post('/', 'store');                                       // ✅ USADO: LinkService.save()
+        // Must stay registered before the /{id} wildcard below — "bulk-action"
+        // is not numeric so the [0-9]+ constraint would not collide, but the
+        // explicit ordering documents the invariant for future routes.
+        Route::post('/bulk-action', 'bulkAction');                       // ✅ NOVO: ações em massa (ativar/desativar/excluir)
         Route::get('/{id}', 'show')->where('id', '[0-9]+');            // ✅ USADO: LinkService.findOne()
         Route::put('/{id}', 'update')->where('id', '[0-9]+');          // ✅ USADO: LinkService.update()
         Route::delete('/{id}', 'destroy')->where('id', '[0-9]+');      // ✅ USADO: LinkService.remove()
@@ -141,8 +150,28 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/{linkId}/audience', 'getAudienceAnalytics')->where('linkId', '[0-9]+');      // ✅ USADO: useAudienceData
     });
 
-    // === GERENCIAMENTO DE SUBDOMÍNIO ===
-    // check must be registered before the bare GET /subdomain to avoid route collision
+    // === RELATÓRIOS AGREGADOS MULTI-LINK ===
+    Route::prefix('reports')->controller(ReportsController::class)->group(function () {
+        Route::get('/summary', 'summary');
+        Route::get('/timeseries', 'timeseries');
+        Route::get('/top-links', 'topLinks');
+        Route::get('/breakdown', 'breakdown');
+        Route::get('/link-performance', 'linkPerformance');
+        Route::get('/insights', 'insights');
+        Route::get('/export/clicks', 'exportClicks');
+    });
+
+    // === GERENCIAMENTO DE SUBDOMÍNIO(S) ===
+    // Plural (múltiplos por usuário) — API atual, consumida pelo frontend.
+    Route::get('/subdomains', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'index']);
+    Route::post('/subdomains', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'store'])
+        ->middleware('throttle:subdomain-claim');
+    Route::delete('/subdomains/{id}', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'destroy'])
+        ->whereNumber('id');
+
+    // Singulares — @deprecated, mantidos por um release (compat com frontend antigo
+    // durante o deploy blue/green). check must be registered before the bare GET
+    // /subdomain to avoid route collision.
     Route::get('/subdomain/check', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'check']);
     Route::get('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'show']);
     Route::post('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'claim'])
