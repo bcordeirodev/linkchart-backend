@@ -52,21 +52,72 @@ class LinkController extends BaseController
     /**
      * GET /api/links
      *
-     * Return all links belonging to the authenticated user, wrapped in a
-     * LinkResource collection.
+     * Return the authenticated user's links, wrapped in a LinkResource collection.
+     *
+     * Two response contracts, opt-in via the `page` query parameter, kept
+     * side-by-side for blue/green deploy compatibility (frontend and backend
+     * containers of different versions may serve traffic simultaneously):
+     *
+     *   - WITHOUT `page`: legacy behaviour, unchanged — returns the full list
+     *     of the user's links, newest first, no filtering/sorting/pagination.
+     *   - WITH `page`: paginated + filterable branch. Accepts:
+     *       page      int, >= 1
+     *       per_page  int, 1–50 (default 12)
+     *       q         string, max 255 — case-insensitive search over
+     *                 title, original_url, and slug
+     *       status    active|inactive|expired
+     *       sort      created_at|clicks|title (default created_at)
+     *       order     asc|desc (default desc)
+     *     Invalid params (e.g. per_page > 50) yield a 422 validation response.
+     *
+     * The per-item shape is identical in both branches — both ultimately
+     * serialise through LinkResource — only the envelope differs.
      *
      * Middleware: api.auth:api, verified
      * Auth: required
      * Owner check: yes — LinkService filters by auth user id.
      *
-     * Response shape: NormalizeApiResponse envelope: { data: LinkResource[] }
+     * Response shape:
+     *   - Legacy: NormalizeApiResponse envelope: { data: LinkResource[] }
+     *   - Paginated: NormalizeApiResponse envelope: { data: LinkResource[], meta: { current_page, per_page, total, last_page } }
+     *
+     * @param  Request  $request  Query string parameters described above.
+     *
+     * @throws \Illuminate\Validation\ValidationException When the paginated branch receives invalid filters.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            $links = $this->linkService->getAllUserLinks();
+            if (! $request->has('page')) {
+                $links = $this->linkService->getAllUserLinks();
 
-            return response()->json(LinkResource::collection($links));
+                return response()->json(LinkResource::collection($links));
+            }
+
+            $validated = $request->validate([
+                'page' => 'integer|min:1',
+                'per_page' => 'integer|min:1|max:50',
+                'q' => 'nullable|string|max:255',
+                'status' => 'nullable|in:active,inactive,expired',
+                'sort' => 'nullable|in:created_at,clicks,title',
+                'order' => 'nullable|in:asc,desc',
+            ]);
+            $validated['page'] = $validated['page'] ?? 1;
+            $validated['per_page'] = $validated['per_page'] ?? 12;
+
+            $paginator = $this->linkService->searchUserLinks($validated);
+
+            return response()->json([
+                'data' => LinkResource::collection($paginator->items()),
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                ],
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
         } catch (\Exception $e) {
             return $this->serverError('Erro ao buscar links.', $e);
         }
