@@ -68,6 +68,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Max Subdomains Per User
+    |--------------------------------------------------------------------------
+    |
+    | Number of active subdomains a single user account may hold simultaneously.
+    | Enforced by SubdomainController::store(). No billing tiers exist yet, so
+    | this is a single flat limit for every account.
+    |
+    */
+
+    'max_subdomains_per_user' => (int) env('MAX_SUBDOMAINS_PER_USER', 3),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     | Here you may specify the default timezone for your application, which

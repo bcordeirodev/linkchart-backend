@@ -155,8 +155,17 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/export/clicks', 'exportClicks');
     });
 
-    // === GERENCIAMENTO DE SUBDOMÍNIO ===
-    // check must be registered before the bare GET /subdomain to avoid route collision
+    // === GERENCIAMENTO DE SUBDOMÍNIO(S) ===
+    // Plural (múltiplos por usuário) — API atual, consumida pelo frontend.
+    Route::get('/subdomains', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'index']);
+    Route::post('/subdomains', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'store'])
+        ->middleware('throttle:subdomain-claim');
+    Route::delete('/subdomains/{id}', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'destroy'])
+        ->whereNumber('id');
+
+    // Singulares — @deprecated, mantidos por um release (compat com frontend antigo
+    // durante o deploy blue/green). check must be registered before the bare GET
+    // /subdomain to avoid route collision.
     Route::get('/subdomain/check', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'check']);
     Route::get('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'show']);
     Route::post('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'claim'])

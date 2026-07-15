@@ -9,6 +9,7 @@ use App\DTOs\CreatePublicLinkDTO;
 use App\DTOs\UpdateLinkDTO;
 use App\Models\Link;
 use App\Models\Tag;
+use App\Models\UserSubdomain;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 
@@ -82,13 +83,15 @@ class LinkService implements LinkServiceInterface
 
         $data = $linkDTO->toArray();
 
-        // Resolve the user's active subdomain and record it on the link.
-        // Stored at creation time so the short URL is immutable even if the user
-        // later releases their subdomain.
-        $sub = \App\Models\UserSubdomain::findByUserCached($linkDTO->user_id);
-        if ($sub) {
-            $data['short_domain'] = $sub->subdomain.'.'.config('app.domain');
-        }
+        // Resolve short_domain from the caller's subdomain choice (or the
+        // default, oldest-active one) and record it on the link. Stored at
+        // creation time so the short URL is immutable even if the user later
+        // releases the subdomain or picks a different one for future links.
+        $data['short_domain'] = $this->resolveShortDomain(
+            $linkDTO->user_id,
+            $linkDTO->subdomain_id,
+            $linkDTO->subdomain_id_provided
+        );
 
         // Gera slug único se não fornecido
         if (empty($data['slug'])) {
@@ -111,6 +114,56 @@ class LinkService implements LinkServiceInterface
         \App\Logging\AppLogger::linkCreated($link, false);
 
         return $link;
+    }
+
+    /**
+     * Resolves the `short_domain` a new link should be created with.
+     *
+     * `short_domain` is immutable once a link is created (existing contract —
+     * links never change domain after creation, even if the underlying
+     * UserSubdomain is later released). Three cases, distinguished by
+     * `$wasProvided` so an absent `subdomain_id` field can be told apart from
+     * an explicit `null`:
+     *
+     *   - `$wasProvided === true && $subdomainId === null`: the caller
+     *     explicitly asked for the default root domain — returns null even if
+     *     the user has an active subdomain.
+     *   - `$subdomainId !== null`: the caller chose a specific subdomain. It
+     *     must be active and owned by `$userId`, otherwise this throws.
+     *   - Neither of the above (field absent): preserves the
+     *     pre-multi-subdomain behavior — falls back to the user's default
+     *     (oldest active) subdomain via {@see UserSubdomain::findByUserCached()},
+     *     or null if the user has none.
+     *
+     * @param  int  $userId  Owner the resolved subdomain (if any) must belong to.
+     * @param  int|null  $subdomainId  Id of the UserSubdomain the caller chose, or null.
+     * @param  bool  $wasProvided  Whether the `subdomain_id` field was present in the request at all.
+     * @return string|null The `short_domain` value to persist on the link, or null for the default domain.
+     *
+     * @throws \InvalidArgumentException If `$subdomainId` does not reference an active subdomain owned by `$userId`.
+     */
+    private function resolveShortDomain(int $userId, ?int $subdomainId, bool $wasProvided): ?string
+    {
+        if ($wasProvided && $subdomainId === null) {
+            return null; // Usuário escolheu explicitamente o domínio padrão.
+        }
+
+        if ($subdomainId !== null) {
+            $sub = UserSubdomain::where('id', $subdomainId)
+                ->where('user_id', $userId)
+                ->where('status', 'active')
+                ->first();
+
+            if ($sub === null) {
+                throw new \InvalidArgumentException('Subdomínio inválido.');
+            }
+
+            return $sub->subdomain.'.'.config('app.domain');
+        }
+
+        $default = UserSubdomain::findByUserCached($userId);
+
+        return $default !== null ? $default->subdomain.'.'.config('app.domain') : null;
     }
 
     /**
@@ -208,12 +261,14 @@ class LinkService implements LinkServiceInterface
 
         \App\Logging\AppLogger::linkCreated($link, true);
 
-        // Apply the user's custom subdomain if they have one active.
-        // Mirrors the behaviour of createLink() for authenticated users.
+        // Apply the user's default (oldest active) subdomain if they have one.
+        // Mirrors createLink()'s behaviour for authenticated users; the public
+        // shortener form has no subdomain picker, so there's never an explicit
+        // choice or an explicit "force default domain" here.
         if (! empty($data['user_id'])) {
-            $subdomain = \App\Models\UserSubdomain::findByUserCached($data['user_id']);
-            if ($subdomain && $subdomain->status === 'active') {
-                $link->short_domain = $subdomain->subdomain.'.'.config('app.domain');
+            $shortDomain = $this->resolveShortDomain((int) $data['user_id'], null, false);
+            if ($shortDomain !== null) {
+                $link->short_domain = $shortDomain;
                 $link->save();
             }
         }
