@@ -63,7 +63,7 @@ class ReportsController extends Controller
      * Middleware: api.auth:api, verified
      *
      * @param  Request  $request  Incoming HTTP request; accepts date_from/date_to/exclude_bots.
-     * @return JsonResponse Response shape: { data: [{date, clicks}, ...] }.
+     * @return JsonResponse Response shape: { data: { series: [{date, clicks, unique_visitors}], previous: [{date, clicks}] } }.
      */
     public function timeseries(Request $request): JsonResponse
     {
@@ -104,7 +104,7 @@ class ReportsController extends Controller
     public function breakdown(Request $request): JsonResponse
     {
         $request->validate([
-            'dimension' => 'required|string|in:country,device,browser,navigation_context,quality_tier',
+            'dimension' => 'required|string|in:country,city,device,os,browser,social_platform,navigation_context,quality_tier',
         ]);
         $dimension = $request->query('dimension');
 
@@ -122,7 +122,7 @@ class ReportsController extends Controller
      * Middleware: api.auth:api, verified
      *
      * @param  Request  $request  Incoming HTTP request; accepts date_from/date_to/exclude_bots/limit.
-     * @return JsonResponse Response shape: { data: [{link_id, title, slug, short_domain, clicks, variation_pct, share_pct}, ...] }.
+     * @return JsonResponse Response shape: { data: [{link_id, title, slug, short_domain, clicks, variation_pct, share_pct, spark}, ...] }.
      */
     public function linkPerformance(Request $request): JsonResponse
     {

@@ -88,8 +88,68 @@ class ReportsAnalyticsServiceTest extends TestCase
 
         $timeseries = $this->service->getTimeseries($user->id, $filters);
 
-        $totalClicks = array_sum(array_column($timeseries, 'clicks'));
+        $totalClicks = array_sum(array_column($timeseries['series'], 'clicks'));
         $this->assertSame(1, $totalClicks);
+    }
+
+    /** Timeseries retorna shape {series, previous} com zero-fill e visitantes únicos. */
+    public function test_timeseries_returns_series_and_previous_with_zero_fill(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id]);
+
+        // 3 cliques ontem (2 IPs distintos) — janela atual
+        \App\Models\Click::factory()->count(2)->create([
+            'link_id' => $link->id, 'is_bot' => false,
+            'created_at' => now()->subDay(), 'ip' => '1.1.1.1',
+        ]);
+        \App\Models\Click::factory()->create([
+            'link_id' => $link->id, 'is_bot' => false,
+            'created_at' => now()->subDay(), 'ip' => '2.2.2.2',
+        ]);
+        // 1 clique há 35 dias — cai na janela ANTERIOR (default = últimos 30 dias)
+        \App\Models\Click::factory()->create([
+            'link_id' => $link->id, 'is_bot' => false,
+            'created_at' => now()->subDays(35),
+        ]);
+
+        $result = $this->service->getTimeseries($user->id, new AnalyticsFilters);
+
+        $this->assertArrayHasKey('series', $result);
+        $this->assertArrayHasKey('previous', $result);
+
+        // Mesma quantidade de pontos nas duas séries (alinhamento por índice no gráfico)
+        $this->assertSame(count($result['series']), count($result['previous']));
+        // Zero-fill: um ponto por dia calendário da janela (31 = hoje + 30 dias anteriores)
+        $this->assertSame(31, count($result['series']));
+
+        $this->assertSame(3, array_sum(array_column($result['series'], 'clicks')));
+        $this->assertSame(1, array_sum(array_column($result['previous'], 'clicks')));
+
+        $yesterday = collect($result['series'])
+            ->firstWhere('date', now()->subDay()->format('Y-m-d'));
+        $this->assertSame(3, $yesterday['clicks']);
+        $this->assertSame(2, $yesterday['unique_visitors']);
+    }
+
+    /** Clique na primeira hora do primeiro dia da janela anterior é contado (fronteira alinhada por dia). */
+    public function test_previous_timeseries_counts_first_day_early_clicks(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id]);
+
+        // Janela default: series tem 31 dias; janela anterior = [startOfDay(from) - 31d, startOfDay(from))
+        $firstPreviousDay = now()->subDays(30)->startOfDay()->subDays(31);
+
+        \App\Models\Click::factory()->create([
+            'link_id' => $link->id, 'is_bot' => false,
+            'created_at' => $firstPreviousDay->copy()->addHour(),
+        ]);
+
+        $result = $this->service->getTimeseries($user->id, new AnalyticsFilters);
+
+        $this->assertSame(1, array_sum(array_column($result['previous'], 'clicks')));
+        $this->assertSame($firstPreviousDay->format('Y-m-d'), $result['previous'][0]['date']);
     }
 
     /** Top links ordena por cliques desc e traz slug/título. */
@@ -118,5 +178,24 @@ class ReportsAnalyticsServiceTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         $this->service->getBreakdown($user->id, 'not_a_real_dimension', new AnalyticsFilters);
+    }
+
+    /** Whitelist do breakdown aceita as dimensões city, social_platform e os. */
+    public function test_breakdown_supports_city_social_platform_and_os(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id]);
+
+        \App\Models\Click::factory()->create([
+            'link_id' => $link->id, 'is_bot' => false,
+            'city' => 'Sao Paulo', 'social_platform' => 'WhatsApp', 'os' => 'Android',
+        ]);
+
+        foreach (['city' => 'Sao Paulo', 'social_platform' => 'WhatsApp', 'os' => 'Android'] as $dimension => $expected) {
+            $rows = $this->service->getBreakdown($user->id, $dimension, new AnalyticsFilters);
+
+            $this->assertNotEmpty($rows, "breakdown vazio para {$dimension}");
+            $this->assertSame($expected, $rows[0]['label']);
+        }
     }
 }
