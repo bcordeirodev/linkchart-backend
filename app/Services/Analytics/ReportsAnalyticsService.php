@@ -168,15 +168,109 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
     /** {@inheritDoc} */
     public function getTimeseries(int $userId, AnalyticsFilters $filters): array
     {
+        $from = $filters->dateFrom ?? Carbon::now()->subDays(30);
+        $to = $filters->dateTo ?? Carbon::now();
+        $dates = $this->windowDates($from, $to);
+
         $dateExpr = SqlDateExpr::date('clicks.created_at');
 
-        return $this->baseQuery($userId, $filters)
+        $rows = $this->baseQuery($userId, $filters)
+            ->selectRaw("{$dateExpr} as date, COUNT(*) as clicks, COUNT(DISTINCT clicks.ip) as unique_visitors")
+            ->groupByRaw($dateExpr)
+            ->get()
+            ->keyBy('date');
+
+        $series = array_map(fn (string $date) => [
+            'date' => $date,
+            'clicks' => (int) ($rows[$date]->clicks ?? 0),
+            'unique_visitors' => (int) ($rows[$date]->unique_visitors ?? 0),
+        ], $dates);
+
+        return [
+            'series' => $series,
+            'previous' => $this->previousTimeseries($userId, $filters, $from, count($dates)),
+        ];
+    }
+
+    /**
+     * Lista de datas (`Y-m-d`) cobertas pela janela, inclusiva nas duas pontas.
+     *
+     * Base do zero-fill do timeseries e do `spark` do link-performance: garante
+     * que toda série diária tenha exatamente um ponto por dia calendário, com
+     * dias sem clique preenchidos com zero — sem isso o gráfico de comparação
+     * (série atual × anterior, alinhadas por índice) ficaria distorcido.
+     *
+     * @param  Carbon  $from  Início da janela.
+     * @param  Carbon  $to  Fim da janela.
+     * @return array<int, string> Datas `Y-m-d` em ordem crescente.
+     */
+    private function windowDates(Carbon $from, Carbon $to): array
+    {
+        $cursor = $from->copy()->startOfDay();
+        $end = $to->copy()->startOfDay();
+        $dates = [];
+
+        while ($cursor <= $end) {
+            $dates[] = $cursor->format('Y-m-d');
+            $cursor->addDay();
+        }
+
+        return $dates;
+    }
+
+    /**
+     * Série diária de cliques da janela imediatamente anterior, com o MESMO
+     * número de pontos da janela atual (zero-fill), para o overlay tracejado
+     * do gráfico do `/reports` — alinhada por índice com a série atual.
+     *
+     * Janela anterior: `[startOfDay($from) - $days, startOfDay($from))` —
+     * alinhada por dia calendário (não pelo instante de `$from`) e meio-aberta
+     * para não contar duas vezes um clique exatamente na fronteira. Alinhar
+     * por dia é essencial: os buckets de label (`Y-m-d`) são por dia
+     * calendário, então usar o instante de `$from` como fronteira SQL faria
+     * os limites de dia e os limites de query divergirem sempre que `$from`
+     * não for meia-noite (ex.: o default sem filtro, `now()->subDays(30)`) —
+     * o primeiro dia da janela anterior ficaria subcontado e cliques no dia
+     * calendário de `$from`, antes do horário exato de `$from`, seriam
+     * buscados pelo SQL mas descartados por não bater com nenhum label.
+     * Reaplica os filtros de dimensão (bots etc.) mas NUNCA o date range
+     * (define a própria janela), mesmo contrato de
+     * {@see previousPeriodClicksByLink()}.
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  AnalyticsFilters  $filters  Filtros ativos (dimensões reaplicadas).
+     * @param  Carbon  $from  Início da janela ATUAL.
+     * @param  int  $days  Número de pontos da série atual.
+     * @return array<int, array{date: string, clicks: int}>
+     */
+    private function previousTimeseries(int $userId, AnalyticsFilters $filters, Carbon $from, int $days): array
+    {
+        $fromDay = $from->copy()->startOfDay();
+        $previousStart = $fromDay->copy()->subDays($days);
+        $dateExpr = SqlDateExpr::date('clicks.created_at');
+
+        $query = DB::table('clicks')
+            ->join('links', 'links.id', '=', 'clicks.link_id')
+            ->where('links.user_id', $userId)
+            ->where('links.is_demo', false)
+            ->where('clicks.created_at', '>=', $previousStart)
+            ->where('clicks.created_at', '<', $fromDay);
+
+        $query = $filters->applyDimensions($query, 'clicks.');
+
+        $rows = $query
             ->selectRaw("{$dateExpr} as date, COUNT(*) as clicks")
             ->groupByRaw($dateExpr)
-            ->orderByRaw($dateExpr)
             ->get()
-            ->map(fn ($r) => ['date' => $r->date, 'clicks' => (int) $r->clicks])
-            ->all();
+            ->keyBy('date');
+
+        $result = [];
+        for ($d = 0; $d < $days; $d++) {
+            $date = $previousStart->copy()->addDays($d)->format('Y-m-d');
+            $result[] = ['date' => $date, 'clicks' => (int) ($rows[$date]->clicks ?? 0)];
+        }
+
+        return $result;
     }
 
     /** {@inheritDoc} */
