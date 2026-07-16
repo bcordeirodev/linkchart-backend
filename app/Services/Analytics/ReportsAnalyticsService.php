@@ -29,8 +29,11 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
     /** Dimensões permitidas no breakdown => coluna SQL qualificada. */
     private const DIMENSIONS = [
         'country' => 'clicks.country',
+        'city' => 'clicks.city',
         'device' => 'clicks.device',
+        'os' => 'clicks.os',
         'browser' => 'clicks.browser',
+        'social_platform' => 'clicks.social_platform',
         'navigation_context' => 'clicks.navigation_context',
         'quality_tier' => 'clicks.quality_tier',
     ];
