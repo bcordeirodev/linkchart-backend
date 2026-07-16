@@ -6,6 +6,17 @@ use Symfony\Component\Console\Input\ArgvInput;
 
 define('LARAVEL_START', microtime(true));
 
+// Disable ALL OpenTelemetry emission (traces/metrics/logs) for interactive
+// tinker sessions. Without this, manual debugging in production shows up as
+// application ERRORs in Loki (e.g. Psy\Exception\ParseErrorException) and
+// pollutes error dashboards/alerts. Must run BEFORE the Composer autoloader:
+// the OTel SDK bootstraps itself via composer autoload files. Queue workers
+// and the scheduler are NOT affected (their argv is queue:work/schedule:work).
+if (in_array($argv[1] ?? null, ['tinker'], true) && getenv('OTEL_SDK_DISABLED') === false) {
+    putenv('OTEL_SDK_DISABLED=true');
+    $_ENV['OTEL_SDK_DISABLED'] = $_SERVER['OTEL_SDK_DISABLED'] = 'true';
+}
+
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';
 
