@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Logging\AppLogger;
 use App\Models\Link;
 use GuzzleHttp\Client;
 use Illuminate\Bus\Queueable;
@@ -34,8 +35,10 @@ use Illuminate\Support\Facades\DB;
  *     cache hits).
  *   - Cache: none written by this job.
  *   - Queue: no further jobs are dispatched.
- *   - Log channels: none (no `AppLogger` calls; HTTP errors are caught silently
- *     and recorded as `health_status = 'error'`).
+ *   - Log channels: `jobs` — lifecycle events (`job.started` / `job.succeeded` /
+ *     `job.failed`) plus per-run totals (`checked` / `errors`) via `AppLogger`.
+ *     Per-link HTTP errors are still caught silently and only recorded as
+ *     `health_status = 'error'` (no log line per unhealthy link).
  *
  * Retry policy:
  *   - `$tries = 1` — no retries; a failed run is acceptable since the scheduler
@@ -60,6 +63,29 @@ class LinkHealthCheckJob implements ShouldQueue
 
     public function handle(): void
     {
+        $start = microtime(true);
+        AppLogger::jobStarted(static::class);
+
+        try {
+            [$checked, $errors] = $this->checkActiveLinks();
+
+            AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
+                'checked' => $checked,
+                'errors' => $errors,
+            ]);
+        } catch (\Throwable $e) {
+            AppLogger::jobFailed(static::class, $e, $this->attempts());
+            throw $e;
+        }
+    }
+
+    /**
+     * Runs the HEAD check over every active link and persists the health columns.
+     *
+     * @return array{0:int,1:int} Tuple of [links checked, links flagged as 'error'].
+     */
+    private function checkActiveLinks(): array
+    {
         $http = new Client([
             'timeout' => 5,
             'connect_timeout' => 3,
@@ -67,9 +93,12 @@ class LinkHealthCheckJob implements ShouldQueue
             'http_errors' => false,
         ]);
 
+        $checked = 0;
+        $errors = 0;
+
         Link::where('is_active', true)
             ->select(['id', 'original_url'])
-            ->chunk(50, function ($links) use ($http) {
+            ->chunk(50, function ($links) use ($http, &$checked, &$errors) {
                 foreach ($links as $link) {
                     try {
                         $response = $http->head($link->original_url);
@@ -77,6 +106,11 @@ class LinkHealthCheckJob implements ShouldQueue
                         $status = ($code >= 200 && $code < 400) ? 'ok' : 'error';
                     } catch (\Exception $e) {
                         $status = 'error';
+                    }
+
+                    $checked++;
+                    if ($status === 'error') {
+                        $errors++;
                     }
 
                     DB::table('links')
@@ -87,5 +121,7 @@ class LinkHealthCheckJob implements ShouldQueue
                         ]);
                 }
             });
+
+        return [$checked, $errors];
     }
 }
