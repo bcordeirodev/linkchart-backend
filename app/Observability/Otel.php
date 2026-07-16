@@ -21,6 +21,17 @@ final class Otel
 {
     private const INSTRUMENTATION = 'linkcharts';
 
+    /**
+     * Bucket boundaries (seconds) for request-scoped histograms. The SDK default
+     * boundaries (0, 5, 10, 25, … — designed for milliseconds) put every
+     * sub-5-second request in a single bucket, so histogram_quantile() returned
+     * a meaningless interpolated 4.75s p95 for every status code.
+     */
+    private const REQUEST_DURATION_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
+
+    /** Bucket boundaries (seconds) for queue jobs, which can legitimately run for minutes. */
+    private const JOB_DURATION_BUCKETS = [0.01, 0.05, 0.1, 0.5, 1, 5, 15, 30, 60, 120, 300];
+
     /** Memoized redirect counter; created once per process. */
     private static ?CounterInterface $redirectCounter = null;
 
@@ -81,7 +92,11 @@ final class Otel
 
         try {
             self::$redirectCounter ??= self::meter()->createCounter('redirect.count');
-            self::$redirectHistogram ??= self::meter()->createHistogram('redirect.duration', 's');
+            self::$redirectHistogram ??= self::meter()->createHistogram(
+                'redirect.duration',
+                's',
+                advisory: ['ExplicitBucketBoundaries' => self::REQUEST_DURATION_BUCKETS],
+            );
 
             $attributes = [
                 'http.response.status_code' => $statusCode,
@@ -134,7 +149,11 @@ final class Otel
 
         try {
             self::$jobCounter ??= self::meter()->createCounter('job.count');
-            self::$jobHistogram ??= self::meter()->createHistogram('job.duration', 's');
+            self::$jobHistogram ??= self::meter()->createHistogram(
+                'job.duration',
+                's',
+                advisory: ['ExplicitBucketBoundaries' => self::JOB_DURATION_BUCKETS],
+            );
             $attributes = ['job.name' => $job, 'job.status' => $status];
             self::$jobCounter->add(1, $attributes);
             self::$jobHistogram->record($durationSeconds, $attributes);
@@ -174,7 +193,11 @@ final class Otel
 
         try {
             self::$httpCounter ??= self::meter()->createCounter('http.server.request.count');
-            self::$httpHistogram ??= self::meter()->createHistogram('http.server.request.duration', 's');
+            self::$httpHistogram ??= self::meter()->createHistogram(
+                'http.server.request.duration',
+                's',
+                advisory: ['ExplicitBucketBoundaries' => self::REQUEST_DURATION_BUCKETS],
+            );
 
             $attributes = [
                 'http.route' => $route,
