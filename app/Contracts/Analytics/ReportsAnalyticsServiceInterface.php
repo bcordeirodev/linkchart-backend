@@ -31,11 +31,14 @@ interface ReportsAnalyticsServiceInterface
     public function getSummary(int $userId, AnalyticsFilters $filters): array;
 
     /**
-     * Returns daily click counts across all of the user's own, non-demo links.
+     * Returns the daily clicks/unique-visitors series for the active window,
+     * plus the immediately preceding window's daily clicks — both zero-filled
+     * to one point per calendar day and equal in length, so the frontend chart
+     * can align them by index.
      *
      * @param  int  $userId  Owner's user ID.
      * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
-     * @return array<int, array{date: string, clicks: int}>
+     * @return array{series: array<int, array{date: string, clicks: int, unique_visitors: int}>, previous: array<int, array{date: string, clicks: int}>}
      */
     public function getTimeseries(int $userId, AnalyticsFilters $filters): array;
 
@@ -54,7 +57,7 @@ interface ReportsAnalyticsServiceInterface
      * user's own, non-demo links.
      *
      * @param  int  $userId  Owner's user ID.
-     * @param  string  $dimension  One of: country, device, browser, navigation_context, quality_tier.
+     * @param  string  $dimension  One of: country, city, device, os, browser, social_platform, navigation_context, quality_tier.
      * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
      * @param  int  $limit  Maximum number of rows to return.
      * @return array<int, array{label: string, clicks: int, pct: float}>
@@ -86,7 +89,7 @@ interface ReportsAnalyticsServiceInterface
      * @param  int  $userId  Owner's user ID.
      * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
      * @param  int  $limit  Maximum number of links to return.
-     * @return array<int, array{link_id: int, title: ?string, slug: string, short_domain: ?string, clicks: int, variation_pct: ?float, share_pct: float}>
+     * @return array<int, array{link_id: int, title: ?string, slug: string, short_domain: ?string, clicks: int, variation_pct: ?float, share_pct: float, spark: array<int, int>}>
      */
     public function getLinkPerformance(int $userId, AnalyticsFilters $filters, int $limit = 10): array;
 

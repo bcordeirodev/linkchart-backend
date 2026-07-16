@@ -126,4 +126,33 @@ class ReportsLinkPerformanceTest extends TestCase
             ->assertUnauthorized()
             ->assertJsonPath('error.code', 'UNAUTHENTICATED');
     }
+
+    /** Cada linha traz spark[] com um ponto por dia da janela, zeros preenchidos. */
+    public function test_rows_include_daily_spark_with_uniform_length(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id]);
+
+        \App\Models\Click::factory()->count(2)->create([
+            'link_id' => $link->id, 'is_bot' => false, 'created_at' => now()->subDay(),
+        ]);
+        \App\Models\Click::factory()->create([
+            'link_id' => $link->id, 'is_bot' => false, 'created_at' => now()->subDays(3),
+        ]);
+
+        $filters = new \App\DTOs\Analytics\AnalyticsFilters(
+            dateFrom: now()->subDays(7)->startOfDay()->toIso8601String(),
+            dateTo: now()->toIso8601String(),
+        );
+
+        $rows = app(\App\Contracts\Analytics\ReportsAnalyticsServiceInterface::class)
+            ->getLinkPerformance($user->id, $filters);
+
+        $this->assertArrayHasKey('spark', $rows[0]);
+        // Janela [hoje-7 .. hoje] inclusiva = 8 dias calendário
+        $this->assertCount(8, $rows[0]['spark']);
+        $this->assertSame(3, array_sum($rows[0]['spark']));
+        // Ontem é o penúltimo ponto
+        $this->assertSame(2, $rows[0]['spark'][6]);
+    }
 }
