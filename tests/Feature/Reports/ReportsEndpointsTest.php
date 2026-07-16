@@ -107,7 +107,7 @@ class ReportsEndpointsTest extends TestCase
         $response = $this->actingAs($user, 'api')->getJson("/api/reports/timeseries?{$query}");
 
         $response->assertOk();
-        $totalClicks = array_sum(array_column($response->json('data'), 'clicks'));
+        $totalClicks = array_sum(array_column($response->json('data.series'), 'clicks'));
         $this->assertSame(1, $totalClicks);
     }
 }

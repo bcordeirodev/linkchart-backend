@@ -63,7 +63,7 @@ class ReportsController extends Controller
      * Middleware: api.auth:api, verified
      *
      * @param  Request  $request  Incoming HTTP request; accepts date_from/date_to/exclude_bots.
-     * @return JsonResponse Response shape: { data: [{date, clicks}, ...] }.
+     * @return JsonResponse Response shape: { data: { series: [{date, clicks, unique_visitors}], previous: [{date, clicks}] } }.
      */
     public function timeseries(Request $request): JsonResponse
     {
