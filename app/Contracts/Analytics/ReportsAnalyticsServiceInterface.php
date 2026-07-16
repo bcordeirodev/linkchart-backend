@@ -89,7 +89,7 @@ interface ReportsAnalyticsServiceInterface
      * @param  int  $userId  Owner's user ID.
      * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
      * @param  int  $limit  Maximum number of links to return.
-     * @return array<int, array{link_id: int, title: ?string, slug: string, short_domain: ?string, clicks: int, variation_pct: ?float, share_pct: float}>
+     * @return array<int, array{link_id: int, title: ?string, slug: string, short_domain: ?string, clicks: int, variation_pct: ?float, share_pct: float, spark: array<int, int>}>
      */
     public function getLinkPerformance(int $userId, AnalyticsFilters $filters, int $limit = 10): array;
 

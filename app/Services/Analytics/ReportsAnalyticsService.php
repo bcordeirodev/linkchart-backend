@@ -339,9 +339,12 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
             ->get();
 
         [$from, $days] = $this->currentWindow($filters);
+        $to = $filters->dateTo ?? Carbon::now();
+        $dates = $this->windowDates($from, $to);
+        $sparkByLink = $this->dailyClicksByLink($userId, $filters, $current->pluck('link_id')->all(), $dates);
         $previousByLink = $this->previousPeriodClicksByLink($userId, $filters, $from, $days, $current->pluck('link_id')->all());
 
-        return $current->map(function ($r) use ($previousByLink, $totalClicks) {
+        return $current->map(function ($r) use ($previousByLink, $totalClicks, $sparkByLink, $dates) {
             $clicks = (int) $r->clicks;
             $previous = $previousByLink[$r->link_id] ?? 0;
 
@@ -353,8 +356,45 @@ class ReportsAnalyticsService implements ReportsAnalyticsServiceInterface
                 'clicks' => $clicks,
                 'variation_pct' => $previous === 0 ? null : round((($clicks - $previous) * 100) / $previous, 1),
                 'share_pct' => round($clicks * 100 / $totalClicks, 1),
+                'spark' => $sparkByLink[$r->link_id] ?? array_fill(0, count($dates), 0),
             ];
         })->all();
+    }
+
+    /**
+     * Cliques diários por link para as linhas do leaderboard — alimenta a
+     * sparkline de cada linha no frontend. Uma única query agrupada por
+     * link+dia, restrita aos top-N ids já selecionados; o zero-fill em PHP
+     * garante arrays de comprimento uniforme (um ponto por dia da janela).
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  AnalyticsFilters  $filters  Filtros ativos.
+     * @param  array<int, int>  $linkIds  Ids dos links do leaderboard.
+     * @param  array<int, string>  $dates  Datas `Y-m-d` da janela ({@see windowDates()}).
+     * @return array<int, array<int, int>> Map de link_id => série diária de cliques.
+     */
+    private function dailyClicksByLink(int $userId, AnalyticsFilters $filters, array $linkIds, array $dates): array
+    {
+        if ($linkIds === []) {
+            return [];
+        }
+
+        $dateExpr = SqlDateExpr::date('clicks.created_at');
+
+        $rows = $this->baseQuery($userId, $filters)
+            ->whereIn('links.id', $linkIds)
+            ->selectRaw("links.id as link_id, {$dateExpr} as date, COUNT(*) as clicks")
+            ->groupByRaw("links.id, {$dateExpr}")
+            ->get()
+            ->groupBy('link_id');
+
+        $result = [];
+        foreach ($linkIds as $id) {
+            $byDate = ($rows[$id] ?? collect())->pluck('clicks', 'date');
+            $result[$id] = array_map(fn (string $date) => (int) ($byDate[$date] ?? 0), $dates);
+        }
+
+        return $result;
     }
 
     /** {@inheritDoc} */
