@@ -104,7 +104,7 @@ class ReportsController extends Controller
     public function breakdown(Request $request): JsonResponse
     {
         $request->validate([
-            'dimension' => 'required|string|in:country,device,browser,navigation_context,quality_tier',
+            'dimension' => 'required|string|in:country,city,device,os,browser,social_platform,navigation_context,quality_tier',
         ]);
         $dimension = $request->query('dimension');
 

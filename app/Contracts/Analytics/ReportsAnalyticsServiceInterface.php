@@ -57,7 +57,7 @@ interface ReportsAnalyticsServiceInterface
      * user's own, non-demo links.
      *
      * @param  int  $userId  Owner's user ID.
-     * @param  string  $dimension  One of: country, device, browser, navigation_context, quality_tier.
+     * @param  string  $dimension  One of: country, city, device, os, browser, social_platform, navigation_context, quality_tier.
      * @param  AnalyticsFilters  $filters  Filter state (date range, bot exclusion).
      * @param  int  $limit  Maximum number of rows to return.
      * @return array<int, array{label: string, clicks: int, pct: float}>

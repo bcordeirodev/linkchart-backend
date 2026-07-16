@@ -179,4 +179,23 @@ class ReportsAnalyticsServiceTest extends TestCase
 
         $this->service->getBreakdown($user->id, 'not_a_real_dimension', new AnalyticsFilters);
     }
+
+    /** Whitelist do breakdown aceita as dimensões city, social_platform e os. */
+    public function test_breakdown_supports_city_social_platform_and_os(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id]);
+
+        \App\Models\Click::factory()->create([
+            'link_id' => $link->id, 'is_bot' => false,
+            'city' => 'Sao Paulo', 'social_platform' => 'WhatsApp', 'os' => 'Android',
+        ]);
+
+        foreach (['city' => 'Sao Paulo', 'social_platform' => 'WhatsApp', 'os' => 'Android'] as $dimension => $expected) {
+            $rows = $this->service->getBreakdown($user->id, $dimension, new AnalyticsFilters);
+
+            $this->assertNotEmpty($rows, "breakdown vazio para {$dimension}");
+            $this->assertSame($expected, $rows[0]['label']);
+        }
+    }
 }
