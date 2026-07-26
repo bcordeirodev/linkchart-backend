@@ -69,10 +69,30 @@ está velha.
 Fontes: <https://www.cloudflare.com/ips-v4> e <https://www.cloudflare.com/ips-v6>.
 Última atualização: **2026-05-27** (22 faixas: 15 IPv4 + 7 IPv6).
 
-## Pendência conhecida
+## Firewall: 80/443 só aceitam a Cloudflare
 
-O `ufw` do droplet libera `80/tcp` e `443/tcp` para qualquer origem, então é possível
-falar direto com a origem e **pular a Cloudflare** — o que também pula o WAF e a
-proteção de DDoS. Isso não permite forjar IP (o `set_real_ip_from` cuida disso), mas
-é exposição. Restringir 80/443 às faixas da CF é hardening pendente, com risco
-próprio: lista velha passa a significar site fora do ar, não só geo degradado.
+Desde **2026-07-26** o `ufw` só permite `80/tcp` e `443/tcp` a partir das faixas da
+Cloudflare (22 regras com o comentário `cloudflare`). Antes disso era possível falar
+direto com a origem e **pular a Cloudflare**, o que também pulava o WAF e a proteção
+de DDoS. Verificado na aplicação: via Cloudflare `200`; direto no IP do droplet,
+timeout.
+
+⚠️ **Isto eleva o custo de uma lista velha.** Antes, faixa faltando significava geo
+degradado; agora significa **visitante bloqueado**. A mesma lista alimenta o
+`set_real_ip_from` e o `ufw` — mantenha as duas em sincronia.
+
+Também foram removidas as regras órfãs de `3000/tcp` e `8080/tcp`, que estavam
+abertas para qualquer origem sem nada escutando nelas publicamente.
+
+Renovação de certificado sobrevive a isso: o wildcard usa **DNS-01** (hook da
+Cloudflare) e o do apex usa HTTP-01 pelo plugin do nginx — como o DNS é proxiado, o
+desafio chega pela borda, de um IP permitido. Se algum dia o apex sair do proxy da
+Cloudflare (nuvem cinza), a renovação passa a falhar em silêncio.
+
+```bash
+# reverter (reabre a origem para qualquer um)
+ssh -i ~/.ssh/id_ed25519 root@134.209.33.182 "ufw allow 80/tcp && ufw allow 443/tcp"
+
+# reaplicar as faixas (adicione ANTES de remover as permissivas)
+for r in <faixas>; do ufw allow proto tcp from "$r" to any port 80,443 comment cloudflare; done
+```
