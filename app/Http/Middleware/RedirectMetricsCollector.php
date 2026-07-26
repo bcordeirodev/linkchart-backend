@@ -16,8 +16,8 @@ use Symfony\Component\HttpFoundation\Response;
 class RedirectMetricsCollector
 {
     /**
-     * @param  ClientIpResolver  $clientIpResolver  Shared client-IP resolver — single source of truth
-     *                                              for proxy/CDN header precedence (also used by
+     * @param  ClientIpResolver  $clientIpResolver  Resolvedor compartilhado do IP do cliente — única
+     *                                              fonte de verdade (também usado por
      *                                              LinkTrackingService::resolveRealUserIP).
      */
     public function __construct(
@@ -377,8 +377,9 @@ class RedirectMetricsCollector
     /**
      * 🌐 CAPTURA IP REAL DO USUÁRIO (MESMA LÓGICA DO LinkTrackingService)
      *
-     * Delega a precedência/validação para o ClientIpResolver compartilhado e emite
-     * os mesmos logs de debug por origem que a versão original, via callback.
+     * Delega no ClientIpResolver compartilhado. O log de origem virou um evento único
+     * porque a origem também é única: antes existiam cinco eventos, um por posição da
+     * cadeia de precedência que foi removida.
      *
      * @param  Request  $request  A requisição HTTP atual.
      * @return string Um endereço IP válido.
