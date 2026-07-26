@@ -75,12 +75,17 @@ class ClientIpResolver
      *
      *  - IP privado resolvido: TrustProxies ou o Nginx interno do container estão
      *    errados.
-     *  - IP resolvido diferente do CF-Connecting-IP: o `real_ip_header` da borda não
-     *    está sendo aplicado, ou seja estamos gravando o IP da **borda da
-     *    Cloudflare** no lugar do cliente. Este é o modo de falha SILENCIOSO — o IP
-     *    da borda é público, então a checagem de IP privado não o pega. Comparar
-     *    contra o header dispensa manter uma cópia das faixas da CF aqui: quando a
-     *    borda está correta, os dois valores são idênticos por construção.
+     *  - IP resolvido diferente do CF-Connecting-IP: duas causas possíveis, e uma
+     *    única request **não** distingue as duas — o que distingue é a taxa.
+     *    Sustentado em quase toda request significa que o `real_ip_header` da borda
+     *    não está sendo aplicado, ou seja estamos gravando o IP da **borda da
+     *    Cloudflare** no lugar do cliente; esse é o modo de falha SILENCIOSO, porque
+     *    o IP da borda é público e escapa da checagem de IP privado acima.
+     *    Esporádico significa um cliente forjando o header (o caso de ir direto na
+     *    origem, pulando a Cloudflare) — aí a resolução está **correta** e o aviso é
+     *    só informativo. Comparar contra o header dispensa manter uma cópia das
+     *    faixas da CF aqui: quando a borda está correta, os dois valores são
+     *    idênticos por construção.
      *
      * @param  Request  $request  A request atual.
      * @param  string  $ip  O IP já resolvido.
@@ -102,7 +107,7 @@ class ClientIpResolver
             AppLogger::event('app', 'warning', 'ip.edge_chain_mismatch', [
                 'resolved_ip' => $ip,
                 'cf_connecting_ip' => $cfConnectingIp,
-                'hint' => 'real_ip_header nao aplicado na borda: provavel gravacao do IP da cloudflare',
+                'hint' => 'em quase toda request = real_ip_header nao aplicado na borda (gravando IP da cloudflare); esporadico = cliente forjando o header, resolucao esta correta',
             ]);
         }
     }

@@ -67,11 +67,12 @@ class LinkHealthCheckJob implements ShouldQueue
         AppLogger::jobStarted(static::class);
 
         try {
-            [$checked, $errors] = $this->checkActiveLinks();
+            [$checked, $errors, $unknown] = $this->checkActiveLinks();
 
             AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
                 'checked' => $checked,
                 'errors' => $errors,
+                'unknown' => $unknown,
             ]);
         } catch (\Throwable $e) {
             AppLogger::jobFailed(static::class, $e, $this->attempts());
@@ -80,37 +81,64 @@ class LinkHealthCheckJob implements ShouldQueue
     }
 
     /**
-     * Runs the HEAD check over every active link and persists the health columns.
+     * User-Agent identificável. O default do Guzzle (`GuzzleHttp/7`) leva 403 de
+     * proteção anti-bot em vários destinos legítimos — sympla.com.br era um.
+     */
+    private const PROBE_USER_AGENT = 'Mozilla/5.0 (compatible; LinkChartsHealthBot/1.0; +https://linkcharts.com.br)';
+
+    /** Intervalo mínimo entre duas requisições ao MESMO host, em microssegundos. */
+    private const MIN_HOST_INTERVAL_MICROS = 500000;
+
+    /**
+     * Constrói o client HTTP usado para sondar os destinos.
      *
-     * @return array{0:int,1:int} Tuple of [links checked, links flagged as 'error'].
+     * Seam deliberadamente `protected`: o client não pode ser propriedade do job
+     * (ele precisa continuar serializável para a fila), então é aqui que os testes
+     * injetam respostas pré-programadas.
+     *
+     * @return Client O client configurado.
+     */
+    protected function httpClient(): Client
+    {
+        return new Client([
+            'timeout' => 10,
+            'connect_timeout' => 5,
+            'allow_redirects' => ['max' => 5],
+            'http_errors' => false,
+            'headers' => [
+                'User-Agent' => self::PROBE_USER_AGENT,
+                'Accept' => '*/*',
+            ],
+        ]);
+    }
+
+    /**
+     * Sonda todos os links ativos e persiste as colunas de saúde.
+     *
+     * @return array{0:int,1:int,2:int} Tupla [checados, marcados 'error', marcados 'unknown'].
      */
     private function checkActiveLinks(): array
     {
-        $http = new Client([
-            'timeout' => 5,
-            'connect_timeout' => 3,
-            'allow_redirects' => ['max' => 5],
-            'http_errors' => false,
-        ]);
+        $http = $this->httpClient();
 
         $checked = 0;
         $errors = 0;
+        $unknown = 0;
+        $lastRequestAt = [];
 
         Link::where('is_active', true)
             ->select(['id', 'original_url'])
-            ->chunk(50, function ($links) use ($http, &$checked, &$errors) {
+            ->chunk(50, function ($links) use ($http, &$checked, &$errors, &$unknown, &$lastRequestAt) {
                 foreach ($links as $link) {
-                    try {
-                        $response = $http->head($link->original_url);
-                        $code = $response->getStatusCode();
-                        $status = ($code >= 200 && $code < 400) ? 'ok' : 'error';
-                    } catch (\Exception $e) {
-                        $status = 'error';
-                    }
+                    $this->throttlePerHost($link->original_url, $lastRequestAt);
+
+                    $status = $this->probe($http, $link->original_url);
 
                     $checked++;
                     if ($status === 'error') {
                         $errors++;
+                    } elseif ($status === 'unknown') {
+                        $unknown++;
                     }
 
                     DB::table('links')
@@ -122,6 +150,74 @@ class LinkHealthCheckJob implements ShouldQueue
                 }
             });
 
-        return [$checked, $errors];
+        return [$checked, $errors, $unknown];
+    }
+
+    /**
+     * Classifica a saúde de um destino.
+     *
+     * Regra central: **'error' só quando o destino respondeu ativamente com erro.**
+     * Tudo que é ambíguo vira 'unknown', porque afirmar "link quebrado" sem
+     * evidência é pior que não afirmar nada — antes desta regra, ~23% dos links
+     * ativos apareciam como quebrados estando vivos.
+     *
+     * @param  Client  $http  Client já configurado.
+     * @param  string  $url  URL de destino a sondar.
+     * @return string 'ok' | 'error' | 'unknown'
+     */
+    private function probe(Client $http, string $url): string
+    {
+        try {
+            $code = $http->head($url)->getStatusCode();
+
+            // Muitos hosts não suportam HEAD (405) ou bloqueiam bots só nele (403).
+            // Um GET desfaz o falso-positivo. 429 não é retentado: já é limite.
+            if ($code >= 400 && $code !== 429) {
+                $code = $http->get($url)->getStatusCode();
+            }
+        } catch (\Throwable $e) {
+            // Não alcançamos o destino daqui. Pode ser link morto, mas também pode
+            // ser o host bloqueando o IP do droplet (anatel.com.br fazia isso) ou
+            // timeout. Sem resposta, não afirmamos nada.
+            return 'unknown';
+        }
+
+        if ($code >= 200 && $code < 400) {
+            return 'ok';
+        }
+
+        // 429 = o destino nos limitou, não diz nada sobre o link.
+        return $code === 429 ? 'unknown' : 'error';
+    }
+
+    /**
+     * Espaça requisições ao mesmo host.
+     *
+     * O job varre em ordem de id, e links do mesmo host tendem a ser criados
+     * juntos — então sem espaçamento ele martela o mesmo destino em sequência e
+     * toma 429. Foi o que aconteceu com os 9 links de chat.whatsapp.com.
+     *
+     * @param  string  $url  URL do destino a sondar.
+     * @param  array<string, float>  $lastRequestAt  Mapa host => timestamp da última requisição.
+     */
+    private function throttlePerHost(string $url, array &$lastRequestAt): void
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return;
+        }
+
+        $previous = $lastRequestAt[$host] ?? null;
+
+        if ($previous !== null) {
+            $elapsedMicros = (microtime(true) - $previous) * 1000000;
+
+            if ($elapsedMicros < self::MIN_HOST_INTERVAL_MICROS) {
+                usleep((int) (self::MIN_HOST_INTERVAL_MICROS - $elapsedMicros));
+            }
+        }
+
+        $lastRequestAt[$host] = microtime(true);
     }
 }
