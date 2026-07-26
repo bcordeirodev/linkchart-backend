@@ -323,12 +323,7 @@ class LinkTrackingService
      */
     public function resolveRealUserIP(Request $request): string
     {
-        return $this->clientIpResolver->resolve([
-            ClientIpResolver::SOURCE_QUERY_PARAM => $request->query('real_ip'),
-            ClientIpResolver::SOURCE_X_REAL_IP => $request->header('X-Real-IP'),
-            ClientIpResolver::SOURCE_X_FORWARDED_FOR => $request->header('X-Forwarded-For'),
-            ClientIpResolver::SOURCE_CF_CONNECTING_IP => $request->header('CF-Connecting-IP'),
-        ], $request->ip() ?: '127.0.0.1');
+        return $this->clientIpResolver->fromRequest($request);
     }
 
     private function extractUtm(array $queryParams, ?string $referer): array
