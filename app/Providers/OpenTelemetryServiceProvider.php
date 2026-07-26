@@ -66,6 +66,16 @@ class OpenTelemetryServiceProvider extends ServiceProvider
             ResourceAttributes::SERVICE_VERSION => config('otel.service_version'),
             // sem-conv v1.38+ renamed DEPLOYMENT_ENVIRONMENT to DEPLOYMENT_ENVIRONMENT_NAME.
             ResourceAttributes::DEPLOYMENT_ENVIRONMENT_NAME => config('otel.environment'),
+            // Stable per-CONTAINER instance id (container hostname), overriding the
+            // SDK's ServiceInstance detector, which generates a random UUID PER
+            // PROCESS. With per-process ids, every php-fpm worker and every
+            // queue:work respawn (--max-time=3600) becomes a distinct stream in
+            // Alloy's deltatocumulative; Grafana Cloud then drops the id, so all
+            // streams collapse into ONE Mimir series that never accumulates —
+            // sparse counters (hourly LinkHealthCheckJob) get stuck at 1 and
+            // increase() reads 0 forever. One id per container = one stream whose
+            // deltas sum correctly across all processes in it.
+            'service.instance.id' => gethostname() ?: 'unknown',
         ])));
 
         $clock = Clock::getDefault();
