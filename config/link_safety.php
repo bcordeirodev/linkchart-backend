@@ -91,4 +91,40 @@ return [
     */
     'allowed_hosts' => [],
 
+    /*
+    | Rule C — encurtadores encadeados.
+    |
+    | Quando o destino é um destes hosts, a verificação resolve a cadeia de
+    | redirects e checa TAMBÉM a URL final. Sem isso, as duas camadas analisam o
+    | encurtador intermediário — que é sempre limpo — e nunca o destino real.
+    |
+    | Por que uma lista e não "resolver sempre": resolver toda URL enviada
+    | transformaria a criação de link (endpoint público, sem autenticação) num
+    | buscador de URL arbitrária, ou seja uma superfície de SSRF nova, e somaria
+    | latência ao caminho do usuário em 100% dos casos para cobrir uma fração.
+    | Limitação aceita, igual à da lista de marcas: um encurtador fora da lista
+    | ainda passa. Estender a partir de sinais de produção.
+    |
+    | Casa host exato ou subdomínio. Inclui os nossos próprios domínios porque já
+    | existem cadeias internas em produção (thyqic → ochncy → e2vkdm → usqacg).
+    */
+    'shortener_hosts' => [
+        'bit.ly',
+        'tinyurl.com',
+        't.co',
+        'goo.gl',
+        'ow.ly',
+        'is.gd',
+        'buff.ly',
+        'rebrand.ly',
+        'cutt.ly',
+        'encurtador.com.br',
+        's.gy',
+        'shre.ink',
+        '5664.in',
+        'shorturl.at',
+        'linktr.ee',
+        'linkcharts.com.br',
+    ],
+
 ];

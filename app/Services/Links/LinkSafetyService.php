@@ -69,6 +69,28 @@ class LinkSafetyService
             return ['safe' => false, 'threats' => ['conteúdo suspeito'], 'api_available' => true];
         }
 
+        // Layer 3 — encurtador encadeado. Verificar só a URL enviada faria as duas
+        // camadas analisarem o intermediário — que é sempre limpo — e nunca o
+        // destino real. Roda DEPOIS da heurística, de propósito: uma URL que já foi
+        // reprovada não deve gerar requisição de saída nenhuma.
+        $urls = [$url];
+
+        if ($this->isKnownShortener($url)) {
+            $final = $this->resolveFinalUrl($url);
+
+            if ($final !== null && $final !== $url) {
+                $urls[] = $final;
+                $reasons = $this->heuristicReasons($final);
+
+                if (! empty($reasons)) {
+                    AppLogger::safetyUrlBlockedHeuristic($final, $reasons);
+                    Otel::recordSafetyCheck('flagged');
+
+                    return ['safe' => false, 'threats' => ['conteúdo suspeito'], 'api_available' => true];
+                }
+            }
+        }
+
         // Layer 4 — Google Safe Browsing (unchanged).
         $apiKey = config('services.google_safe_browsing.key');
 
@@ -89,7 +111,9 @@ class LinkSafetyService
                     'threatTypes' => self::THREAT_TYPES,
                     'platformTypes' => ['ANY_PLATFORM'],
                     'threatEntryTypes' => ['URL'],
-                    'threatEntries' => [['url' => $url]],
+                    // A API aceita várias entradas por request, então a cadeia
+                    // inteira é verificada numa única chamada.
+                    'threatEntries' => array_map(fn (string $candidate) => ['url' => $candidate], $urls),
                 ],
             ]);
 
@@ -124,6 +148,77 @@ class LinkSafetyService
             Otel::recordSafetyCheck('unavailable');
 
             return ['safe' => true, 'threats' => [], 'api_available' => false];
+        }
+    }
+
+    /**
+     * Indica se o host da URL é um encurtador conhecido (host exato ou subdomínio).
+     *
+     * O gate existe para não transformar a criação de link num buscador de URL
+     * arbitrária — ver a justificativa em config/link_safety.php.
+     *
+     * @param  string  $url  A URL enviada.
+     * @return bool True quando vale resolver a cadeia.
+     */
+    private function isKnownShortener(string $url): bool
+    {
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+
+        if ($host === '') {
+            return false;
+        }
+
+        foreach ((array) config('link_safety.shortener_hosts', []) as $shortener) {
+            $shortener = strtolower((string) $shortener);
+
+            if ($host === $shortener || str_ends_with($host, '.'.$shortener)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Resolve o destino final de uma cadeia de redirects.
+     *
+     * Faz um HEAD com timeout curto e devolve o último salto. **Fail-open por
+     * desenho**: qualquer falha devolve null e a verificação segue apenas com a URL
+     * enviada — este código roda num caminho de usuário (criação de link), e não
+     * deve introduzir um novo modo de falha bloqueante.
+     *
+     * Seam `protected` para os testes não dependerem de rede.
+     *
+     * Nota: isto faz o servidor buscar uma URL fornecida pelo usuário, mas apenas
+     * lê a *URL* final — nunca o corpo — e o app já faz buscas assim em
+     * LinkPreviewService e LinkHealthCheckJob, então não amplia a superfície.
+     *
+     * @param  string  $url  A URL enviada.
+     * @return string|null O destino final, ou null quando não há redirect ou a
+     *                     resolução falhou.
+     */
+    protected function resolveFinalUrl(string $url): ?string
+    {
+        try {
+            $response = Http::withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (compatible; LinkChartsSafetyBot/1.0; +https://linkcharts.com.br)',
+            ])
+                ->connectTimeout(2)
+                ->timeout(3)
+                ->withOptions(['allow_redirects' => ['max' => 5, 'track_redirects' => true]])
+                ->head($url);
+
+            $history = trim((string) $response->header('X-Guzzle-Redirect-History'));
+
+            if ($history === '') {
+                return null;
+            }
+
+            $hops = array_values(array_filter(array_map('trim', explode(',', $history))));
+
+            return $hops === [] ? null : end($hops);
+        } catch (\Throwable $e) {
+            return null;
         }
     }
 
