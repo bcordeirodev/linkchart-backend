@@ -39,7 +39,8 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // 360 > o $timeout de 300s do LinkHealthCheckJob. Ver a nota em 'redis'.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 360),
             'after_commit' => false,
         ],
 
@@ -47,7 +48,8 @@ return [
             'driver' => 'beanstalkd',
             'host' => env('BEANSTALKD_QUEUE_HOST', 'localhost'),
             'queue' => env('BEANSTALKD_QUEUE', 'default'),
-            'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 90),
+            // 360 > o $timeout de 300s do LinkHealthCheckJob. Ver a nota em 'redis'.
+            'retry_after' => (int) env('BEANSTALKD_QUEUE_RETRY_AFTER', 360),
             'block_for' => 0,
             'after_commit' => false,
         ],
@@ -67,7 +69,20 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            // Conexão usada em produção (QUEUE_CONNECTION=redis).
+            //
+            // `retry_after` TEM que ser maior que o $timeout do job mais longo desta
+            // conexão — hoje o LinkHealthCheckJob, com 300s. Se for menor, a fila
+            // devolve o job enquanto ele ainda está rodando, um segundo worker o
+            // pega, e com `tries = 1` isso estoura em MaxAttemptsExceededException:
+            // trabalho duplicado e erro em produção, com o job na verdade tendo
+            // concluído com sucesso. `->withoutOverlapping()` no scheduler não
+            // protege disso — ele impede o scheduler de despachar duas vezes, não a
+            // fila de reentregar.
+            //
+            // O default era 90s, e a varredura de saúde levava ~87s: falhava de
+            // forma intermitente. Guardado por tests/Unit/QueueRetryAfterSafetyTest.
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 360),
             'block_for' => null,
             'after_commit' => false,
         ],
