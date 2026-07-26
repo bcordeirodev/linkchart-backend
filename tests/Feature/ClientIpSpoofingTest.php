@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\TrustProxies;
+use App\Support\ClientIpResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
@@ -89,5 +91,78 @@ class ClientIpSpoofingTest extends TestCase
         $second = $limiter($through('1.2.3.4, 203.0.113.99'));
 
         $this->assertNotSame($first->key, $second->key);
+    }
+
+    public function test_from_request_returns_the_trusted_client_ip(): void
+    {
+        $request = $this->requestThroughProxy('1.2.3.4, 203.0.113.10');
+        (new TrustProxies)->handle($request, fn () => new Response);
+
+        $this->assertSame('203.0.113.10', (new ClientIpResolver)->fromRequest($request));
+    }
+
+    public function test_from_request_honours_real_ip_override_outside_production(): void
+    {
+        config(['app.env' => 'local']);
+        $request = Request::create('/?real_ip=198.51.100.7', 'GET', [], [], [], [
+            'REMOTE_ADDR' => '172.19.0.1',
+        ]);
+
+        $this->assertSame('198.51.100.7', (new ClientIpResolver)->fromRequest($request));
+    }
+
+    public function test_from_request_ignores_real_ip_override_in_production(): void
+    {
+        config(['app.env' => 'production']);
+        $request = $this->requestThroughProxy('203.0.113.10');
+        $request->query->set('real_ip', '198.51.100.7');
+        (new TrustProxies)->handle($request, fn () => new Response);
+
+        $this->assertSame('203.0.113.10', (new ClientIpResolver)->fromRequest($request));
+    }
+
+    /**
+     * Modo de falha SILENCIOSO: se o real_ip_header da borda não estiver ativo, o IP
+     * resolvido passa a ser a borda da Cloudflare — que é público e portanto escapa
+     * da checagem de IP privado. Comparar contra o CF-Connecting-IP é o que denuncia.
+     */
+    public function test_warns_when_resolved_ip_disagrees_with_cf_connecting_ip(): void
+    {
+        config(['app.env' => 'production']);
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('warning')
+            ->once()
+            ->withArgs(fn (string $message, array $context) => $message === 'ip.edge_chain_mismatch'
+                && $context['resolved_ip'] === '203.0.113.10'
+                && $context['cf_connecting_ip'] === '198.51.100.7');
+
+        $request = $this->requestThroughProxy('203.0.113.10');
+        $request->headers->set('CF-Connecting-IP', '198.51.100.7');
+        (new TrustProxies)->handle($request, fn () => new Response);
+
+        $this->assertSame('203.0.113.10', (new ClientIpResolver)->fromRequest($request));
+    }
+
+    public function test_does_not_warn_when_edge_chain_is_consistent(): void
+    {
+        config(['app.env' => 'production']);
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('warning')->never();
+
+        $request = $this->requestThroughProxy('203.0.113.10');
+        $request->headers->set('CF-Connecting-IP', '203.0.113.10');
+        (new TrustProxies)->handle($request, fn () => new Response);
+
+        $this->assertSame('203.0.113.10', (new ClientIpResolver)->fromRequest($request));
+    }
+
+    public function test_is_public_ip_rejects_private_and_reserved_ranges(): void
+    {
+        $resolver = new ClientIpResolver;
+
+        $this->assertTrue($resolver->isPublicIp('203.0.113.10'));
+        $this->assertFalse($resolver->isPublicIp('172.19.0.1'));
+        $this->assertFalse($resolver->isPublicIp('127.0.0.1'));
+        $this->assertFalse($resolver->isPublicIp('nao-e-ip'));
     }
 }
