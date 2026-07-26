@@ -6,47 +6,30 @@ use Illuminate\Http\Middleware\TrustProxies as Middleware;
 use Illuminate\Http\Request;
 
 /**
- * Restrict proxy trust to Cloudflare IP ranges only.
+ * Declara como proxy confiável apenas o espaço de endereços das bridges do Docker.
  *
- * Using '*' would allow any client to spoof X-Forwarded-For and bypass
- * per-IP rate limiters. Since all traffic passes through Cloudflare,
- * REMOTE_ADDR will always be a Cloudflare IP — restricting here is safe.
+ * A validação de procedência do IP do cliente é feita **na borda**, pelo Nginx do
+ * host (`real_ip_header CF-Connecting-IP` restrito às faixas da Cloudflare, em
+ * /etc/nginx/conf.d/cloudflare-realip.conf). O Nginx acrescenta o IP verdadeiro à
+ * direita do X-Forwarded-For; confiando na bridge, o Symfony caminha a cadeia da
+ * direita para a esquerda, descarta o salto confiável e devolve esse IP — de modo
+ * que um token forjado pelo cliente à esquerda é ignorado.
  *
- * IP ranges: https://www.cloudflare.com/ips-v4 and /ips-v6
- * Update these if Cloudflare publishes new ranges.
+ * Confiar num /12 em vez de um gateway fixo é deliberado: a aplicação é alcançável
+ * por mais de uma rede Docker (172.18.x e 172.19.x aparecem nos logs de produção) e
+ * subnets de bridge são reatribuídas quando uma rede é recriada. Isso não afrouxa a
+ * segurança — só um peer dentro do Docker consegue apresentar origem nessa faixa, e
+ * entre o Nginx e o PHP não existe nada além do Docker.
+ *
+ * @see docs/superpowers/specs/2026-07-25-ip-resolution-anti-abuse-design.md
  */
 class TrustProxies extends Middleware
 {
     /**
-     * Cloudflare IPv4 + IPv6 ranges (last updated 2026-05-27).
-     *
      * @var array<int, string>|string|null
      */
     protected $proxies = [
-        // IPv4
-        '173.245.48.0/20',
-        '103.21.244.0/22',
-        '103.22.200.0/22',
-        '103.31.4.0/22',
-        '141.101.64.0/18',
-        '108.162.192.0/18',
-        '190.93.240.0/20',
-        '188.114.96.0/20',
-        '197.234.240.0/22',
-        '198.41.128.0/17',
-        '162.158.0.0/15',
-        '104.16.0.0/13',
-        '104.24.0.0/14',
-        '172.64.0.0/13',
-        '131.0.72.0/22',
-        // IPv6
-        '2400:cb00::/32',
-        '2606:4700::/32',
-        '2803:f800::/32',
-        '2405:b500::/32',
-        '2405:8100::/32',
-        '2a06:98c0::/29',
-        '2c0f:f248::/32',
+        '172.16.0.0/12',
     ];
 
     /**
@@ -58,24 +41,4 @@ class TrustProxies extends Middleware
         Request::HEADER_X_FORWARDED_PORT |
         Request::HEADER_X_FORWARDED_PROTO |
         Request::HEADER_X_FORWARDED_PREFIX;
-
-    /**
-     * Determine if the request should be trusted.
-     *
-     * Custom logic:
-     * - Always trust in development
-     * - In production, validate proxy origin
-     */
-    protected function shouldTrustRequest(Request $request): bool
-    {
-        // In development, always trust
-        if (config('app.env') === 'local' || config('app.env') === 'development') {
-            return true;
-        }
-
-        // In production, validate if request has valid proxy headers
-        return $request->hasHeader('X-Forwarded-For') ||
-               $request->hasHeader('X-Real-IP') ||
-               $request->hasHeader('CF-Connecting-IP'); // Cloudflare
-    }
 }
