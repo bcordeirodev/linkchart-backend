@@ -385,34 +385,10 @@ class RedirectMetricsCollector
      */
     private function getRealUserIP(Request $request): string
     {
-        return $this->clientIpResolver->resolve([
-            ClientIpResolver::SOURCE_QUERY_PARAM => $request->query('real_ip'),
-            ClientIpResolver::SOURCE_X_REAL_IP => $request->header('X-Real-IP'),
-            ClientIpResolver::SOURCE_X_FORWARDED_FOR => $request->header('X-Forwarded-For'),
-            ClientIpResolver::SOURCE_CF_CONNECTING_IP => $request->header('CF-Connecting-IP'),
-        ], $request->ip() ?: '127.0.0.1', $this->logResolvedIp(...));
-    }
+        $ip = $this->clientIpResolver->fromRequest($request);
 
-    /**
-     * Emits the per-source debug log for a resolved client IP, preserving the
-     * original event names and context fields of this middleware.
-     *
-     * @param  string  $source  The winning source label (a ClientIpResolver::SOURCE_* constant).
-     * @param  string  $ip  The resolved IP address.
-     * @param  array<string, mixed>  $context  Extra context (e.g. the full X-Forwarded-For chain).
-     */
-    private function logResolvedIp(string $source, string $ip, array $context): void
-    {
-        $events = [
-            ClientIpResolver::SOURCE_QUERY_PARAM => ['redirect_metrics.ip_captured_query_param', ['source' => 'query_param']],
-            ClientIpResolver::SOURCE_X_REAL_IP => ['redirect_metrics.ip_captured_x_real_ip', ['source' => 'X-Real-IP']],
-            ClientIpResolver::SOURCE_X_FORWARDED_FOR => ['redirect_metrics.ip_captured_x_forwarded_for', ['source' => 'X-Forwarded-For', 'full_chain' => $context['full_chain'] ?? null]],
-            ClientIpResolver::SOURCE_CF_CONNECTING_IP => ['redirect_metrics.ip_captured_cf_connecting_ip', ['source' => 'Cloudflare']],
-            ClientIpResolver::SOURCE_FALLBACK => ['redirect_metrics.ip_fallback', ['source' => 'request->ip()', 'warning' => 'This might be proxy IP, not real user IP']],
-        ];
+        AppLogger::event('redirect', 'debug', 'redirect_metrics.ip_resolved', ['ip' => $ip]);
 
-        [$event, $extra] = $events[$source];
-
-        AppLogger::event('redirect', 'debug', $event, ['ip' => $ip] + $extra);
+        return $ip;
     }
 }

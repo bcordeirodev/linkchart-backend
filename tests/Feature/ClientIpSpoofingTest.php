@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Http\Middleware\TrustProxies;
+use App\Jobs\ProcessLinkClickJob;
 use App\Support\ClientIpResolver;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
+use Tests\Concerns\CreatesTestLinks;
 use Tests\TestCase;
 
 /**
@@ -23,6 +27,10 @@ use Tests\TestCase;
  */
 class ClientIpSpoofingTest extends TestCase
 {
+    use CreatesTestLinks, RefreshDatabase;
+
+    private const HUMAN_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
     /**
      * Request::setTrustedProxies() é estático, então o estado vaza entre testes no
      * mesmo processo do PHPUnit. Sem este reset, um teste posterior que dependa de
@@ -164,5 +172,28 @@ class ClientIpSpoofingTest extends TestCase
         $this->assertFalse($resolver->isPublicIp('172.19.0.1'));
         $this->assertFalse($resolver->isPublicIp('127.0.0.1'));
         $this->assertFalse($resolver->isPublicIp('nao-e-ip'));
+    }
+
+    /**
+     * O teste que fecha o buraco: em produção, uma request com X-Forwarded-For
+     * forjado gravou o clique como 133.11.0.1 / country=Japan / city=Tokyo. O IP
+     * forjado é mantido aqui de propósito, para o teste ficar rastreável até o
+     * experimento que revelou a vulnerabilidade.
+     */
+    public function test_forged_x_forwarded_for_does_not_reach_the_tracked_click(): void
+    {
+        Queue::fake();
+        $link = $this->makeLink();
+
+        $this->call('GET', '/r/'.$link->slug, [], [], [], [
+            'REMOTE_ADDR' => '172.19.0.1',
+            'HTTP_X_FORWARDED_FOR' => '133.11.0.1, 203.0.113.10',
+            'HTTP_USER_AGENT' => self::HUMAN_UA,
+        ]);
+
+        Queue::assertPushed(
+            ProcessLinkClickJob::class,
+            fn (ProcessLinkClickJob $job) => $job->payload['ip'] === '203.0.113.10'
+        );
     }
 }
