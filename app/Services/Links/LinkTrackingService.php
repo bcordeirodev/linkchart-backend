@@ -305,18 +305,12 @@ class LinkTrackingService
      * The Job has no access to the Request object, so this must be called
      * synchronously in RedirectController::dispatchTracking() before queuing.
      *
-     * Priority chain (first valid public IP wins):
-     *   1. ?real_ip query parameter (dev/proxy override)
-     *   2. X-Real-IP header (nginx proxy)
-     *   3. X-Forwarded-For header, first token (CDN/load balancer)
-     *   4. CF-Connecting-IP header (Cloudflare)
-     *   5. Request::ip() fallback (or '127.0.0.1' when that is also empty)
-     *
-     * In production, private/reserved ranges are excluded via FILTER_FLAG_NO_PRIV_RANGE
-     * | FILTER_FLAG_NO_RES_RANGE — this prevents internal proxy IPs from being stored.
-     *
-     * Delegates the actual precedence/validation logic to the shared ClientIpResolver
-     * (single source of truth, also used by RedirectMetricsCollector).
+     * Delega no ClientIpResolver (única fonte de verdade, também usado pelo
+     * RedirectMetricsCollector), que devolve `$request->ip()` — autoritativo porque a
+     * procedência é validada na borda pelo Nginx do host. Não existe mais cadeia de
+     * precedência de headers aqui: a antiga confiava no primeiro token do
+     * X-Forwarded-For, que é controlado pelo cliente e permitia forjar o IP e o geo
+     * do clique.
      *
      * @param  Request  $request  The current HTTP request.
      * @return string A valid IP address string.
