@@ -2027,7 +2027,7 @@
         "/change-password": {
             "put": {
                 "operationId": "auth.changePassword",
-                "description": "Verify the current password and replace it with a new one.\n\nMiddleware: api.auth:api, verified\nAuth: required (JWT + verified email)\nOwner check: no (operates on the authenticated user's own record)\n\nResponse shape: { success, message } (200)\n                { error, message } on wrong current password (422)\n                { error, message, errors } on validation failure (422)\n                { error, message, error_id } on server error (500)",
+                "description": "Verify the current password and replace it with a new one.\n\nStamps users.password_changed_at, which invalidates every previously\nissued JWT (ApiAuthenticate compares the `pwd_ts` claim against it) \u2014\nincluding the very token that authenticated this request. So the user\ndoes not get logged out mid-session, the response carries a freshly\nminted JWT and re-sets the httpOnly auth_token cookie, following the\nsame pattern as auth0Exchange (see makeAuthCookie / AUTH_COOKIE).\n\nMiddleware: api.auth:api, verified\nAuth: required (JWT + verified email)\nOwner check: no (operates on the authenticated user's own record)\n\nResponse shape: { success, message, token } (200, + auth_token cookie)\n                { error, message } on wrong current password (422)\n                { error, message, errors } on validation failure (422)\n                { error, message, error_id } on server error (500)",
                 "summary": "PUT /api/change-password",
                 "tags": [
                     "Auth"
@@ -2102,11 +2102,15 @@
                                         "message": {
                                             "type": "string",
                                             "const": "Senha alterada com sucesso"
+                                        },
+                                        "token": {
+                                            "type": "string"
                                         }
                                     },
                                     "required": [
                                         "success",
-                                        "message"
+                                        "message",
+                                        "token"
                                     ]
                                 }
                             }

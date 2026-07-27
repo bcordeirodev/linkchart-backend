@@ -6,6 +6,7 @@ use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class RecentClicksSeeder extends Seeder
 {
@@ -72,10 +73,10 @@ class RecentClicksSeeder extends Seeder
 
         $this->command->info("✅ Seeder concluído! Total de {$totalClicks} clicks recentes criados.");
 
-        // Atualizar contadores dos links
+        // Atualizar contadores dos links (query direta: `clicks` não é fillable)
         foreach ($userLinks as $link) {
             $clickCount = Click::where('link_id', $link->id)->count();
-            $link->update(['clicks' => $clickCount]);
+            DB::table('links')->where('id', $link->id)->update(['clicks' => $clickCount, 'updated_at' => now()]);
         }
 
         $this->command->info('✅ Contadores dos links atualizados!');

@@ -6,6 +6,7 @@ use App\Models\Click;
 use App\Models\Link;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class LinkThreeClicksSeeder extends Seeder
 {
@@ -213,8 +214,8 @@ class LinkThreeClicksSeeder extends Seeder
             Click::insert($clicks);
         }
 
-        // Atualizar contador de cliques no link
-        $link->update(['clicks' => 8500]);
+        // Atualizar contador de cliques no link (query direta: `clicks` não é fillable)
+        DB::table('links')->where('id', $link->id)->update(['clicks' => 8500, 'updated_at' => now()]);
 
         $this->command->info('🎉 8.500 clicks criados com sucesso!');
 

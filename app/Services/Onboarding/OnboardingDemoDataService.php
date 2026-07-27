@@ -6,6 +6,7 @@ use App\Models\Click;
 use App\Models\Link;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -250,12 +251,17 @@ class OnboardingDemoDataService
             'description' => 'This is a sample link created automatically so you can explore the full power of Link Charts analytics. The '.self::TOTAL_CLICKS.' clicks shown here are simulated data spread across '.self::DAYS_BACK.' days, covering multiple countries, devices, and traffic sources — exactly what your real links will look like after your audience starts clicking. Feel free to delete this link whenever you\'re ready.',
             'is_active' => true,
             'is_demo' => true,
-            'clicks' => 0,
         ]);
 
         $this->insertClicks($link->id);
 
-        $link->update(['clicks' => self::TOTAL_CLICKS]);
+        // `clicks` is a denormalised counter and is intentionally NOT fillable —
+        // it is always maintained via direct queries (same pattern as the
+        // redirect hot path), so update it bypassing mass assignment.
+        DB::table('links')->where('id', $link->id)->update([
+            'clicks' => self::TOTAL_CLICKS,
+            'updated_at' => now(),
+        ]);
     }
 
     private function generateUniqueSlug(): string

@@ -76,4 +76,21 @@ class SqlDateExpr
             ? "strftime('%Y-%m-%d', {$timestampColumn})"
             : "TO_CHAR({$timestampColumn}, 'YYYY-MM-DD')";
     }
+
+    /**
+     * Builds the calendar year-month (Y-M) formatting expression.
+     *
+     * Matches PHP's `Carbon::format('Y-m')` (zero-padded month), so SQL
+     * GROUP BY aggregations produce the same keys the previous in-memory
+     * aggregation produced.
+     *
+     * @param  string  $timestampColumn  Source timestamp column. Defaults to `created_at`.
+     * @return string Raw SQL fragment (no alias).
+     */
+    public static function yearMonth(string $timestampColumn = 'created_at'): string
+    {
+        return self::isSqlite()
+            ? "strftime('%Y-%m', {$timestampColumn})"
+            : "TO_CHAR({$timestampColumn}, 'YYYY-MM')";
+    }
 }

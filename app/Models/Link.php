@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\Cache;
  * the denormalised `clicks` counter is updated directly via DB::table()->increment()
  * (bypassing model events) to avoid cache churn.
  *
- * Fillable: id, slug, original_url, title, description, user_id, expires_at,
- *           starts_in, is_active, is_demo, clicks, click_limit, utm_source,
- *           utm_medium, utm_campaign, utm_term, utm_content, created_at,
- *           updated_at, health_status, health_checked_at, short_domain.
+ * Fillable: slug, original_url, title, description, user_id, expires_at,
+ *           starts_in, is_active, is_demo, click_limit, utm_source,
+ *           utm_medium, utm_campaign, utm_term, utm_content, health_status,
+ *           health_checked_at, short_domain. (id, clicks and the timestamps
+ *           are intentionally NOT fillable — see $fillable PHPDoc.)
  *
  * Casts: expires_at → datetime, starts_in → datetime, is_active → boolean,
  *        is_demo → boolean, health_checked_at → datetime.
@@ -68,8 +69,22 @@ class Link extends Model
 
     public const CACHE_TTL_SECONDS = 600;
 
+    /**
+     * Mass-assignable attributes.
+     *
+     * Deliberately excluded: `id` (auto-increment PK), `clicks` (denormalised
+     * counter maintained exclusively via direct `DB::table()->increment()` /
+     * `->update()` queries) and `created_at`/`updated_at` (managed by Eloquent
+     * timestamps). None of them has a legitimate mass-assignment path, and
+     * keeping them fillable would let a forged payload overwrite them.
+     *
+     * `user_id` IS fillable on purpose: CreateLinkDTO / CreatePublicLinkDTO
+     * pass it through LinkRepository::create(); it is derived from the
+     * authenticated user upstream, never from raw client input.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
-        'id',
         'slug',
         'original_url',
         'title',
@@ -79,15 +94,12 @@ class Link extends Model
         'starts_in',
         'is_active',
         'is_demo',
-        'clicks',
         'click_limit',
         'utm_source',
         'utm_medium',
         'utm_campaign',
         'utm_term',
         'utm_content',
-        'created_at',
-        'updated_at',
         'health_status',
         'health_checked_at',
         'short_domain',
