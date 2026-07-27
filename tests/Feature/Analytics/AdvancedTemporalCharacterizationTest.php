@@ -40,12 +40,23 @@ class AdvancedTemporalCharacterizationTest extends TestCase
 
     private TemporalAnalyticsService $service;
 
+    /** Carbon locale ativo antes do teste, restaurado no tearDown. */
+    private string $previousCarbonLocale;
+
     /** {@inheritDoc} */
     protected function setUp(): void
     {
         parent::setUp();
 
         Carbon::setTestNow('2026-07-15 12:00:00');
+
+        // Ambiente hostil de propósito: pt_BR começa a semana no DOMINGO no
+        // CLDR. O payload não pode depender do locale global do processo —
+        // no CI o locale vaza como pt_BR e semanas derivadas de
+        // startOfWeek() sem argumento deslocam -1 (regressão real de
+        // 2026-07-27). O snapshot é a convenção ISO (segunda-feira).
+        $this->previousCarbonLocale = Carbon::getLocale();
+        Carbon::setLocale('pt_BR');
 
         $user = User::factory()->create(['email_verified_at' => now()]);
         $this->link = Link::factory()->create(['user_id' => $user->id]);
@@ -55,6 +66,7 @@ class AdvancedTemporalCharacterizationTest extends TestCase
     /** {@inheritDoc} */
     protected function tearDown(): void
     {
+        Carbon::setLocale($this->previousCarbonLocale);
         Carbon::setTestNow();
 
         parent::tearDown();

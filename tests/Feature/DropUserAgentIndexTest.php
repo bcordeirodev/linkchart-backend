@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -16,21 +16,31 @@ use Tests\TestCase;
  * amplification on the click-insert hot path (user_agent is up to 1024 chars),
  * so a later migration drops it. This test proves the drop migration ran and
  * keeps anyone from resurrecting the index without a query that needs it.
+ *
+ * Introspection goes through Schema::getIndexes(), which is driver-agnostic —
+ * the suite runs on SQLite locally and on PostgreSQL in CI, and a raw
+ * `sqlite_master` query errors out under pgsql.
  */
 class DropUserAgentIndexTest extends TestCase
 {
     use RefreshDatabase;
 
     /**
+     * Index names of the `clicks` table under the current connection driver.
+     *
+     * @return \Illuminate\Support\Collection<int, string>
+     */
+    private function clickIndexNames(): \Illuminate\Support\Collection
+    {
+        return collect(Schema::getIndexes('clicks'))->pluck('name');
+    }
+
+    /**
      * After running all migrations the dead index must not exist.
      */
     public function test_idx_clicks_user_agent_does_not_exist(): void
     {
-        $indexes = collect(DB::select(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'clicks'"
-        ))->pluck('name');
-
-        $this->assertNotContains('idx_clicks_user_agent', $indexes);
+        $this->assertNotContains('idx_clicks_user_agent', $this->clickIndexNames());
     }
 
     /**
@@ -38,9 +48,7 @@ class DropUserAgentIndexTest extends TestCase
      */
     public function test_sibling_clicks_indexes_still_exist(): void
     {
-        $indexes = collect(DB::select(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'clicks'"
-        ))->pluck('name');
+        $indexes = $this->clickIndexNames();
 
         $this->assertContains('idx_clicks_link_date', $indexes);
         $this->assertContains('idx_clicks_geo', $indexes);

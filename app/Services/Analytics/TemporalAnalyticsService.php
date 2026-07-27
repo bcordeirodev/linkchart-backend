@@ -316,6 +316,12 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * 3.46, and PHP's key uses the *calendar* year of the Monday, not the ISO
      * year). Memory is O(distinct days), not O(clicks).
      *
+     * The week start is pinned to MONDAY explicitly: `startOfWeek()` without
+     * an argument inherits the process-global Carbon locale (pt_BR = Sunday),
+     * which shifted every key by -1 week whenever any earlier code path had
+     * set the locale. Monday is the only convention consistent with `W`
+     * (ISO-8601 week number), and makes the payload environment-independent.
+     *
      * @param  int  $linkId  Link primary key.
      * @param  AnalyticsFilters  $filters  Applied filter state.
      * @param  string  $segment  Segment constraint passed to baseQuery.
@@ -332,7 +338,7 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
 
         $weekly = [];
         foreach ($rows as $row) {
-            $w = Carbon::parse($row->date)->startOfWeek()->format('Y-W');
+            $w = Carbon::parse($row->date)->startOfWeek(Carbon::MONDAY)->format('Y-W');
             $weekly[$w] = ($weekly[$w] ?? 0) + (int) $row->clicks;
         }
         ksort($weekly);
