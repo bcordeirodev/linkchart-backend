@@ -54,6 +54,13 @@ Route::prefix('public')->controller(PublicLinkController::class)->group(function
 
 // Página pública "link-in-bio" — consumida diretamente pelo frontend Next, sem
 // autenticação. Nunca expõe user_id/email/original_url (ver PublicBioController).
+//
+// by-subdomain/{subdomain} é registrada ANTES de {handle} para não ser
+// engolida pelo parâmetro de handle — ver PublicBioController::showBySubdomain
+// e BioPagePublicBySubdomainTest (prova que ambas respondem corretamente,
+// inclusive quando uma bio tem handle literalmente "by-subdomain").
+Route::get('/public/bio/by-subdomain/{subdomain}', [PublicBioController::class, 'showBySubdomain'])
+    ->middleware('throttle:public-bio');
 Route::get('/public/bio/{handle}', [PublicBioController::class, 'show'])
     ->middleware('throttle:public-bio');
 

@@ -36,21 +36,25 @@ class BioPageService implements BioPageServiceInterface
             return null;
         }
 
-        $items = $page->items()->where('is_active', true)->with('link')->get();
+        return $this->formatPublic($page);
+    }
 
-        return [
-            'handle' => $page->handle,
-            'title' => $page->title,
-            'bio' => $page->bio,
-            'theme' => $page->theme,
-            'avatar_url' => $page->avatar_url,
-            'url' => $this->computeUrl($page),
-            'items' => $items->map(fn ($item) => [
-                'id' => $item->id,
-                'label' => $item->label,
-                'url' => $item->link->getShortedUrl(),
-            ])->values()->all(),
-        ];
+    /**
+     * {@inheritDoc}
+     */
+    public function getPublicBySubdomain(string $subdomain): ?array
+    {
+        $sub = UserSubdomain::where('subdomain', strtolower($subdomain))->where('status', 'active')->first();
+        if (! $sub) {
+            return null;
+        }
+
+        $page = BioPage::where('subdomain_id', $sub->id)->where('is_active', true)->first();
+        if (! $page) {
+            return null;
+        }
+
+        return $this->formatPublic($page);
     }
 
     /**
@@ -68,10 +72,28 @@ class BioPageService implements BioPageServiceInterface
      */
     public function upsert(int $userId, array $data): array
     {
-        $handle = strtolower($data['handle']);
-
         $page = BioPage::where('user_id', $userId)->first();
         $isNew = $page === null;
+
+        // Must run BEFORE $page is replaced with a new instance below (for
+        // $isNew) — the check needs the EXISTING row's current subdomain_id
+        // to tell a legacy page apart from one that already has an
+        // association. Throws before any mutation, so a rejected request
+        // never touches the DB.
+        $this->assertSubdomainProvidedWhenRequired($page, $isNew, $data);
+
+        // Subdomain-first: o editor nao envia handle. Criacao deriva do label
+        // do subdominio associado (com sufixo em colisao/reservado); update
+        // sem handle mantem o atual — nunca re-deriva, nem quando o
+        // subdominio troca. Handle explicito (API) segue aceito.
+        if (array_key_exists('handle', $data)) {
+            $handle = strtolower($data['handle']);
+        } elseif ($isNew) {
+            $handle = $this->deriveHandleFromSubdomain($userId, $data);
+        } else {
+            $handle = $page->handle;
+        }
+
         $handleChanged = ! $isNew && $page->handle !== $handle;
 
         if ($isNew) {
@@ -89,24 +111,24 @@ class BioPageService implements BioPageServiceInterface
         // subdomain_id is handled outside fill()/$fillable on purpose — it
         // goes through ownership/active-status validation, never blind mass
         // assignment. Absent from $data: leave the current association (if
-        // any) untouched. Present as null: explicitly detach. Present as an
-        // int: must be an ACTIVE subdomain owned by $userId, mirroring
-        // LinkService::resolveShortDomain()'s check for links.
+        // any) untouched — assertSubdomainProvidedWhenRequired() above
+        // already guarantees that's only reachable when one already exists.
+        // Present as an int: must be an ACTIVE subdomain owned by $userId,
+        // mirroring LinkService::resolveShortDomain()'s check for links.
+        // Present as `null` never reaches here — rejected above; the bio
+        // page's subdomain, once required, can no longer be detached via
+        // update, only replaced with another active one.
         if (array_key_exists('subdomain_id', $data)) {
-            if ($data['subdomain_id'] === null) {
-                $page->subdomain_id = null;
-            } else {
-                $sub = UserSubdomain::where('id', $data['subdomain_id'])
-                    ->where('user_id', $userId)
-                    ->where('status', 'active')
-                    ->first();
+            $sub = UserSubdomain::where('id', $data['subdomain_id'])
+                ->where('user_id', $userId)
+                ->where('status', 'active')
+                ->first();
 
-                if ($sub === null) {
-                    throw new \InvalidArgumentException('Subdomínio inválido, inativo ou não pertence ao usuário.');
-                }
-
-                $page->subdomain_id = $sub->id;
+            if ($sub === null) {
+                throw new \InvalidArgumentException('Subdomínio inválido, inativo ou não pertence ao usuário.');
             }
+
+            $page->subdomain_id = $sub->id;
         }
 
         $page->save();
@@ -126,6 +148,115 @@ class BioPageService implements BioPageServiceInterface
         }
 
         return $this->formatManagement($page->fresh());
+    }
+
+    /**
+     * Deriva um handle livre a partir do label do subdominio associado.
+     *
+     * Base = label do subdominio (ja lowercase). Se a base for invalida no
+     * formato de handle, estiver na blocklist (`config('bio.reserved_handles')`)
+     * ou ja pertencer a OUTRO usuario, tenta `{base}-1`, `{base}-2`, ...
+     * truncando a base quando preciso para caber no limite de 30 chars.
+     *
+     * @param  int  $userId  Dono da pagina.
+     * @param  array<string, mixed>  $data  Payload validado do upsert (subdomain_id garantido presente na criacao).
+     * @return string Handle livre e valido.
+     *
+     * @throws \InvalidArgumentException Se o subdominio nao for ativo/do usuario.
+     */
+    private function deriveHandleFromSubdomain(int $userId, array $data): string
+    {
+        $sub = UserSubdomain::where('id', $data['subdomain_id'] ?? 0)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->first();
+
+        if ($sub === null) {
+            throw new \InvalidArgumentException('Subdomínio inválido, inativo ou não pertence ao usuário.');
+        }
+
+        $base = strtolower($sub->subdomain);
+
+        if ($this->handleUsable($base, $userId)) {
+            return $base;
+        }
+
+        for ($n = 1; $n < 100; $n++) {
+            $suffix = '-'.$n;
+            $candidate = substr($base, 0, 30 - strlen($suffix)).$suffix;
+
+            if ($this->handleUsable($candidate, $userId)) {
+                return $candidate;
+            }
+        }
+
+        throw new \InvalidArgumentException('Não foi possível derivar um identificador livre para a página.');
+    }
+
+    /**
+     * Um candidato a handle e utilizavel: formato valido, fora da blocklist e
+     * nao pertencente a outro usuario.
+     */
+    private function handleUsable(string $candidate, int $userId): bool
+    {
+        if (! preg_match('/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/', $candidate)) {
+            return false;
+        }
+
+        if (in_array($candidate, config('bio.reserved_handles', []), true)) {
+            return false;
+        }
+
+        return ! BioPage::where('handle', $candidate)
+            ->where('user_id', '<>', $userId)
+            ->exists();
+    }
+
+    /**
+     * Enforce the product rule that every bio page must have an associated
+     * subdomain — the subdomain IS the page's identity (decision recorded
+     * 2026-07-27). `bio_pages.subdomain_id` stays nullable in the schema
+     * (pre-existing/legacy pages may still lack one), but {@see self::upsert()}
+     * never lets a request through that would create or knowingly re-save a
+     * page without one:
+     *
+     *   - CREATE ($isNew true): `subdomain_id` must be present and non-null.
+     *   - UPDATE, `subdomain_id` explicitly sent as `null`: always rejected —
+     *     detaching the subdomain via update is no longer allowed.
+     *   - UPDATE, `subdomain_id` absent from the payload: the "leave the
+     *     current association untouched" convenience only applies once the
+     *     page already has one — a legacy page (`$page->subdomain_id` still
+     *     null) must supply one on its very next save.
+     *   - UPDATE, `subdomain_id` absent, page already has an association:
+     *     allowed — see {@see self::upsert()}'s own handling right after this
+     *     call, which leaves `$page->subdomain_id` untouched in that case.
+     *
+     * @param  ?BioPage  $page  For updates: the EXISTING row fetched from the
+     *                          DB before any fill() — its current
+     *                          `subdomain_id` is what determines "legacy".
+     *                          Null (and ignored) for creates.
+     * @param  bool  $isNew  Whether {@see self::upsert()} is about to create a
+     *                       brand-new bio page for this user.
+     * @param  array<string, mixed>  $data  Validated request payload.
+     *
+     * @throws \InvalidArgumentException When the rule above is violated —
+     *                                   message surfaced as 422 by
+     *                                   {@see \App\Http\Controllers\Bio\BioPageController::upsert()}.
+     */
+    private function assertSubdomainProvidedWhenRequired(?BioPage $page, bool $isNew, array $data): void
+    {
+        $hasKey = array_key_exists('subdomain_id', $data);
+        $value = $hasKey ? $data['subdomain_id'] : null;
+
+        $violates = $isNew
+            ? $value === null
+            : (($hasKey && $value === null) || (! $hasKey && $page?->subdomain_id === null));
+
+        if ($violates) {
+            throw new \InvalidArgumentException(
+                'Sua página precisa de um endereço personalizado. Associe um subdomínio ativo para continuar.'
+            );
+        }
     }
 
     /**
@@ -370,6 +501,35 @@ class BioPageService implements BioPageServiceInterface
         }
 
         return '/@'.$page->handle;
+    }
+
+    /**
+     * Build the public-shape array for a bio page — shared by
+     * {@see self::getPublicByHandle()} and {@see self::getPublicBySubdomain()}
+     * so both lookup paths return byte-identical shapes for the same page.
+     *
+     * Only active items are included. Never exposes `user_id`,
+     * `subdomain_id`, `link_id`, or `original_url` — see PublicBioController.
+     *
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}
+     */
+    private function formatPublic(BioPage $page): array
+    {
+        $items = $page->items()->where('is_active', true)->with('link')->get();
+
+        return [
+            'handle' => $page->handle,
+            'title' => $page->title,
+            'bio' => $page->bio,
+            'theme' => $page->theme,
+            'avatar_url' => $page->avatar_url,
+            'url' => $this->computeUrl($page),
+            'items' => $items->map(fn ($item) => [
+                'id' => $item->id,
+                'label' => $item->label,
+                'url' => $item->link->getShortedUrl(),
+            ])->values()->all(),
+        ];
     }
 
     /**

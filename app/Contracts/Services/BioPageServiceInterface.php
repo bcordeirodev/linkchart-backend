@@ -35,6 +35,22 @@ interface BioPageServiceInterface
     public function getPublicByHandle(string $handle): ?array;
 
     /**
+     * Return the public shape of an active bio page by the subdomain label
+     * it's associated with, or null when: the subdomain does not exist, the
+     * subdomain is not active, the subdomain has no associated bio page
+     * (`bio_pages.subdomain_id`), or that bio page is inactive.
+     *
+     * Identical response shape to {@see self::getPublicByHandle()} — the
+     * frontend renders the bio page directly on the subdomain's own host
+     * (e.g. `bruno.linkcharts.com.br`), so it needs to resolve by subdomain
+     * label instead of by the bio page's own handle. See PublicBioController.
+     *
+     * @param  string  $subdomain  Subdomain label (case-insensitive), e.g. "bruno".
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}|null
+     */
+    public function getPublicBySubdomain(string $subdomain): ?array;
+
+    /**
      * Return the authenticated user's bio page in the management shape, or
      * null if they haven't created one yet.
      *
@@ -49,19 +65,27 @@ interface BioPageServiceInterface
      * subsequent call updates the existing row (upsert — never a second
      * insert, since `bio_pages.user_id` is unique).
      *
-     * `subdomain_id` has three distinct behaviours based on presence in
-     * `$data` (see {@see \App\Http\Requests\Bio\UpsertBioPageRequest}):
-     *   - absent: the current association (if any) is left untouched.
-     *   - present as `null`: removes the association.
-     *   - present as an int: must reference an ACTIVE `user_subdomains` row
-     *     owned by `$userId` (mirrors {@see \App\Services\Links\LinkService::resolveShortDomain()}'s
+     * A subdomain association is now MANDATORY — the subdomain IS the page's
+     * identity (decision recorded 2026-07-27). `subdomain_id`'s behaviour
+     * based on presence in `$data` (see {@see \App\Http\Requests\Bio\UpsertBioPageRequest}):
+     *   - CREATE: must be present as an int; absent or `null` throws.
+     *   - UPDATE, present as `null`: always throws — detaching the subdomain
+     *     via update is no longer allowed.
+     *   - UPDATE, absent: the current association is left untouched — UNLESS
+     *     the existing page is legacy (its `subdomain_id` is still null, from
+     *     before this rule existed), in which case this also throws, forcing
+     *     the migration on the owner's very next save.
+     *   - present as an int (create or update): must reference an ACTIVE
+     *     `user_subdomains` row owned by `$userId` (mirrors
+     *     {@see \App\Services\Links\LinkService::resolveShortDomain()}'s
      *     check), otherwise throws.
      *
      * @param  array{handle: string, title: string, bio?: ?string, theme?: ?string, is_active?: ?bool, subdomain_id?: ?int}  $data  Validated input (see UpsertBioPageRequest).
      * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
      *
-     * @throws \InvalidArgumentException When `subdomain_id` is present and not an
-     *                                   active subdomain owned by `$userId`.
+     * @throws \InvalidArgumentException When the subdomain requirement above is
+     *                                   violated, or `subdomain_id` is present and
+     *                                   not an active subdomain owned by `$userId`.
      */
     public function upsert(int $userId, array $data): array;
 

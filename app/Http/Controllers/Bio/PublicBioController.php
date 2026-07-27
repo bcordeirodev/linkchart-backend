@@ -20,6 +20,11 @@ use Illuminate\Routing\Controller;
  * is the computed shareable address — the associated subdomain's root when
  * one is set, otherwise a path-based fallback; see BioPageService::computeUrl().
  *
+ * Also owns GET /api/public/bio/by-subdomain/{subdomain} — same response
+ * shape, resolved by subdomain label instead of handle; used when the
+ * frontend renders the bio page directly on the subdomain's own host (see
+ * {@see self::showBySubdomain()} and BioPageServiceInterface::getPublicBySubdomain).
+ *
  * Also owns GET / (root, no slug) on subdomain hosts — see
  * {@see self::redirectFromSubdomainRoot()} — registered in routes/web.php,
  * not routes/api.php, since it competes with the plain root path.
@@ -66,6 +71,57 @@ class PublicBioController extends Controller
         } catch (\Exception $e) {
             AppLogger::event('app', 'error', 'bio.public_lookup_failed', [
                 'handle' => $handle,
+                'error' => $e->getMessage(),
+            ]);
+
+            $body = ['message' => 'Erro ao buscar página bio.'];
+            if (config('app.debug')) {
+                $body['detail'] = $e->getMessage();
+            }
+
+            return response()->json($body, 500);
+        }
+    }
+
+    /**
+     * GET /api/public/bio/by-subdomain/{subdomain}
+     *
+     * Same as {@see self::show()} but resolves by the subdomain LABEL
+     * instead of the bio page's own handle — used when the frontend renders
+     * the bio page directly on the subdomain's own host (e.g.
+     * `bruno.linkcharts.com.br`), so it never sees the handle to look up by.
+     *
+     * 404 when: the subdomain does not exist, the subdomain is not active,
+     * the subdomain has no associated bio page (`bio_pages.subdomain_id`),
+     * or that bio page is inactive.
+     *
+     * Registered BEFORE `/public/bio/{handle}` in routes/api.php so this
+     * more specific two-segment route is matched first; see BioPagePublicBySubdomainTest
+     * for a test proving both routes respond correctly, including the
+     * sharpest collision case (a bio page whose handle literally IS
+     * "by-subdomain").
+     *
+     * Middleware: throttle:public-bio (same limiter as show())
+     * Auth: none
+     *
+     * Response shape: identical envelope/shape to show():
+     *   { data: { handle, title, bio, theme, avatar_url, url, items: [{ id, label, url }] } }
+     *
+     * @param  string  $subdomain  Subdomain label from the URL path (case-insensitive).
+     */
+    public function showBySubdomain(string $subdomain): JsonResponse
+    {
+        try {
+            $page = $this->bioPageService->getPublicBySubdomain($subdomain);
+
+            if (! $page) {
+                return response()->json(['message' => 'Página não encontrada.'], 404);
+            }
+
+            return response()->json(['data' => $page]);
+        } catch (\Exception $e) {
+            AppLogger::event('app', 'error', 'bio.public_lookup_by_subdomain_failed', [
+                'subdomain' => $subdomain,
                 'error' => $e->getMessage(),
             ]);
 
