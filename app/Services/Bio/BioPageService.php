@@ -7,6 +7,7 @@ use App\Logging\AppLogger;
 use App\Models\BioPage;
 use App\Models\BioPageItem;
 use App\Models\Link;
+use App\Models\UserSubdomain;
 
 /**
  * Business-logic layer for the "link-in-bio" module.
@@ -39,6 +40,7 @@ class BioPageService implements BioPageServiceInterface
             'title' => $page->title,
             'bio' => $page->bio,
             'theme' => $page->theme,
+            'url' => $this->computeUrl($page),
             'items' => $items->map(fn ($item) => [
                 'id' => $item->id,
                 'label' => $item->label,
@@ -79,6 +81,30 @@ class BioPageService implements BioPageServiceInterface
             'theme' => $data['theme'] ?? ($page->theme ?? 'dark'),
             'is_active' => array_key_exists('is_active', $data) ? (bool) $data['is_active'] : ($page->is_active ?? true),
         ]);
+
+        // subdomain_id is handled outside fill()/$fillable on purpose — it
+        // goes through ownership/active-status validation, never blind mass
+        // assignment. Absent from $data: leave the current association (if
+        // any) untouched. Present as null: explicitly detach. Present as an
+        // int: must be an ACTIVE subdomain owned by $userId, mirroring
+        // LinkService::resolveShortDomain()'s check for links.
+        if (array_key_exists('subdomain_id', $data)) {
+            if ($data['subdomain_id'] === null) {
+                $page->subdomain_id = null;
+            } else {
+                $sub = UserSubdomain::where('id', $data['subdomain_id'])
+                    ->where('user_id', $userId)
+                    ->where('status', 'active')
+                    ->first();
+
+                if ($sub === null) {
+                    throw new \InvalidArgumentException('Subdomínio inválido, inativo ou não pertence ao usuário.');
+                }
+
+                $page->subdomain_id = $sub->id;
+            }
+        }
+
         $page->save();
 
         if ($isNew) {
@@ -219,6 +245,39 @@ class BioPageService implements BioPageServiceInterface
     }
 
     /**
+     * Compute the shareable URL for a bio page.
+     *
+     * Data relationship only (Option A of the bio<->subdomain integration):
+     * this does NOT make the subdomain root actually serve the bio page —
+     * that is a separate, explicitly-scoped follow-up. When an associated
+     * subdomain exists, returns its root address
+     * (`{scheme}://{subdomain}.{app.domain}`, scheme derived from
+     * `config('app.redirect_url')` the same way {@see \App\Models\Link::getShortedUrl()}
+     * does). Otherwise falls back to a path-based address (`/@{handle}`) for
+     * the frontend to route on its own domain.
+     *
+     * Note: this reads `subdomain_id` plus a `belongsTo` lookup, not the
+     * subdomain's `status` — a subdomain that was soft-released (status =
+     * inactive) via `/api/subdomains/{id}` while still linked here would
+     * still resolve to its root URL until the bio page itself is updated to
+     * clear or replace the association. Only a hard delete of the
+     * `user_subdomains` row (which nulls `subdomain_id` via `nullOnDelete()`)
+     * is covered automatically. Flagged as a known follow-up, not fixed here
+     * to stay within this change's scope.
+     */
+    private function computeUrl(BioPage $page): string
+    {
+        if ($page->subdomain_id !== null && $page->subdomain !== null) {
+            $redirectUrl = config('app.redirect_url', 'http://localhost:8000');
+            $scheme = parse_url($redirectUrl, PHP_URL_SCHEME) ?? 'https';
+
+            return "{$scheme}://{$page->subdomain->subdomain}.".config('app.domain');
+        }
+
+        return '/@'.$page->handle;
+    }
+
+    /**
      * Build the management-shape array for a single bio page item.
      *
      * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, url: string, clicks: int}
@@ -256,6 +315,8 @@ class BioPageService implements BioPageServiceInterface
             'bio' => $page->bio,
             'theme' => $page->theme,
             'is_active' => $page->is_active,
+            'subdomain_id' => $page->subdomain_id,
+            'url' => $this->computeUrl($page),
             'items' => $items->map(fn ($item) => [
                 'id' => $item->id,
                 'link_id' => $item->link_id,

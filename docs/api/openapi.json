@@ -2463,6 +2463,12 @@
                                                 "is_active": {
                                                     "type": "boolean"
                                                 },
+                                                "subdomain_id": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
@@ -2478,6 +2484,8 @@
                                                 "bio",
                                                 "theme",
                                                 "is_active",
+                                                "subdomain_id",
+                                                "url",
                                                 "items"
                                             ]
                                         }
@@ -2493,7 +2501,7 @@
             },
             "put": {
                 "operationId": "bioPage.upsert",
-                "description": "Create the authenticated user's bio page on first call, update it on\nevery subsequent call (upsert \u2014 `bio_pages.user_id` is unique, so this\nnever inserts a second row for the same user).\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nBody: { handle, title, bio?, theme?, is_active? } \u2014 see UpsertBioPageRequest.\nResponse shape: NormalizeApiResponse envelope: { data: BioPage }",
+                "description": "Create the authenticated user's bio page on first call, update it on\nevery subsequent call (upsert \u2014 `bio_pages.user_id` is unique, so this\nnever inserts a second row for the same user).\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nBody: { handle, title, bio?, theme?, is_active?, subdomain_id? } \u2014 see\nUpsertBioPageRequest. `subdomain_id` absent keeps the current\nassociation, `null` removes it, an int must be an active subdomain\nowned by the caller (422 otherwise \u2014 mirrors LinkService::resolveShortDomain).\nResponse shape: NormalizeApiResponse envelope: { data: BioPage } \u2014 includes\nthe computed `url` and, in this management shape, `subdomain_id`.",
                 "summary": "PUT /api/bio",
                 "tags": [
                     "BioPage"
@@ -2532,6 +2540,9 @@
                             }
                         }
                     },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
                     "200": {
                         "description": "",
                         "content": {
@@ -2560,6 +2571,12 @@
                                                 "is_active": {
                                                     "type": "boolean"
                                                 },
+                                                "subdomain_id": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
@@ -2575,6 +2592,8 @@
                                                 "bio",
                                                 "theme",
                                                 "is_active",
+                                                "subdomain_id",
+                                                "url",
                                                 "items"
                                             ]
                                         }
@@ -2585,9 +2604,6 @@
                                 }
                             }
                         }
-                    },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationException"
                     },
                     "403": {
                         "$ref": "#/components/responses/AuthorizationException"
@@ -2830,6 +2846,12 @@
                                                 "is_active": {
                                                     "type": "boolean"
                                                 },
+                                                "subdomain_id": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
@@ -2845,6 +2867,8 @@
                                                 "bio",
                                                 "theme",
                                                 "is_active",
+                                                "subdomain_id",
+                                                "url",
                                                 "items"
                                             ]
                                         }
@@ -4931,7 +4955,7 @@
         "/public/bio/{handle}": {
             "get": {
                 "operationId": "publicBio.show",
-                "description": "Return the public shape of an active bio page. 404 when the handle\ndoes not exist, the page is inactive, or (implicitly, since a handle\nonly exists once a page is created) the user never created one.\n\nMiddleware: throttle:public-bio\nAuth: none\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: { handle, title, bio, theme, items: [{ id, label, url }] } }",
+                "description": "Return the public shape of an active bio page. 404 when the handle\ndoes not exist, the page is inactive, or (implicitly, since a handle\nonly exists once a page is created) the user never created one.\n\nMiddleware: throttle:public-bio\nAuth: none\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: { handle, title, bio, theme, url, items: [{ id, label, url }] } }",
                 "summary": "GET /api/public/bio/{handle}",
                 "tags": [
                     "PublicBio"
@@ -4996,6 +5020,9 @@
                                                 "theme": {
                                                     "type": "string"
                                                 },
+                                                "url": {
+                                                    "type": "string"
+                                                },
                                                 "items": {
                                                     "type": "array",
                                                     "items": {
@@ -5024,6 +5051,7 @@
                                                 "title",
                                                 "bio",
                                                 "theme",
+                                                "url",
                                                 "items"
                                             ]
                                         }
@@ -7225,7 +7253,7 @@
             },
             "UpsertBioPageRequest": {
                 "type": "object",
-                "description": "Form Request for PUT /api/bio (create-or-update the authenticated user's\nbio page).\n\n`handle` is validated against the fixed format regex (3\u201330 chars,\nlowercase alnum with internal hyphens only), the {@see BioHandleNotReserved}\nblocklist, and global uniqueness \u2014 ignoring the authenticated user's own\nexisting row, so resubmitting an unchanged handle never trips the\nuniqueness check against itself.",
+                "description": "Form Request for PUT /api/bio (create-or-update the authenticated user's\nbio page).\n\n`handle` is validated against the fixed format regex (3\u201330 chars,\nlowercase alnum with internal hyphens only), the {@see BioHandleNotReserved}\nblocklist, and global uniqueness \u2014 ignoring the authenticated user's own\nexisting row, so resubmitting an unchanged handle never trips the\nuniqueness check against itself.\n\n`subdomain_id` only has its shape validated here (nullable integer).\nOwnership and active-status are business rules enforced in\n{@see \\App\\Services\\Bio\\BioPageService::upsert()}, mirroring how\n{@see \\App\\Services\\Links\\LinkService::resolveShortDomain()} validates the\nsame relationship for links \u2014 surfaced as 422 by the controller. The field\nis `sometimes`: absent from the payload leaves the current association\nuntouched; present as `null` explicitly removes it.",
                 "properties": {
                     "handle": {
                         "type": "string",
@@ -7255,6 +7283,12 @@
                     "is_active": {
                         "type": [
                             "boolean",
+                            "null"
+                        ]
+                    },
+                    "subdomain_id": {
+                        "type": [
+                            "integer",
                             "null"
                         ]
                     }

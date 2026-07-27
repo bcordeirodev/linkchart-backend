@@ -11,9 +11,11 @@ use Illuminate\Routing\Controller;
  * Public (unauthenticated) controller for the "link-in-bio" module.
  *
  * Owns GET /api/public/bio/{handle} — the endpoint the frontend's public
- * bio page fetches directly. Never exposes user_id, email, or
- * original_url; only handle/title/bio/theme and each active item's
- * id/label/short url (see BioPageServiceInterface::getPublicByHandle).
+ * bio page fetches directly. Never exposes user_id, subdomain_id, email, or
+ * original_url; only handle/title/bio/theme/url and each active item's
+ * id/label/short url (see BioPageServiceInterface::getPublicByHandle). `url`
+ * is the computed shareable address — the associated subdomain's root when
+ * one is set, otherwise a path-based fallback; see BioPageService::computeUrl().
  *
  * Middleware: throttle:public-bio (60/min per IP) — see routes/api.php.
  *
@@ -39,7 +41,7 @@ class PublicBioController extends Controller
      * Auth: none
      *
      * Response shape: NormalizeApiResponse envelope:
-     *   { data: { handle, title, bio, theme, items: [{ id, label, url }] } }
+     *   { data: { handle, title, bio, theme, url, items: [{ id, label, url }] } }
      *
      * @param  string  $handle  Bio page handle from the URL path (case-insensitive).
      */

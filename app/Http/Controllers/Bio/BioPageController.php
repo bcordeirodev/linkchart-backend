@@ -70,8 +70,12 @@ class BioPageController extends Controller
      * Middleware: api.auth:api, verified
      * Auth: required
      *
-     * Body: { handle, title, bio?, theme?, is_active? } — see UpsertBioPageRequest.
-     * Response shape: NormalizeApiResponse envelope: { data: BioPage }
+     * Body: { handle, title, bio?, theme?, is_active?, subdomain_id? } — see
+     * UpsertBioPageRequest. `subdomain_id` absent keeps the current
+     * association, `null` removes it, an int must be an active subdomain
+     * owned by the caller (422 otherwise — mirrors LinkService::resolveShortDomain).
+     * Response shape: NormalizeApiResponse envelope: { data: BioPage } — includes
+     * the computed `url` and, in this management shape, `subdomain_id`.
      *
      * @throws \Illuminate\Validation\ValidationException (handled by UpsertBioPageRequest)
      */
@@ -81,6 +85,11 @@ class BioPageController extends Controller
             $page = $this->bioPageService->upsert($request->user()->id, $request->validated());
 
             return response()->json(['data' => $page]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'Dados inválidos.',
+                'message' => $e->getMessage(),
+            ], 422);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao salvar página bio.', $e);
         }

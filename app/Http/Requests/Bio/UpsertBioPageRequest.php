@@ -17,6 +17,14 @@ use Illuminate\Validation\Rule;
  * blocklist, and global uniqueness — ignoring the authenticated user's own
  * existing row, so resubmitting an unchanged handle never trips the
  * uniqueness check against itself.
+ *
+ * `subdomain_id` only has its shape validated here (nullable integer).
+ * Ownership and active-status are business rules enforced in
+ * {@see \App\Services\Bio\BioPageService::upsert()}, mirroring how
+ * {@see \App\Services\Links\LinkService::resolveShortDomain()} validates the
+ * same relationship for links — surfaced as 422 by the controller. The field
+ * is `sometimes`: absent from the payload leaves the current association
+ * untouched; present as `null` explicitly removes it.
  */
 class UpsertBioPageRequest extends FormRequest
 {
@@ -45,6 +53,7 @@ class UpsertBioPageRequest extends FormRequest
             'bio' => ['nullable', 'string', 'max:280'],
             'theme' => ['nullable', Rule::in(['dark', 'light'])],
             'is_active' => ['nullable', 'boolean'],
+            'subdomain_id' => ['sometimes', 'nullable', 'integer'],
         ];
     }
 

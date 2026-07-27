@@ -20,6 +20,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @property int $id
  * @property int $user_id Owner; unique — one bio page per user (MVP).
+ * @property int|null $subdomain_id Optional link to one of the owner's active `user_subdomains` rows;
+ *                                  `nullOnDelete()` — released/deleted subdomains silently detach.
+ *                                  Data relationship only (Option A): does not make the subdomain
+ *                                  root serve the bio page; only feeds the computed `url` field
+ *                                  built by {@see \App\Services\Bio\BioPageService}.
  * @property string $handle Public URL slug, lowercase, 3–30 chars, globally unique.
  * @property string $title Display title shown at the top of the page.
  * @property string|null $bio Short free-text description, max 280 chars.
@@ -29,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\User $user Owning user.
+ * @property-read \App\Models\UserSubdomain|null $subdomain Associated subdomain, when set.
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\BioPageItem> $items Buttons on this page, ordered by position.
  */
 class BioPage extends Model
@@ -37,6 +43,11 @@ class BioPage extends Model
 
     /**
      * Mass-assignable attributes.
+     *
+     * `subdomain_id` is deliberately excluded — it goes through the
+     * ownership/active-status validation in
+     * {@see \App\Services\Bio\BioPageService::upsert()} and is set via
+     * direct attribute assignment there, never blind mass-assignment.
      *
      * @var array<int, string>
      */
@@ -60,6 +71,14 @@ class BioPage extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The subdomain associated with this bio page, if any (belongsTo UserSubdomain).
+     */
+    public function subdomain(): BelongsTo
+    {
+        return $this->belongsTo(UserSubdomain::class);
     }
 
     /**

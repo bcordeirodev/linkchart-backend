@@ -23,9 +23,13 @@ interface BioPageServiceInterface
      * when the handle does not exist or the page is inactive.
      *
      * Only active items are included, ordered by position. Never exposes
-     * `user_id`, `link_id`, or `original_url` — see PublicBioController.
+     * `user_id`, `subdomain_id`, `link_id`, or `original_url` — see
+     * PublicBioController. `url` is the computed shareable address: the
+     * associated subdomain's root when one is set
+     * (`https://{subdomain}.{app.domain}`), otherwise a path-based fallback
+     * (`/@{handle}`) — see BioPageService's `computeUrl()`.
      *
-     * @return array{handle: string, title: string, bio: ?string, theme: string, items: array<int, array{id: int, label: string, url: string}>}|null
+     * @return array{handle: string, title: string, bio: ?string, theme: string, url: string, items: array<int, array{id: int, label: string, url: string}>}|null
      */
     public function getPublicByHandle(string $handle): ?array;
 
@@ -33,7 +37,7 @@ interface BioPageServiceInterface
      * Return the authenticated user's bio page in the management shape, or
      * null if they haven't created one yet.
      *
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, items: array<int, array<string, mixed>>}|null
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}|null
      */
     public function getForUser(int $userId): ?array;
 
@@ -44,8 +48,19 @@ interface BioPageServiceInterface
      * subsequent call updates the existing row (upsert — never a second
      * insert, since `bio_pages.user_id` is unique).
      *
-     * @param  array{handle: string, title: string, bio?: ?string, theme?: ?string, is_active?: ?bool}  $data  Validated input (see UpsertBioPageRequest).
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, items: array<int, array<string, mixed>>}
+     * `subdomain_id` has three distinct behaviours based on presence in
+     * `$data` (see {@see \App\Http\Requests\Bio\UpsertBioPageRequest}):
+     *   - absent: the current association (if any) is left untouched.
+     *   - present as `null`: removes the association.
+     *   - present as an int: must reference an ACTIVE `user_subdomains` row
+     *     owned by `$userId` (mirrors {@see \App\Services\Links\LinkService::resolveShortDomain()}'s
+     *     check), otherwise throws.
+     *
+     * @param  array{handle: string, title: string, bio?: ?string, theme?: ?string, is_active?: ?bool, subdomain_id?: ?int}  $data  Validated input (see UpsertBioPageRequest).
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
+     *
+     * @throws \InvalidArgumentException When `subdomain_id` is present and not an
+     *                                   active subdomain owned by `$userId`.
      */
     public function upsert(int $userId, array $data): array;
 
@@ -101,7 +116,7 @@ interface BioPageServiceInterface
      * operation is rejected without applying any change.
      *
      * @param  array<int, int>  $ids  Full ordered list of the page's item ids.
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, items: array<int, array<string, mixed>>}
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
      *
      * @throws \InvalidArgumentException When the user has no bio page yet, or `$ids`
      *                                   does not exactly match the page's current item ids.
