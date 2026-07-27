@@ -9,12 +9,20 @@ use Illuminate\Support\Str;
 /**
  * A single-use token for e-mail verification or password reset.
  *
- * Tokens are SHA-256 hashes of a 60-character random string. Two token types
- * share this table, distinguished by the `type` column. On creation, any
- * existing unused tokens of the same type for the same e-mail are soft-invalidated
- * (marked used) before the new one is created. The record is associated with a
- * User via the e-mail address rather than a foreign key, because password reset
- * tokens may be created before login.
+ * SECURITY — hashed at rest: the raw token (a 64-char hex string) is generated
+ * at creation, exposed ONLY on the returned instance via {@see $plainTextToken}
+ * (so it can be embedded in the outgoing email), and never persisted. The
+ * `token` column stores sha256(raw) — a database leak therefore does not yield
+ * usable reset/verification links. Lookups hash the incoming raw token before
+ * comparing ({@see findValidToken}). Consequence: tokens issued before this
+ * hardening was deployed no longer validate (the stored value used to be the
+ * raw token); pending links die and the user simply requests a new one.
+ *
+ * Two token types share this table, distinguished by the `type` column. On
+ * creation, any existing unused tokens of the same type for the same e-mail
+ * are soft-invalidated (marked used) before the new one is created. The record
+ * is associated with a User via the e-mail address rather than a foreign key,
+ * because password reset tokens may be created before login.
  *
  * Fillable: email, token, type, expires_at, used, used_at, ip_address, user_agent.
  *
@@ -26,7 +34,7 @@ use Illuminate\Support\Str;
  *
  * @property int $id
  * @property string $email E-mail address the token was issued for (indexed).
- * @property string $token SHA-256 hex digest (64 chars, unique).
+ * @property string $token SHA-256 hex digest of the raw token (64 chars, unique). Never the raw token itself.
  * @property string $type Token purpose: 'email_verification' | 'password_reset'.
  * @property \Illuminate\Support\Carbon $expires_at Hard expiry timestamp; token is invalid after this.
  * @property bool $used True once the token has been consumed or superseded.
@@ -40,6 +48,17 @@ use Illuminate\Support\Str;
 class EmailVerificationToken extends Model
 {
     use HasFactory;
+
+    /**
+     * The raw (plain-text) token, available ONLY on the instance returned by
+     * {@see createEmailVerificationToken} / {@see createPasswordResetToken}.
+     *
+     * This is the value that goes into the email link; the database persists
+     * only sha256 of it (see the `token` column). Declared as a real class
+     * property (not an Eloquent attribute) so it can never be accidentally
+     * persisted or serialized into a response.
+     */
+    public ?string $plainTextToken = null;
 
     protected $fillable = [
         'email',
@@ -64,10 +83,11 @@ class EmailVerificationToken extends Model
     const TYPE_PASSWORD_RESET = 'password_reset';
 
     /**
-     * Generate a cryptographically safe token string.
+     * Generate a cryptographically safe RAW token string.
      *
-     * Returns a SHA-256 hex digest (64 chars) of 60 random bytes produced by
-     * Str::random(). Suitable for use as the unique `token` column value.
+     * Returns a 64-char hex string (SHA-256 digest of 60 chars of CSPRNG
+     * output from Str::random()). This is the value emailed to the user —
+     * the `token` column stores sha256 of it, never this value directly.
      */
     public static function generateToken(): string
     {
@@ -79,6 +99,9 @@ class EmailVerificationToken extends Model
      *
      * Any existing unused email_verification tokens for the same e-mail are
      * invalidated first. The new token expires in 24 hours.
+     *
+     * The returned instance carries the raw token in {@see $plainTextToken};
+     * the persisted `token` column holds only its sha256 digest.
      *
      * @param  string|null  $ipAddress  Client IP to record for audit purposes.
      * @param  string|null  $userAgent  Client User-Agent to record for audit purposes.
@@ -94,14 +117,20 @@ class EmailVerificationToken extends Model
             ->where('used', false)
             ->update(['used' => true, 'used_at' => now()]);
 
-        return self::create([
+        $plainTextToken = self::generateToken();
+
+        $token = self::create([
             'email' => $email,
-            'token' => self::generateToken(),
+            'token' => hash('sha256', $plainTextToken),
             'type' => self::TYPE_EMAIL_VERIFICATION,
             'expires_at' => now()->addHours(24), // 24 horas para verificação
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
         ]);
+
+        $token->plainTextToken = $plainTextToken;
+
+        return $token;
     }
 
     /**
@@ -109,6 +138,9 @@ class EmailVerificationToken extends Model
      *
      * Any existing unused password_reset tokens for the same e-mail are
      * invalidated first. The new token expires in 1 hour.
+     *
+     * The returned instance carries the raw token in {@see $plainTextToken};
+     * the persisted `token` column holds only its sha256 digest.
      *
      * @param  string|null  $ipAddress  Client IP to record for audit purposes.
      * @param  string|null  $userAgent  Client User-Agent to record for audit purposes.
@@ -124,14 +156,20 @@ class EmailVerificationToken extends Model
             ->where('used', false)
             ->update(['used' => true, 'used_at' => now()]);
 
-        return self::create([
+        $plainTextToken = self::generateToken();
+
+        $token = self::create([
             'email' => $email,
-            'token' => self::generateToken(),
+            'token' => hash('sha256', $plainTextToken),
             'type' => self::TYPE_PASSWORD_RESET,
             'expires_at' => now()->addHours(1), // 1 hora para reset de senha
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
         ]);
+
+        $token->plainTextToken = $plainTextToken;
+
+        return $token;
     }
 
     /**
@@ -146,16 +184,19 @@ class EmailVerificationToken extends Model
     }
 
     /**
-     * Find an unused, unexpired token matching the given hash and type.
+     * Find an unused, unexpired token matching the given RAW token and type.
      *
-     * Returns null if no matching valid token exists. Used by AuthController
-     * to verify incoming reset/verification requests.
+     * The incoming raw token (as received from the email link) is hashed with
+     * sha256 before comparison, because the `token` column stores only the
+     * digest. Returns null if no matching valid token exists. Used by
+     * EmailVerificationService to verify incoming reset/verification requests.
      *
+     * @param  string  $token  Raw token exactly as received from the user.
      * @param  string  $type  One of TYPE_EMAIL_VERIFICATION or TYPE_PASSWORD_RESET.
      */
     public static function findValidToken(string $token, string $type): ?self
     {
-        return self::where('token', $token)
+        return self::where('token', hash('sha256', $token))
             ->where('type', $type)
             ->where('used', false)
             ->where('expires_at', '>', now())

@@ -49,6 +49,56 @@ class ChangePasswordTest extends TestCase
     }
 
     /**
+     * SECURITY (hardening 2): changing the password must kill every JWT issued
+     * before the change, and — so the user doesn't get logged out mid-session —
+     * the response must carry a NEW working JWT, also re-set as the httpOnly
+     * auth_token cookie (same pattern as login/auth0-exchange).
+     */
+    public function test_change_password_invalidates_previous_jwt_and_returns_working_replacement(): void
+    {
+        $user = User::factory()->create(['email' => 'rotate@example.com']);
+
+        $oldToken = $this->postJson('/api/auth/login', [
+            'email' => 'rotate@example.com',
+            'password' => 'password',
+        ])->assertOk()->json('data.token');
+
+        $this->flushAuthState();
+        $change = $this->putJson('/api/change-password', [
+            'current_password' => 'password',
+            'new_password' => 'new-secret-123',
+            'new_password_confirmation' => 'new-secret-123',
+        ], ['Authorization' => "Bearer {$oldToken}"]);
+
+        $change->assertOk()
+            ->assertJsonPath('data.success', true)
+            ->assertJsonStructure(['data' => ['token']]);
+
+        $newToken = $change->json('data.token');
+        $this->assertNotSame($oldToken, $newToken);
+
+        // The replacement JWT is re-set as the httpOnly auth cookie so browser
+        // clients (which authenticate via the cookie) stay logged in.
+        $change->assertCookie('auth_token');
+        $cookie = $change->getCookie('auth_token', false); // raw JWT, not Laravel-encrypted
+        $this->assertNotNull($cookie);
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertSame($newToken, $cookie->getValue());
+
+        // The pre-change JWT is dead…
+        $this->flushAuthState();
+        $this->getJson('/api/me', ['Authorization' => "Bearer {$oldToken}"])
+            ->assertStatus(401)
+            ->assertJsonPath('error.code', 'UNAUTHENTICATED');
+
+        // …and the replacement authenticates normally.
+        $this->flushAuthState();
+        $this->getJson('/api/me', ['Authorization' => "Bearer {$newToken}"])
+            ->assertOk()
+            ->assertJsonPath('data.user.id', $user->id);
+    }
+
+    /**
      * A wrong current password is rejected with 422/INVALID_PASSWORD and the
      * stored password does not change.
      */

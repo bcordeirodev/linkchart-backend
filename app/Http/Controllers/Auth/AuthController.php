@@ -418,11 +418,18 @@ class AuthController extends Controller
      *
      * Verify the current password and replace it with a new one.
      *
+     * Stamps users.password_changed_at, which invalidates every previously
+     * issued JWT (ApiAuthenticate compares the `pwd_ts` claim against it) —
+     * including the very token that authenticated this request. So the user
+     * does not get logged out mid-session, the response carries a freshly
+     * minted JWT and re-sets the httpOnly auth_token cookie, following the
+     * same pattern as auth0Exchange (see makeAuthCookie / AUTH_COOKIE).
+     *
      * Middleware: api.auth:api, verified
      * Auth: required (JWT + verified email)
      * Owner check: no (operates on the authenticated user's own record)
      *
-     * Response shape: { success, message } (200)
+     * Response shape: { success, message, token } (200, + auth_token cookie)
      *                 { error, message } on wrong current password (422)
      *                 { error, message, errors } on validation failure (422)
      *                 { error, message, error_id } on server error (500)
@@ -455,15 +462,23 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            // Atualizar senha
+            // Atualizar senha. password_changed_at invalida todo JWT emitido
+            // antes deste instante (claim `pwd_ts` diverge no ApiAuthenticate).
             $user->update([
                 'password' => Hash::make($request->new_password),
+                'password_changed_at' => now(),
             ]);
+
+            // Rotaciona o JWT: o token que autenticou esta request acabou de
+            // morrer junto com todos os outros, então emite um novo (com o
+            // pwd_ts atualizado) e re-seta o cookie httpOnly para o browser.
+            $token = JWTAuth::fromUser($user);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Senha alterada com sucesso',
-            ]);
+                'token' => $token,
+            ])->withCookie($this->makeAuthCookie($token));
 
         } catch (\Exception $e) {
             AppLogger::authError('change_password', $e);

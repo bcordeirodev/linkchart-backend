@@ -17,9 +17,11 @@ use Tests\TestCase;
  * POST /api/resend-verification-email (JWT, throttle:resend-verification 5/min).
  *
  * Tokens are minted directly through EmailVerificationToken (the same code
- * path EmailVerificationService uses) — the token column holds the exact
- * string the user receives by email. EmailService is mocked for the resend
- * tests so nothing tries to reach SendGrid.
+ * path EmailVerificationService uses). Tokens are hashed at rest: the token
+ * column holds sha256(raw), so tests read the raw token from the transient
+ * $plainTextToken on the instance returned at creation — never from the
+ * database. EmailService is mocked for the resend tests so nothing tries to
+ * reach SendGrid.
  */
 class EmailVerificationTest extends TestCase
 {
@@ -49,7 +51,7 @@ class EmailVerificationTest extends TestCase
         $user = User::factory()->unverified()->create(['email' => 'verifyme@example.com']);
         $token = EmailVerificationToken::createEmailVerificationToken('verifyme@example.com');
 
-        $this->postJson('/api/auth/verify-email', ['token' => $token->token])
+        $this->postJson('/api/auth/verify-email', ['token' => $token->plainTextToken])
             ->assertOk()
             ->assertJsonPath('data.success', true)
             ->assertJsonPath('data.type', 'verified');
@@ -87,7 +89,7 @@ class EmailVerificationTest extends TestCase
         $token = EmailVerificationToken::createEmailVerificationToken('late@example.com');
         $token->update(['expires_at' => now()->subMinute()]);
 
-        $this->postJson('/api/auth/verify-email', ['token' => $token->token])
+        $this->postJson('/api/auth/verify-email', ['token' => $token->plainTextToken])
             ->assertStatus(400)
             ->assertJsonPath('error.details.type', 'invalid_token');
 
@@ -103,9 +105,9 @@ class EmailVerificationTest extends TestCase
         User::factory()->unverified()->create(['email' => 'once@example.com']);
         $token = EmailVerificationToken::createEmailVerificationToken('once@example.com');
 
-        $this->postJson('/api/auth/verify-email', ['token' => $token->token])->assertOk();
+        $this->postJson('/api/auth/verify-email', ['token' => $token->plainTextToken])->assertOk();
 
-        $this->postJson('/api/auth/verify-email', ['token' => $token->token])
+        $this->postJson('/api/auth/verify-email', ['token' => $token->plainTextToken])
             ->assertStatus(400)
             ->assertJsonPath('error.details.type', 'invalid_token');
     }
@@ -119,12 +121,35 @@ class EmailVerificationTest extends TestCase
         User::factory()->create(['email' => 'done@example.com']); // verified by default
         $token = EmailVerificationToken::createEmailVerificationToken('done@example.com');
 
-        $this->postJson('/api/auth/verify-email', ['token' => $token->token])
+        $this->postJson('/api/auth/verify-email', ['token' => $token->plainTextToken])
             ->assertOk()
             ->assertJsonPath('data.success', true)
             ->assertJsonPath('data.type', 'already_verified');
 
         $this->assertTrue($token->fresh()->used);
+    }
+
+    /**
+     * SECURITY (hardening 1): the verification token must be stored hashed
+     * (sha256) at rest — a database leak must not yield usable verification
+     * links. The raw token exists only on the instance returned at creation
+     * (and in the email); the persisted value is its sha256 digest, and the
+     * raw token still validates end to end.
+     */
+    public function test_verification_token_is_stored_hashed_at_rest(): void
+    {
+        User::factory()->unverified()->create(['email' => 'atrest@example.com']);
+        $token = EmailVerificationToken::createEmailVerificationToken('atrest@example.com');
+
+        $raw = $token->plainTextToken;
+        $this->assertNotNull($raw, 'create must expose the raw token on the returned instance');
+        $this->assertNotSame($raw, $token->fresh()->token, 'Raw token must never be persisted');
+        $this->assertSame(hash('sha256', $raw), $token->fresh()->token, 'Persisted token must be sha256(raw)');
+
+        // The raw token is the one that validates.
+        $this->postJson('/api/auth/verify-email', ['token' => $raw])
+            ->assertOk()
+            ->assertJsonPath('data.type', 'verified');
     }
 
     /**
