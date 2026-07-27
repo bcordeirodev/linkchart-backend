@@ -317,7 +317,7 @@ class AnalyticsController extends BaseController
      * Auth: required
      * Owner check: yes — uses findOwnedLink.
      *
-     * Response shape: raw JSON — not wrapped by NormalizeApiResponse.
+     * Response shape (wrapped in `data` by NormalizeApiResponse):
      *   Zero clicks: { has_sufficient_data: false, total_clicks: 0, link_info }
      *   With clicks:  { total_clicks, unique_visitors, avg_daily_clicks,
      *                   conversion_rate, clicks_over_time, clicks_by_country,
@@ -358,8 +358,10 @@ class AnalyticsController extends BaseController
             // Unique IPs for unique_visitors
             $uniqueVisitors = $base()->distinct('ip')->count('ip');
 
-            // avg_daily_clicks: total / days since creation (min 1)
-            $daysSinceCreated = max(1, now()->diffInDays($link->created_at));
+            // avg_daily_clicks: total / days since creation (min 1).
+            // Ordem passado->presente importa: no Carbon 3 diffInDays é
+            // assinado, e now()->diffInDays($passado) seria negativo.
+            $daysSinceCreated = max(1, (int) $link->created_at->diffInDays(now()));
             $avgDailyClicks = round($totalClicks / $daysSinceCreated, 1);
             $conversionRate = $uniqueVisitors > 0
                 ? round(($totalClicks / $uniqueVisitors) * 100, 1).'%'
