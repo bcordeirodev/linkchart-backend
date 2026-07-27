@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\V1\LinkController as V1LinkController;
 use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OnboardingController;
+use App\Http\Controllers\Bio\BioPageController;
+use App\Http\Controllers\Bio\PublicBioController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\TagController;
@@ -49,6 +51,11 @@ Route::prefix('public')->controller(PublicLinkController::class)->group(function
     Route::get('/links/suggest-slug', 'suggestSlug')->middleware('throttle:suggest-slug');   // Slug disponível resolvido server-side
     Route::get('/analytics/{slug}', 'basicAnalytics')->middleware('throttle:public-analytics'); // ✅ NOVO: Analytics básicos públicos
 });
+
+// Página pública "link-in-bio" — consumida diretamente pelo frontend Next, sem
+// autenticação. Nunca expõe user_id/email/original_url (ver PublicBioController).
+Route::get('/public/bio/{handle}', [PublicBioController::class, 'show'])
+    ->middleware('throttle:public-bio');
 
 /**
  * ==============================
@@ -170,6 +177,20 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         ->middleware('throttle:subdomain-claim');
     Route::delete('/subdomains/{id}', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'destroy'])
         ->whereNumber('id');
+
+    // === PÁGINA "LINK-IN-BIO" (gestão) ===
+    // Recurso singular por usuário (MVP: uma página por conta) — sem id
+    // numérico na URL, ao contrário de /links/{id}. Ver PublicBioController
+    // para o endpoint público correspondente (fora deste grupo autenticado).
+    Route::prefix('bio')->controller(BioPageController::class)->group(function () {
+        Route::get('/', 'show');
+        Route::put('/', 'upsert');
+        Route::get('/handle-available', 'handleAvailable')->middleware('throttle:bio-handle-check');
+        Route::post('/items', 'storeItem');
+        Route::put('/items-order', 'reorderItems');
+        Route::put('/items/{id}', 'updateItem')->whereNumber('id');
+        Route::delete('/items/{id}', 'destroyItem')->whereNumber('id');
+    });
 
     // Singulares — @deprecated, mantidos por um release (compat com frontend antigo
     // durante o deploy blue/green). check must be registered before the bare GET

@@ -2400,6 +2400,690 @@
                 }
             }
         },
+        "/bio": {
+            "get": {
+                "operationId": "bioPage.show",
+                "description": "Return the authenticated user's bio page, or null if they haven't\ncreated one yet.\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nResponse shape: NormalizeApiResponse envelope: { data: BioPage|null }",
+                "summary": "GET /api/bio",
+                "tags": [
+                    "BioPage"
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao buscar p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Explicit ['data' => null] (rather than response()->json(null)) so\nNormalizeApiResponse's array_key_exists('data', ...) branch keeps\nthe null value \u2014 mirrors SubdomainController::show().",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "additionalProperties": {}
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "is_active",
+                                                "items"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "operationId": "bioPage.upsert",
+                "description": "Create the authenticated user's bio page on first call, update it on\nevery subsequent call (upsert \u2014 `bio_pages.user_id` is unique, so this\nnever inserts a second row for the same user).\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nBody: { handle, title, bio?, theme?, is_active? } \u2014 see UpsertBioPageRequest.\nResponse shape: NormalizeApiResponse envelope: { data: BioPage }",
+                "summary": "PUT /api/bio",
+                "tags": [
+                    "BioPage"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpsertBioPageRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao salvar p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "additionalProperties": {}
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "is_active",
+                                                "items"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/bio/handle-available": {
+            "get": {
+                "operationId": "bioPage.handleAvailable",
+                "description": "Whether `handle` could be saved by the authenticated user right now.\nThe user's own current handle always counts as available (re-saving\nan unchanged handle must never report itself as taken).\n\nMiddleware: api.auth:api, verified\nAuth: required\nRate limit: throttle:bio-handle-check (30/min per user).\n\nResponse shape: NormalizeApiResponse envelope: { data: { available: bool } }",
+                "summary": "GET /api/bio/handle-available?handle=x",
+                "tags": [
+                    "BioPage"
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao verificar identificador."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "available": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "available"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/bio/items": {
+            "post": {
+                "operationId": "bioPage.storeItem",
+                "description": "Append a new button to the authenticated user's bio page, pointing at\none of their own existing shortened links.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 `link_id` must belong to the authenticated user\n(enforced in BioPageService::addItem, surfaced here as 422).\n\nBody: { link_id, label? } \u2014 see CreateBioPageItemRequest.\nResponse shape: NormalizeApiResponse envelope: { data: BioPageItem } (201)",
+                "summary": "POST /api/bio/items",
+                "tags": [
+                    "BioPage"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateBioPageItemRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao adicionar item \u00e0 p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "link_id": {
+                                                    "type": "integer"
+                                                },
+                                                "label": {
+                                                    "type": "string"
+                                                },
+                                                "position": {
+                                                    "type": "integer"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
+                                                "clicks": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "link_id",
+                                                "label",
+                                                "position",
+                                                "is_active",
+                                                "url",
+                                                "clicks"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/bio/items-order": {
+            "put": {
+                "operationId": "bioPage.reorderItems",
+                "description": "Reorder every button on the authenticated user's bio page. `ids` must\ncontain exactly the set of item ids currently on the page.\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nBody: { ids: number[] } \u2014 see ReorderBioPageItemsRequest.\nResponse shape: NormalizeApiResponse envelope: { data: BioPage }",
+                "summary": "PUT /api/bio/items-order",
+                "tags": [
+                    "BioPage"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReorderBioPageItemsRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao reordenar itens da p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "additionalProperties": {}
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "is_active",
+                                                "items"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/bio/items/{id}": {
+            "put": {
+                "operationId": "bioPage.updateItem",
+                "description": "Update a button on the authenticated user's bio page.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 the item's bio page must belong to the authenticated user.\n\nBody: { label?, is_active? } \u2014 see UpdateBioPageItemRequest.\nResponse shape: NormalizeApiResponse envelope: { data: BioPageItem }",
+                "summary": "PUT /api/bio/items/{id}",
+                "tags": [
+                    "BioPage"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric bio page item ID.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateBioPageItemRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao atualizar item da p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "link_id": {
+                                                    "type": "integer"
+                                                },
+                                                "label": {
+                                                    "type": "string"
+                                                },
+                                                "position": {
+                                                    "type": "integer"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
+                                                "clicks": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "link_id",
+                                                "label",
+                                                "position",
+                                                "is_active",
+                                                "url",
+                                                "clicks"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Item n\u00e3o encontrado ou sem permiss\u00e3o."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "bioPage.destroyItem",
+                "description": "Permanently remove a button from the authenticated user's bio page.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 the item's bio page must belong to the authenticated user.\n\nResponse shape: NormalizeApiResponse envelope: { data: { deleted: true } }",
+                "summary": "DELETE /api/bio/items/{id}",
+                "tags": [
+                    "BioPage"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric bio page item ID.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao remover item da p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "deleted": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "deleted"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Item n\u00e3o encontrado ou sem permiss\u00e3o."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/links": {
             "get": {
                 "operationId": "links.link.index",
@@ -4244,6 +4928,136 @@
                 }
             }
         },
+        "/public/bio/{handle}": {
+            "get": {
+                "operationId": "publicBio.show",
+                "description": "Return the public shape of an active bio page. 404 when the handle\ndoes not exist, the page is inactive, or (implicitly, since a handle\nonly exists once a page is created) the user never created one.\n\nMiddleware: throttle:public-bio\nAuth: none\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: { handle, title, bio, theme, items: [{ id, label, url }] } }",
+                "summary": "GET /api/public/bio/{handle}",
+                "tags": [
+                    "PublicBio"
+                ],
+                "parameters": [
+                    {
+                        "name": "handle",
+                        "in": "path",
+                        "required": true,
+                        "description": "Bio page handle from the URL path (case-insensitive).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao buscar p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "properties": {
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "url": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "label",
+                                                            "url"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "items"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "P\u00e1gina n\u00e3o encontrada."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
         "/public/shorten": {
             "post": {
                 "operationId": "publicLink.store",
@@ -5726,6 +6540,26 @@
             }
         },
         "schemas": {
+            "CreateBioPageItemRequest": {
+                "type": "object",
+                "description": "Form Request for POST /api/bio/items (add a button to the authenticated\nuser's bio page).\n\nOnly bounds the shape here \u2014 whether `link_id` belongs to the\nauthenticated user, whether their bio page exists yet, and the 20-item cap\nare all business rules enforced by {@see \\App\\Services\\Bio\\BioPageService::addItem()}\nand surfaced as 422 by the controller.",
+                "properties": {
+                    "link_id": {
+                        "type": "integer"
+                    },
+                    "label": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 255
+                    }
+                },
+                "required": [
+                    "link_id"
+                ],
+                "title": "CreateBioPageItemRequest"
+            },
             "CreateLinkRequest": {
                 "type": "object",
                 "description": "Form Request para cria\u00e7\u00e3o de links\n\nCentraliza todas as regras de valida\u00e7\u00e3o para cria\u00e7\u00e3o de links,\nseguindo o princ\u00edpio DRY e SRP.",
@@ -6121,6 +6955,23 @@
                 ],
                 "title": "PublicLinkResource"
             },
+            "ReorderBioPageItemsRequest": {
+                "type": "object",
+                "description": "Form Request for PUT /api/bio/items-order (reorder every button on the\nauthenticated user's bio page).\n\nOnly bounds the shape here \u2014 whether `ids` matches exactly the set of item\nids currently on the page is a business rule enforced by\n{@see \\App\\Services\\Bio\\BioPageService::reorderItems()}, surfaced as 422\nby the controller.",
+                "properties": {
+                    "ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "minItems": 1
+                    }
+                },
+                "required": [
+                    "ids"
+                ],
+                "title": "ReorderBioPageItemsRequest"
+            },
             "StoreApiKeyRequest": {
                 "type": "object",
                 "description": "Form Request para cria\u00e7\u00e3o de uma API key (POST /api/api-keys).\n\nValida apenas o nome da chave; o limite de 5 chaves por usu\u00e1rio \u00e9 regra de\nneg\u00f3cio verificada no controller (depende do estado atual do banco, n\u00e3o do\npayload). Rota protegida por api.auth:api + verified \u2014 o token Sanctum\nemitido aqui NUNCA autentica nas rotas de gest\u00e3o (isolamento de guards).",
@@ -6236,6 +7087,20 @@
                     "color"
                 ],
                 "title": "TagResource"
+            },
+            "UpdateBioPageItemRequest": {
+                "type": "object",
+                "description": "Form Request for PUT /api/bio/items/{id} (partial update of a bio page button).\n\nBoth fields are optional \u2014 the caller sends only what changed. Ownership\n(the item's bio page must belong to the authenticated user) is enforced by\n{@see \\App\\Services\\Bio\\BioPageService::updateItem()}, surfaced as 404 by\nthe controller.",
+                "properties": {
+                    "label": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "is_active": {
+                        "type": "boolean"
+                    }
+                },
+                "title": "UpdateBioPageItemRequest"
             },
             "UpdateLinkRequest": {
                 "type": "object",
@@ -6357,6 +7222,48 @@
                     }
                 },
                 "title": "UpdateTagRequest"
+            },
+            "UpsertBioPageRequest": {
+                "type": "object",
+                "description": "Form Request for PUT /api/bio (create-or-update the authenticated user's\nbio page).\n\n`handle` is validated against the fixed format regex (3\u201330 chars,\nlowercase alnum with internal hyphens only), the {@see BioHandleNotReserved}\nblocklist, and global uniqueness \u2014 ignoring the authenticated user's own\nexisting row, so resubmitting an unchanged handle never trips the\nuniqueness check against itself.",
+                "properties": {
+                    "handle": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 255
+                    },
+                    "bio": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 280
+                    },
+                    "theme": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "enum": [
+                            "dark",
+                            "light"
+                        ]
+                    },
+                    "is_active": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "handle",
+                    "title"
+                ],
+                "title": "UpsertBioPageRequest"
             },
             "User": {
                 "type": "object",

@@ -33,6 +33,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\Links\TagService::class
         );
 
+        $this->app->bind(
+            \App\Contracts\Services\BioPageServiceInterface::class,
+            \App\Services\Bio\BioPageService::class
+        );
+
         $this->app->bind(\App\Contracts\Analytics\DashboardAnalyticsInterface::class, \App\Services\Analytics\DashboardAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\GeographicAnalyticsInterface::class, \App\Services\Analytics\GeographicAnalyticsService::class);
         $this->app->bind(\App\Contracts\Analytics\TemporalAnalyticsInterface::class, \App\Services\Analytics\TemporalAnalyticsService::class);
@@ -153,6 +158,19 @@ class AppServiceProvider extends ServiceProvider
                 : ($user?->id ? 'user:'.$user->id : 'ip:'.$request->ip());
 
             return Limit::perMinute(60)->by('public-api:'.$key);
+        });
+
+        // 30 checagens/min por usuário na disponibilidade de handle do bio —
+        // o frontend consulta a cada tecla digitada (debounced), então o
+        // limite é permissivo o bastante para uso normal e ainda contém abuso.
+        RateLimiter::for('bio-handle-check', function (Request $request) {
+            return Limit::perMinute(30)->by('bio-handle-check:'.($request->user('api')?->id ?: $request->ip()));
+        });
+
+        // 60 consultas/min por IP na página bio pública — mitiga scraping por
+        // enumeração de handles, no mesmo espírito do limiter 'public-analytics'.
+        RateLimiter::for('public-bio', function (Request $request) {
+            return Limit::perMinute(60)->by($request->ip());
         });
     }
 }
