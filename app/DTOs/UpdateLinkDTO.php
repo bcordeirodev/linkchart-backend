@@ -119,6 +119,25 @@ class UpdateLinkDTO
     private readonly bool $tagIdsPresent;
 
     /**
+     * New plain-text password for the link (write-only input); null both when
+     * the field was absent AND when it was sent as null/empty ("remove the
+     * password") — the two cases are told apart by {@see self::$passwordPresent}
+     * / {@see self::hasPasswordField()}. Deliberately excluded from
+     * {@see self::toArray()}: `password` is not a `links` column and the plain
+     * text must never reach mass-assignment or logs.
+     * {@see \App\Services\Links\LinkService::updateLink()} reads it directly
+     * and stores only the bcrypt hash (or null) in `links.password_hash`.
+     */
+    public readonly ?string $password;
+
+    /**
+     * Whether `password` was present in the source request at all. Present
+     * with a value = set/replace; present as null/empty = remove; absent =
+     * leave untouched. See {@see self::hasPasswordField()}.
+     */
+    private readonly bool $passwordPresent;
+
+    /**
      * @param  string|null  $original_url  New destination URL; null = unchanged.
      * @param  string|null  $title  New label; null = unchanged.
      * @param  string|null  $slug  New slug; null = unchanged.
@@ -135,6 +154,8 @@ class UpdateLinkDTO
      * @param  array<int, string>|null  $presentFields  Field names present in the source request; null = legacy null-stripping in toArray().
      * @param  array<int, int>|null  $tag_ids  New complete tag id set; null = tag_ids not sent (leave tags untouched).
      * @param  bool  $tagIdsPresent  Whether tag_ids was present in the source request.
+     * @param  string|null  $password  New plain-text link password; null = remove (when present) or untouched (when absent).
+     * @param  bool  $passwordPresent  Whether password was present in the source request.
      */
     public function __construct(
         ?string $original_url = null,
@@ -152,7 +173,9 @@ class UpdateLinkDTO
         ?string $utm_content = null,
         ?array $presentFields = null,
         ?array $tag_ids = null,
-        bool $tagIdsPresent = false
+        bool $tagIdsPresent = false,
+        ?string $password = null,
+        bool $passwordPresent = false
     ) {
         $this->presentFields = $presentFields;
         $this->original_url = $original_url;
@@ -170,6 +193,8 @@ class UpdateLinkDTO
         $this->utm_content = $utm_content;
         $this->tag_ids = $tag_ids;
         $this->tagIdsPresent = $tagIdsPresent;
+        $this->password = $password;
+        $this->passwordPresent = $passwordPresent;
     }
 
     /**
@@ -213,7 +238,9 @@ class UpdateLinkDTO
             tag_ids: $request->has('tag_ids')
                 ? array_map('intval', $request->input('tag_ids', []))
                 : null,
-            tagIdsPresent: $request->has('tag_ids')
+            tagIdsPresent: $request->has('tag_ids'),
+            password: $request->input('password') ?: null,
+            passwordPresent: $request->has('password')
         );
     }
 
@@ -273,13 +300,15 @@ class UpdateLinkDTO
      *
      * Also true when `tag_ids` was present, even if `toArray()` is otherwise
      * empty — a request containing only `tag_ids` is a legitimate partial
-     * update (sync the link's tags) and must not be rejected as empty.
+     * update (sync the link's tags) and must not be rejected as empty. The
+     * same applies to `password`: setting or removing the link password is a
+     * legitimate update even though it never goes through toArray().
      *
-     * @return bool True when `toArray()` produces at least one entry, or tag_ids was sent.
+     * @return bool True when `toArray()` produces at least one entry, or tag_ids/password was sent.
      */
     public function hasDataToUpdate(): bool
     {
-        return ! empty($this->toArray()) || $this->tagIdsPresent;
+        return ! empty($this->toArray()) || $this->tagIdsPresent || $this->passwordPresent;
     }
 
     /**
@@ -295,6 +324,22 @@ class UpdateLinkDTO
     public function hasTagIds(): bool
     {
         return $this->tagIdsPresent;
+    }
+
+    /**
+     * Check whether `password` was present in the source request.
+     *
+     * Distinguishes the three update semantics consumed by
+     * {@see \App\Services\Links\LinkService::updateLink()}:
+     * present with a value (set/replace, `$password` non-null), present as
+     * null/empty (remove, `$password` null), absent (leave untouched — this
+     * method returns false).
+     *
+     * @return bool True if `password` was sent in the request that built this DTO.
+     */
+    public function hasPasswordField(): bool
+    {
+        return $this->passwordPresent;
     }
 
     /**

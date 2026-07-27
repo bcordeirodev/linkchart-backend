@@ -98,6 +98,17 @@ class CreateLinkDTO
     public readonly ?int $subdomain_id;
 
     /**
+     * Optional plain-text password protecting the link (write-only input).
+     *
+     * Null (or empty) means the link is created without password protection.
+     * Deliberately excluded from {@see self::toArray()} — `password` is not a
+     * `links` column and the plain text must never reach mass-assignment or
+     * logs. {@see \App\Services\Links\LinkService::createLink()} reads it
+     * directly and stores only the bcrypt hash in `links.password_hash`.
+     */
+    public readonly ?string $password;
+
+    /**
      * Whether the `subdomain_id` key was present in the incoming request at all,
      * independent of its value. Distinguishes three cases consumed by
      * {@see \App\Services\Links\LinkService::resolveShortDomain()}:
@@ -128,6 +139,7 @@ class CreateLinkDTO
      * @param  array<int, int>|null  $tag_ids  Candidate tag IDs to attach; null means none provided.
      * @param  int|null  $subdomain_id  Id of the UserSubdomain to use; null means default/absent (see $subdomain_id_provided).
      * @param  bool  $subdomain_id_provided  Whether `subdomain_id` was present in the request at all.
+     * @param  string|null  $password  Plain-text link password to hash; null means no protection.
      */
     public function __construct(
         string $original_url,
@@ -146,7 +158,8 @@ class CreateLinkDTO
         ?string $utm_content = null,
         ?array $tag_ids = null,
         ?int $subdomain_id = null,
-        bool $subdomain_id_provided = false
+        bool $subdomain_id_provided = false,
+        ?string $password = null
     ) {
         $this->original_url = $original_url;
         $this->user_id = $user_id;
@@ -165,6 +178,7 @@ class CreateLinkDTO
         $this->tag_ids = $tag_ids;
         $this->subdomain_id = $subdomain_id;
         $this->subdomain_id_provided = $subdomain_id_provided;
+        $this->password = $password;
     }
 
     /**
@@ -202,7 +216,8 @@ class CreateLinkDTO
             subdomain_id: $request->has('subdomain_id') && $request->input('subdomain_id') !== null
                 ? (int) $request->input('subdomain_id')
                 : null,
-            subdomain_id_provided: $request->has('subdomain_id')
+            subdomain_id_provided: $request->has('subdomain_id'),
+            password: $request->input('password') ?: null
         );
     }
 
@@ -225,6 +240,10 @@ class CreateLinkDTO
      * `$linkDTO->subdomain_id`/`$linkDTO->subdomain_id_provided` directly and
      * resolves them to the `short_domain` string via
      * {@see \App\Services\Links\LinkService::resolveShortDomain()}.
+     *
+     * `password` is also deliberately excluded — the plain text must never
+     * reach mass-assignment; the service layer hashes it into
+     * `links.password_hash` explicitly (see {@see self::$password}).
      *
      * @return array<string, mixed> Associative array with non-null link attributes.
      */

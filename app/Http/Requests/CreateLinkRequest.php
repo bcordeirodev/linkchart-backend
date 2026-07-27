@@ -82,6 +82,18 @@ class CreateLinkRequest extends FormRequest
             ],
             'is_active' => 'boolean',
 
+            // Senha opcional (write-only): quando presente é hasheada em
+            // LinkService e armazenada em links.password_hash. Máx. 72 pelo
+            // limite de input do bcrypt. Nunca aparece em respostas — apenas
+            // o boolean derivado has_password (LinkResource).
+            'password' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'min:4',
+                'max:72',
+            ],
+
             // UTM Parameters
             'utm_source' => 'nullable|string|max:100',
             'utm_medium' => 'nullable|string|max:100',
@@ -127,6 +139,9 @@ class CreateLinkRequest extends FormRequest
             'custom_slug.alpha_dash' => 'O slug pode conter apenas letras, números, hífens e underscores.',
             'custom_slug.unique' => 'Este slug já está em uso.',
             'custom_slug.not_in' => 'Este slug é reservado e não pode ser usado.',
+
+            'password.min' => 'A senha do link deve ter pelo menos 4 caracteres.',
+            'password.max' => 'A senha do link não pode ter mais de 72 caracteres.',
 
             'tag_ids.array' => 'As tags devem ser enviadas como uma lista.',
             'tag_ids.max' => 'Um link pode ter no máximo 5 tags.',

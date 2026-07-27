@@ -92,6 +92,15 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(600)->by($request->ip());
         });
 
+        // 10 tentativas/min por IP+slug no unlock de link protegido por senha
+        // (POST /r/{slug}/unlock) — contém brute-force da senha de um link sem
+        // consumir o limite permissivo do redirect nem travar outros slugs
+        // acessados pelo mesmo IP.
+        RateLimiter::for('redirect-unlock', function (Request $request) {
+            return Limit::perMinute(10)
+                ->by('redirect-unlock:'.$request->ip().':'.(string) $request->route('slug'));
+        });
+
         // 10 trocas/min por IP no endpoint de exchange Auth0 — previne abuso de token.
         RateLimiter::for('auth0-exchange', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());

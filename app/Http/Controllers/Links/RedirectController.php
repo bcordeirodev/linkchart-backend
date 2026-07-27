@@ -11,6 +11,7 @@ use App\Services\Links\LinkTrackingService;
 use App\Services\Links\RedirectMetadataFetcher;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Hash;
 use Jenssegers\Agent\Agent;
 
 /**
@@ -38,6 +39,14 @@ use Jenssegers\Agent\Agent;
  *   3. ?preview=1 query param:
  *      - Same HTML rendering path as bots, but intended for human preview.
  *      - No click is recorded.
+ *
+ *   4. Password-protected link (links.password_hash set):
+ *      - After all availability guards, EVERY visitor class (human, bot,
+ *        ?preview=1) gets the password challenge page instead — the metadata
+ *        fetcher is never reached, so destination OG data cannot leak.
+ *      - The form POSTs to /r/{slug}/unlock (public.redirect.unlock, throttle
+ *        redirect-unlock 10/min per IP+slug); on Hash::check success unlock()
+ *        replays the human flow (tracking job + 302). Clicks only count there.
  *
  * Cache invariant: Link::findActiveBySlugCached() uses a 10-minute TTL and is
  * invalidated by Link's saved/deleted model events. Do not bypass this cache.
@@ -111,37 +120,22 @@ class RedirectController extends Controller
 
             AppLogger::redirectStarted($slug, $link->id);
 
-            // Subdomain context: null = root domain, false = unregistered subdomain, UserSubdomain = registered
-            $subdomainCtx = $request->attributes->get('subdomain_context', null);
-
-            if ($subdomainCtx === false) {
-                AppLogger::redirectBlocked($slug, 'subdomain_not_found');
-
-                return $this->renderErrorPage('Link não encontrado ou inativo');
+            if ($guardResponse = $this->guardLinkAvailability($link, $request, $slug)) {
+                return $guardResponse;
             }
 
-            if ($subdomainCtx !== null && $link->user_id !== $subdomainCtx->user_id) {
-                AppLogger::redirectBlocked($slug, 'subdomain_ownership_mismatch');
+            // Password gate — runs AFTER all availability checks and BEFORE the
+            // human/bot branches: humans, bots and ?preview=1 all get the same
+            // password page. Deliberately never reaches the metadata fetcher, so
+            // destination OG data can never leak for a protected link. No click
+            // is recorded here — only a successful unlock() counts.
+            if ($link->hasPassword()) {
+                AppLogger::event('redirect', 'info', 'redirect.password_challenge', [
+                    'slug' => $slug,
+                    'link_id' => $link->id,
+                ]);
 
-                return $this->renderErrorPage('Link não encontrado ou inativo');
-            }
-
-            if ($link->expires_at && now()->isAfter($link->expires_at)) {
-                AppLogger::redirectBlocked($slug, 'expired');
-
-                return $this->renderErrorPage('Este link expirou e não está mais disponível');
-            }
-
-            if ($link->starts_in && now()->isBefore($link->starts_in)) {
-                AppLogger::redirectBlocked($slug, 'not_started');
-
-                return $this->renderErrorPage('Este link ainda não está disponível');
-            }
-
-            if ($link->hasReachedClickLimit()) {
-                AppLogger::redirectBlocked($slug, 'click_limit');
-
-                return $this->renderErrorPage('Este link atingiu o limite de cliques');
+                return $this->renderPasswordPage($link);
             }
 
             $isBot = $this->isBotUserAgent($request->userAgent());
@@ -178,6 +172,131 @@ class RedirectController extends Controller
 
             return $this->renderErrorPage('Erro ao processar redirecionamento');
         }
+    }
+
+    /**
+     * POST /r/{slug}/unlock  (public.redirect.unlock)
+     *
+     * Verify the password of a protected link and, on success, perform EXACTLY
+     * the same human-redirect flow as redirect(): dispatch ProcessLinkClickJob
+     * (which increments the denormalised clicks counter) and 302 to the
+     * original URL with no-cache headers. A click is only ever counted here —
+     * never when the password form is displayed.
+     *
+     * Middleware: resolve.subdomain, throttle:redirect-unlock (10/min per
+     * IP+slug), plus the default web group (session + CSRF validation on the
+     * form's _token).
+     * Auth: not required
+     * Owner check: no (public endpoint)
+     *
+     * Response shape:
+     *   Correct password: 302 redirect to original_url with no-cache headers
+     *   Wrong/missing password: 422 HTML password page with a generic error
+     *   Link without password: 302 redirect to the GET route (normal flow)
+     *   Not found / expired / not started / click-limit: 404 HTML error page
+     *
+     * The submitted password is NEVER logged — log context carries only slug
+     * and link_id.
+     *
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\Response
+     */
+    public function unlock(string $slug, Request $request)
+    {
+        try {
+            $link = Link::findActiveBySlugCached($slug);
+
+            if (! $link) {
+                AppLogger::redirectBlocked($slug, 'not_found');
+
+                return $this->renderErrorPage('Link não encontrado ou inativo');
+            }
+
+            if ($guardResponse = $this->guardLinkAvailability($link, $request, $slug)) {
+                return $guardResponse;
+            }
+
+            // Link sem senha: nada a desbloquear — volta ao fluxo normal do GET
+            // (que decide entre 302 humano, preview de bot, etc.).
+            if (! $link->hasPassword()) {
+                return redirect()->route('public.redirect', ['slug' => $slug]);
+            }
+
+            $password = (string) $request->input('password', '');
+
+            if ($password === '' || ! Hash::check($password, $link->password_hash)) {
+                AppLogger::event('redirect', 'warning', 'redirect.unlock_failed', [
+                    'slug' => $slug,
+                    'link_id' => $link->id,
+                ]);
+
+                return $this->renderPasswordPage($link, 'Senha incorreta. Tente novamente.', 422);
+            }
+
+            AppLogger::event('redirect', 'info', 'redirect.unlock_succeeded', [
+                'slug' => $slug,
+                'link_id' => $link->id,
+            ]);
+
+            $this->dispatchTracking($link, $request, $slug);
+
+            return redirect()->away($link->original_url, 302)->withHeaders([
+                'Cache-Control' => 'no-store, no-cache, must-revalidate',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+            ]);
+        } catch (\Exception $e) {
+            AppLogger::redirectError($slug, $e);
+
+            return $this->renderErrorPage('Erro ao processar redirecionamento');
+        }
+    }
+
+    /**
+     * Run the availability guards shared by redirect() and unlock():
+     * subdomain context/ownership, expiry, scheduled start and click limit —
+     * in this exact order, all BEFORE any password handling.
+     *
+     * @param  Link  $link  The resolved active link.
+     * @param  Request  $request  Current request (carries the subdomain_context attribute).
+     * @param  string  $slug  Slug used for logging context.
+     * @return \Illuminate\Http\Response|null A 404 error page when a guard blocks access, null when the link is available.
+     */
+    private function guardLinkAvailability(Link $link, Request $request, string $slug): ?\Illuminate\Http\Response
+    {
+        // Subdomain context: null = root domain, false = unregistered subdomain, UserSubdomain = registered
+        $subdomainCtx = $request->attributes->get('subdomain_context', null);
+
+        if ($subdomainCtx === false) {
+            AppLogger::redirectBlocked($slug, 'subdomain_not_found');
+
+            return $this->renderErrorPage('Link não encontrado ou inativo');
+        }
+
+        if ($subdomainCtx !== null && $link->user_id !== $subdomainCtx->user_id) {
+            AppLogger::redirectBlocked($slug, 'subdomain_ownership_mismatch');
+
+            return $this->renderErrorPage('Link não encontrado ou inativo');
+        }
+
+        if ($link->expires_at && now()->isAfter($link->expires_at)) {
+            AppLogger::redirectBlocked($slug, 'expired');
+
+            return $this->renderErrorPage('Este link expirou e não está mais disponível');
+        }
+
+        if ($link->starts_in && now()->isBefore($link->starts_in)) {
+            AppLogger::redirectBlocked($slug, 'not_started');
+
+            return $this->renderErrorPage('Este link ainda não está disponível');
+        }
+
+        if ($link->hasReachedClickLimit()) {
+            AppLogger::redirectBlocked($slug, 'click_limit');
+
+            return $this->renderErrorPage('Este link atingiu o limite de cliques');
+        }
+
+        return null;
     }
 
     /**
@@ -298,6 +417,34 @@ class RedirectController extends Controller
         ], 200)
             ->header('Content-Type', 'text/html; charset=UTF-8')
             ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
+    }
+
+    /**
+     * Render the password challenge page for a password-protected link.
+     *
+     * The page contains only generic "Link protegido" content and OG tags —
+     * never the destination URL or fetched metadata — plus a form that POSTs
+     * to the `public.redirect.unlock` route. The form action is emitted as a
+     * relative path so the request stays on the current host (root domain or
+     * a custom subdomain alike).
+     *
+     * Escaping contract (same as the other redirect views): values are escaped
+     * HERE and emitted raw ({!! !!}) by the template.
+     *
+     * @param  Link  $link  The protected link being challenged.
+     * @param  string|null  $errorMessage  Optional pre-set generic error (wrong password retry).
+     * @param  int  $status  HTTP status: 200 for the initial form, 422 on failed unlock.
+     */
+    private function renderPasswordPage(Link $link, ?string $errorMessage = null, int $status = 200): \Illuminate\Http\Response
+    {
+        return response()->view('redirect.password', [
+            'formAction' => e(route('public.redirect.unlock', ['slug' => $link->slug], false)),
+            'errorMessage' => $errorMessage !== null ? e($errorMessage) : null,
+        ], $status)
+            ->header('Content-Type', 'text/html; charset=UTF-8')
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
             ->header('Pragma', 'no-cache')
             ->header('Expires', '0');
     }
