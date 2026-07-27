@@ -22,6 +22,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('links');
+        Schema::table('links', function (Blueprint $table) {
+            $table->dropColumn('starts_in');
+        });
     }
 };

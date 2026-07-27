@@ -79,6 +79,45 @@ class MigrationSafetyTest extends TestCase
     }
 
     /**
+     * O down() so pode dropar tabelas que o proprio up() criou.
+     *
+     * Rollback e manual e raro, mas um `Schema::dropIfExists` de tabela alheia
+     * no down() transforma um `migrate:rollback` acidental em perda da tabela
+     * inteira — incluindo dados que a migration nunca tocou. O caso inverso
+     * (dropar um nome que o up() nao criou por typo) tambem e bug: o rollback
+     * "funciona" e deixa a tabela real para tras.
+     */
+    public function test_down_only_drops_tables_created_by_up(): void
+    {
+        $violations = [];
+
+        foreach (glob(__DIR__.'/../../database/migrations/*.php') as $file) {
+            $source = file_get_contents($file);
+
+            $created = $this->tableNames($this->extractUpBody($source), 'create');
+            $dropped = $this->tableNames($this->extractDownBody($source), 'drop');
+
+            foreach (array_diff($dropped, $created) as $table) {
+                $violations[] = basename($file)." -> drop de '{$table}' sem Schema::create correspondente no up()";
+            }
+        }
+
+        $this->assertSame([], $violations, implode("\n", [
+            '',
+            'down() dropando tabela que o up() nao criou. Um rollback acidental',
+            'destruiria dados que a migration nunca tocou (ou, no caso de typo,',
+            'deixaria a tabela real para tras).',
+            '',
+            'Migration que so ALTERA uma tabela deve reverter apenas a alteracao',
+            '(ex.: dropColumn da coluna adicionada), nunca dropar a tabela.',
+            '',
+            'Violacoes:',
+            ...$violations,
+            '',
+        ]));
+    }
+
+    /**
      * Extrai o corpo do up(), parando no down().
      *
      * O down() so roda em rollback manual, nunca no deploy — por isso um
@@ -97,5 +136,32 @@ class MigrationSafetyTest extends TestCase
         return $end === false
             ? substr($source, $start)
             : substr($source, $start, $end - $start);
+    }
+
+    /**
+     * Extrai o corpo do down() (do cabecalho ate o fim do arquivo).
+     */
+    private function extractDownBody(string $source): string
+    {
+        $start = strpos($source, 'function down()');
+
+        return $start === false ? '' : substr($source, $start);
+    }
+
+    /**
+     * Nomes de tabela passados a Schema::create ou Schema::drop[IfExists]
+     * dentro de um trecho de codigo de migration.
+     *
+     * @return string[]
+     */
+    private function tableNames(string $body, string $operation): array
+    {
+        $pattern = $operation === 'create'
+            ? '/Schema::create\(\s*[\'"]([^\'"]+)[\'"]/'
+            : '/Schema::(?:dropIfExists|drop)\(\s*[\'"]([^\'"]+)[\'"]/';
+
+        preg_match_all($pattern, $body, $matches);
+
+        return $matches[1];
     }
 }
