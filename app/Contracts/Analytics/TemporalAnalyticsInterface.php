@@ -94,4 +94,80 @@ interface TemporalAnalyticsInterface
         ?AnalyticsFilters $filters = null,
         string $segment = 'all'
     ): array;
+
+    /**
+     * Return click counts per hour of day (0–23) as a zero-filled 24-bucket array.
+     *
+     * Uses COALESCE of the pre-computed `hour_of_day` column with a DB-native
+     * extraction from `created_at` so older clicks are included. Granular entry
+     * point consumed by DashboardAnalyticsService, which composes its
+     * temporal_data block from this service (single source per aggregation).
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'.
+     * @return array<int, array{hour: int, label: string, clicks: int}> 24-element array indexed 0–23.
+     */
+    public function getClicksByHour(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array;
+
+    /**
+     * Return click counts per ISO day of week (1=Monday … 7=Sunday) as a
+     * zero-filled 7-bucket array with Portuguese day names.
+     *
+     * Uses COALESCE of the pre-computed `day_of_week` column with a DB-native
+     * extraction fallback. Granular entry point consumed by
+     * DashboardAnalyticsService (see getClicksByHour).
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'.
+     * @return array<int, array{day: int, day_name: string, clicks: int}> 7-element array indexed 1–7.
+     */
+    public function getClicksByDayOfWeek(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array;
+
+    /**
+     * Return hourly click patterns from the pre-computed `hour_of_day` column
+     * (visitor-local time, Phase 2 enrichment).
+     *
+     * Only clicks with a stored local hour are included and only hours with
+     * traffic are returned (no zero-filled scaffold). Granular entry point
+     * consumed by DashboardAnalyticsService (see getClicksByHour).
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @param  string  $segment  Accepted: 'all'|'weekday'|'weekend'|'business'.
+     * @return array<int, array{hour: int, clicks: int, avg_response_time: float, unique_visitors: int}> Ordered by hour ascending.
+     */
+    public function getHourlyPatternsLocal(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array;
+
+    /**
+     * Return the weekend vs. weekday comparison built from the pre-computed
+     * `is_weekend` boolean (visitor-local time) — the dashboard variant.
+     *
+     * Distinct from the DOW-derived weekend_vs_weekday of the tab payload:
+     * clicks with NULL is_weekend (pre-Phase 2) match neither bucket, and the
+     * shape carries avg_response_time with a fixed `percentage => 0`
+     * placeholder kept for frontend compatibility.
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @return array{weekend: array{clicks: int, unique_visitors: int, avg_response_time: float, percentage: int}, weekday: array{clicks: int, unique_visitors: int, avg_response_time: float, percentage: int}}
+     */
+    public function getWeekendVsWeekdayLocal(int $linkId, ?AnalyticsFilters $filters = null): array;
+
+    /**
+     * Return the business-hours vs. off-hours comparison built from the
+     * pre-computed `is_business_hours` boolean (visitor-local time) — the
+     * dashboard variant.
+     *
+     * Distinct from the hour-derived business_hours_analysis of the tab
+     * payload: clicks with NULL is_business_hours match neither bucket, and
+     * the shape adds avg_session_depth plus fixed time_range labels
+     * ('09:00-17:00' / '17:01-08:59').
+     *
+     * @param  int  $linkId  ID of the link to analyse.
+     * @param  ?AnalyticsFilters  $filters  Filter state (date range, bot exclusion). Null = no filter applied.
+     * @return array{business_hours: array{clicks: int, unique_visitors: int, avg_response_time: float, avg_session_depth: float, time_range: string}, non_business_hours: array{clicks: int, unique_visitors: int, avg_response_time: float, avg_session_depth: float, time_range: string}}
+     */
+    public function getBusinessHoursAnalysisLocal(int $linkId, ?AnalyticsFilters $filters = null): array;
 }

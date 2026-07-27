@@ -142,12 +142,16 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * extraction fallback so older clicks without the column are included.
      * Respects AnalyticsFilters (date range, bot exclusion) and segment filtering.
      *
+     * Public: also consumed by DashboardAnalyticsService, which composes its
+     * temporal_data block from this service instead of re-implementing the
+     * aggregation (dashboard/tab dedup, 2026-07-27).
+     *
      * @param  int  $linkId  Link primary key.
      * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
      * @param  string  $segment  Segment constraint passed to baseQuery.
      * @return array<int, array{hour: int, label: string, clicks: int}> 24-element array indexed 0–23.
      */
-    private function getClicksByHour(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
+    public function getClicksByHour(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         $filters ??= new AnalyticsFilters;
         $expr = SqlDateExpr::hourOfDay();
@@ -171,12 +175,14 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * Uses COALESCE of the pre-computed day_of_week column with a DB-native
      * extraction fallback. Respects AnalyticsFilters and segment filtering.
      *
+     * Public: also consumed by DashboardAnalyticsService (see getClicksByHour).
+     *
      * @param  int  $linkId  Link primary key.
      * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
      * @param  string  $segment  Segment constraint passed to baseQuery.
      * @return array<int, array{day: int, day_name: string, clicks: int}> 7-element array indexed 1–7.
      */
-    private function getClicksByDayOfWeek(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
+    public function getClicksByDayOfWeek(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         $filters ??= new AnalyticsFilters;
         $expr = SqlDateExpr::dayOfWeek();
@@ -194,8 +200,25 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return $result;
     }
 
-    private function getHourlyPatternsLocal(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
+    /**
+     * Aggregate hourly click patterns from the pre-computed hour_of_day column
+     * (visitor-local time, Phase 2 enrichment).
+     *
+     * Unlike getClicksByHour, no created_at fallback is applied: only clicks
+     * with a stored local hour are included, and only hours with traffic are
+     * returned (no zero-filled 24-bucket scaffold).
+     *
+     * Public: also consumed by DashboardAnalyticsService (see getClicksByHour).
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{hour: int, clicks: int, avg_response_time: float, unique_visitors: int}> Ordered by hour ascending.
+     */
+    public function getHourlyPatternsLocal(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
+        $filters ??= new AnalyticsFilters;
+
         return $this->baseQuery($linkId, $filters, $segment)
             ->selectRaw('hour_of_day, COUNT(*) as clicks, AVG(response_time) as avg_response_time, COUNT(DISTINCT ip) as unique_visitors')
             ->whereNotNull('hour_of_day')
@@ -241,6 +264,96 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         return [
             'business_hours' => ['clicks' => $business, 'percentage' => $total > 0 ? round($business / $total * 100, 2) : 0],
             'after_hours' => ['clicks' => $after,    'percentage' => $total > 0 ? round($after / $total * 100, 2) : 0],
+        ];
+    }
+
+    /**
+     * Aggregate weekend vs. weekday clicks from the pre-computed is_weekend
+     * boolean (visitor-local time, Phase 2 enrichment) — the dashboard variant.
+     *
+     * Deliberately DISTINCT from the private DOW-derived getWeekendVsWeekday
+     * used in the tab payload: this one trusts the stored local-time flag
+     * (clicks with NULL is_weekend — pre-Phase 2 — match neither bucket) and
+     * carries avg_response_time, while `percentage` is a fixed 0 placeholder
+     * kept for frontend shape compatibility. Moved here from
+     * DashboardAnalyticsService (dashboard/tab dedup, 2026-07-27) so every
+     * temporal aggregation lives in this service.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
+     * @return array{weekend: array{clicks: int, unique_visitors: int, avg_response_time: float, percentage: int}, weekday: array{clicks: int, unique_visitors: int, avg_response_time: float, percentage: int}}
+     */
+    public function getWeekendVsWeekdayLocal(int $linkId, ?AnalyticsFilters $filters = null): array
+    {
+        $filters ??= new AnalyticsFilters;
+
+        $weekend = $this->baseQuery($linkId, $filters)
+            ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time')
+            ->where('is_weekend', true)->first();
+
+        $weekday = $this->baseQuery($linkId, $filters)
+            ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time')
+            ->where('is_weekend', false)->first();
+
+        return [
+            'weekend' => [
+                'clicks' => (int) ($weekend->clicks ?? 0),
+                'unique_visitors' => (int) ($weekend->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($weekend->avg_response_time ?? 0), 2),
+                'percentage' => 0,
+            ],
+            'weekday' => [
+                'clicks' => (int) ($weekday->clicks ?? 0),
+                'unique_visitors' => (int) ($weekday->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($weekday->avg_response_time ?? 0), 2),
+                'percentage' => 0,
+            ],
+        ];
+    }
+
+    /**
+     * Aggregate business-hours vs. off-hours clicks from the pre-computed
+     * is_business_hours boolean (visitor-local time, Phase 2 enrichment) —
+     * the dashboard variant.
+     *
+     * Deliberately DISTINCT from the private hour-derived
+     * getBusinessHoursAnalysis used in the tab payload: this one trusts the
+     * stored local-time flag (clicks with NULL is_business_hours match neither
+     * bucket) and adds avg_session_depth plus the fixed time_range labels.
+     * Moved here from DashboardAnalyticsService (dashboard/tab dedup,
+     * 2026-07-27). Business hours are defined as 09:00–17:00 local time.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  ?AnalyticsFilters  $filters  Applied filter state. Null = no filter.
+     * @return array{business_hours: array{clicks: int, unique_visitors: int, avg_response_time: float, avg_session_depth: float, time_range: string}, non_business_hours: array{clicks: int, unique_visitors: int, avg_response_time: float, avg_session_depth: float, time_range: string}}
+     */
+    public function getBusinessHoursAnalysisLocal(int $linkId, ?AnalyticsFilters $filters = null): array
+    {
+        $filters ??= new AnalyticsFilters;
+
+        $biz = $this->baseQuery($linkId, $filters)
+            ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time, AVG(session_clicks) as avg_session_depth')
+            ->where('is_business_hours', true)->first();
+
+        $nonBiz = $this->baseQuery($linkId, $filters)
+            ->selectRaw('COUNT(*) as clicks, COUNT(DISTINCT ip) as unique_visitors, AVG(response_time) as avg_response_time, AVG(session_clicks) as avg_session_depth')
+            ->where('is_business_hours', false)->first();
+
+        return [
+            'business_hours' => [
+                'clicks' => (int) ($biz->clicks ?? 0),
+                'unique_visitors' => (int) ($biz->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($biz->avg_response_time ?? 0), 2),
+                'avg_session_depth' => round((float) ($biz->avg_session_depth ?? 0), 1),
+                'time_range' => '09:00-17:00',
+            ],
+            'non_business_hours' => [
+                'clicks' => (int) ($nonBiz->clicks ?? 0),
+                'unique_visitors' => (int) ($nonBiz->unique_visitors ?? 0),
+                'avg_response_time' => round((float) ($nonBiz->avg_response_time ?? 0), 2),
+                'avg_session_depth' => round((float) ($nonBiz->avg_session_depth ?? 0), 1),
+                'time_range' => '17:01-08:59',
+            ],
         ];
     }
 
