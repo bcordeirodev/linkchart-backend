@@ -452,6 +452,30 @@ class LinkTrackingCoverageTest extends TestCase
     }
 
     /**
+     * Visitor-behavior counters count prior clicks from the same IP.
+     *
+     * Characterization of the current semantics: the window is per IP across
+     * ALL links (not per link) — first click ever is not a return visitor and
+     * starts the session at 1; a follow-up click from the same IP on another
+     * link is a return visit and increments the session counter.
+     */
+    public function test_return_visitor_and_session_clicks_count_prior_clicks_from_same_ip(): void
+    {
+        $linkA = $this->makeLink();
+        $linkB = $this->makeLink(['slug' => 'abc456']);
+
+        // request_id distinto por clique — com dedup_key ausente ele é o
+        // fallback do marker de dedup, e um id repetido viraria "retry".
+        $first = $this->runJob($linkA->id, ['ip' => '9.9.9.9', 'request_id' => 'req_ret_1']);
+        $this->assertFalse((bool) $first->is_return_visitor);
+        $this->assertSame(1, (int) $first->session_clicks);
+
+        $second = $this->runJob($linkB->id, ['ip' => '9.9.9.9', 'request_id' => 'req_ret_2']);
+        $this->assertTrue((bool) $second->is_return_visitor);
+        $this->assertSame(2, (int) $second->session_clicks);
+    }
+
+    /**
      * social_platform is detected from Instagram referer.
      */
     public function test_social_platform_is_written_for_instagram_referer(): void
