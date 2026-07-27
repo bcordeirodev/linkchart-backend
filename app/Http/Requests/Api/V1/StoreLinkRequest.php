@@ -11,7 +11,8 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * Espelha as regras de {@see \App\Http\Requests\CreateLinkRequest} (painel)
  * para o subconjunto de campos expostos no contrato v1 — original_url, slug,
- * title, expires_at, click_limit e utm_* — com duas diferenças deliberadas:
+ * title, expires_at, click_limit, subdomain_id e utm_* — com duas diferenças
+ * deliberadas:
  *
  *   - o campo público chama-se `slug` (não `custom_slug`);
  *   - a validação falha com a ValidationException padrão, renderizada pelo
@@ -75,6 +76,14 @@ class StoreLinkRequest extends FormRequest
                 'max:1000000',
             ],
 
+            // Ownership e status ativo são validados no LinkService
+            // (resolveShortDomain), igual ao painel — ver
+            // CreateLinkRequest::rules() e CreateLinkDTO::$subdomain_id_provided.
+            'subdomain_id' => [
+                'nullable',
+                'integer',
+            ],
+
             // UTM Parameters
             'utm_source' => 'nullable|string|max:100',
             'utm_medium' => 'nullable|string|max:100',
@@ -106,6 +115,8 @@ class StoreLinkRequest extends FormRequest
             'expires_at.date' => 'A data de expiração deve ser uma data válida.',
             'expires_at.after' => 'A data de expiração deve ser no futuro.',
             'expires_at.before' => 'A data de expiração não pode ser superior a 5 anos.',
+
+            'subdomain_id.integer' => 'O subdomain_id deve ser um número inteiro.',
         ];
     }
 

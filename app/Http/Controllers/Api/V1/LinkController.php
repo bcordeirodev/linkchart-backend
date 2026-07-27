@@ -63,9 +63,15 @@ class LinkController extends Controller
      * URLs are rejected with 422. When `slug` is omitted a unique slug is
      * generated automatically.
      *
+     * `subdomain_id` follows the panel's tri-state semantics (see
+     * CreateLinkDTO::$subdomain_id_provided): absent → the user's default
+     * (oldest active) subdomain; explicit null → force the root domain; an id
+     * → that subdomain, which must be active and owned by the token's user
+     * (422 otherwise).
+     *
      * Body: { original_url (required), slug?, title?, expires_at?,
-     *         click_limit?, utm_source?, utm_medium?, utm_campaign?,
-     *         utm_term?, utm_content? }
+     *         click_limit?, subdomain_id?, utm_source?, utm_medium?,
+     *         utm_campaign?, utm_term?, utm_content? }
      *
      * Middleware: auth:sanctum, throttle:public-api
      * Auth: required (Bearer API key)
@@ -91,6 +97,10 @@ class LinkController extends Controller
                 click_limit: $request->validated('click_limit') !== null
                     ? (int) $request->validated('click_limit')
                     : null,
+                subdomain_id: $request->validated('subdomain_id') !== null
+                    ? (int) $request->validated('subdomain_id')
+                    : null,
+                subdomain_id_provided: $request->has('subdomain_id'),
                 utm_source: $request->validated('utm_source') ?: null,
                 utm_medium: $request->validated('utm_medium') ?: null,
                 utm_campaign: $request->validated('utm_campaign') ?: null,

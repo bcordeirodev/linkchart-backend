@@ -5,7 +5,9 @@ namespace Tests\Feature\Api\V1;
 use App\Models\Click;
 use App\Models\Link;
 use App\Models\User;
+use App\Models\UserSubdomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -180,6 +182,88 @@ class PublicApiLinksTest extends TestCase
             'original_url' => 'https://example.com',
             'slug' => 'taken-slug',
         ], $this->auth())->assertStatus(422);
+    }
+
+    // =========================================================
+    // POST /api/v1/links — subdomain_id (mesma semântica do painel;
+    // ver Tests\Feature\Subdomain\SubdomainLinkCreationTest)
+    // =========================================================
+
+    /**
+     * Prepara o cenário de subdomínio: domínio raiz fixo e cache limpo
+     * (Cache::remember guarda até resultado null do findByUserCached).
+     */
+    private function setUpSubdomains(): void
+    {
+        config(['app.domain' => 'linkcharts.com.br']);
+        Cache::flush();
+    }
+
+    /** subdomain_id válido grava short_domain do subdomínio escolhido. */
+    public function test_create_link_uses_selected_subdomain(): void
+    {
+        $this->setUpSubdomains();
+        UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'acme']);
+        $chosen = UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'shop']);
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain_id' => $chosen->id,
+        ], $this->auth())->assertCreated();
+
+        $this->assertDatabaseHas('links', [
+            'user_id' => $this->user->id,
+            'short_domain' => 'shop.linkcharts.com.br',
+        ]);
+    }
+
+    /** subdomain_id de outro usuário → 422 e nada é criado. */
+    public function test_create_link_rejects_foreign_subdomain(): void
+    {
+        $this->setUpSubdomains();
+        $owner = User::factory()->create();
+        $foreign = UserSubdomain::factory()->create(['user_id' => $owner->id, 'subdomain' => 'acme']);
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain_id' => $foreign->id,
+        ], $this->auth())->assertStatus(422);
+
+        $this->assertDatabaseMissing('links', ['user_id' => $this->user->id]);
+    }
+
+    /** subdomain_id null explícito força o domínio raiz mesmo havendo default. */
+    public function test_create_link_null_subdomain_forces_root_domain(): void
+    {
+        $this->setUpSubdomains();
+        UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'acme']);
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain_id' => null,
+        ], $this->auth())->assertCreated();
+
+        $this->assertDatabaseHas('links', [
+            'user_id' => $this->user->id,
+            'short_domain' => null,
+        ]);
+    }
+
+    /** Campo ausente preserva o fallback: subdomínio ativo mais antigo. */
+    public function test_create_link_defaults_to_oldest_active_subdomain(): void
+    {
+        $this->setUpSubdomains();
+        UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'acme']);
+        UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'shop']);
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+        ], $this->auth())->assertCreated();
+
+        $this->assertDatabaseHas('links', [
+            'user_id' => $this->user->id,
+            'short_domain' => 'acme.linkcharts.com.br',
+        ]);
     }
 
     // =========================================================
