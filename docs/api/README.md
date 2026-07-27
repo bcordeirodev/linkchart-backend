@@ -7,13 +7,14 @@ repo consumes (types, request/response shapes, auth requirements).
 
 ## Coverage
 
-All 39 operations across the public API: auth, links CRUD, link metadata,
-analytics, public shorten/analytics, and subdomains.
+All 57 operations across the public API: auth, links CRUD (including bulk
+actions), link metadata, analytics, reports, tags, subdomains CRUD, onboarding,
+account deletion, and public shorten/analytics/suggest-slug.
 
 - **Auth:** documented as HTTP **bearer (JWT)**. Endpoints behind the `api.auth`
-  middleware require `Authorization: Bearer <token>`; the 9 public endpoints
+  middleware require `Authorization: Bearer <token>`; the 10 public endpoints
   (login, register, verify/forgot/reset password, auth0-exchange, public shorten,
-  public link, public analytics) are marked open.
+  public link, public analytics, public suggest-slug) are marked open.
 - **Envelopes:** success responses use `{ data, meta?, message? }` and errors use
   `{ error: { code, message, details? } }`, applied by the `NormalizeApiResponse`
   middleware. Note: Scramble infers the controllers' raw return shapes, so a few
@@ -38,3 +39,8 @@ docker compose exec -T app php artisan scramble:analyze
 Configuration (title, version, description, the `api.auth` security strategy)
 lives in `config/scramble.php`. In local dev the interactive docs UI is also
 available at `/docs/api`.
+
+> **Last regenerated: 2026-07-27** (branch `fix/audit-week1`). The spec is a
+> snapshot of the code at generation time — it reflects whatever routes and
+> FormRequests exist in the working tree at that moment, including features
+> still in flight on the branch. Regenerate after any endpoint change.

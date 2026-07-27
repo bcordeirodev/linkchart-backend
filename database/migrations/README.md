@@ -58,6 +58,50 @@
 
 - `2026_05_07_000003_add_phase3_quality_to_clicks_table.php` — adds `quality_score` (unsigned tinyint, nullable, 0–100), `quality_tier` (varchar 15, nullable), `fingerprint_score` (unsigned tinyint, default 0; count of detected header inconsistencies 0–3) to `clicks`; index on `quality_tier`.
 
+### Auth0 social login (2026-05)
+
+- `2026_05_12_121915_add_auth0_sub_to_users_table.php` — adds `users.auth0_sub` (nullable, unique — the Auth0 `sub` claim, e.g. `google-oauth2|1234`) and makes `users.password` nullable, since Auth0-only users never set a password.
+
+### Custom subdomains + social platform (2026-05-19)
+
+- `2026_05_19_000001_create_user_subdomains_table.php` — `user_subdomains` table (`user_id` FK, `subdomain` varchar 63, `status` active/inactive); on pgsql adds a **partial unique index** on `subdomain WHERE status = 'active'` so a released subdomain can be reclaimed (SQLite tests skip it).
+- `2026_05_19_000002_add_short_domain_to_links_table.php` — adds `links.short_domain` (nullable varchar 255): full hostname captured at link creation (e.g. `acme.linkcharts.com.br`); NULL = default domain; immutable after creation by design.
+- `2026_05_19_000003_add_social_platform_to_clicks_table.php` — adds `clicks.social_platform` (nullable varchar 30) after `click_source`.
+
+### Temporal backfill (2026-05-21)
+
+- `2026_05_21_000001_backfill_temporal_columns_in_clicks_table.php` — **data migration** (no schema change): backfills `day_of_week`/`hour_of_day` from UTC `created_at` where NULL and recalculates `is_weekend`/`is_business_hours` for all populated rows — fixes historical weekend clicks leaking into the "weekday only" filter. `down()` is intentionally empty (irreversible without the original timezone data). Separate pgsql/SQLite SQL variants.
+
+### LGPD IP retention (2026-06-12)
+
+- `2026_06_12_000001_add_ip_anonymized_to_clicks_table.php` — adds `clicks.ip_anonymized` (boolean, default false) + composite index `(ip_anonymized, created_at)` so the daily `clicks:anonymize-ips` sweep (90-day retention) only scans rows still pending anonymization.
+
+### Click idempotency (2026-06-17)
+
+- `2026_06_17_000001_add_dedup_key_to_clicks_table.php` — adds `clicks.dedup_key` (nullable varchar 80, UNIQUE): server-generated token created in `RedirectController` and carried in the `ProcessLinkClickJob` payload, making click persistence idempotent under job retry at the database level. Nullable on purpose — legacy payloads without a key still insert (NULLs never collide in a UNIQUE index).
+
+### Referer widening (2026-07-06)
+
+- `2026_07_06_000001_widen_clicks_referer_length.php` — widens `clicks.referer` from varchar(255) to varchar(2048): real referers (notably Facebook in-app-browser `l.php?u=…` wrappers) exceeded 255 chars and made `ProcessLinkClickJob` fail with SQLSTATE[22001], silently dropping those clicks.
+
+### Tags (2026-07-10)
+
+- `2026_07_10_000001_create_tags_table.php` — `tags` table: per-user label (`name` varchar 50, `color` 7-char hex) with `unique(user_id, name)` so name uniqueness is scoped per user.
+- `2026_07_10_000002_create_link_tag_table.php` — `link_tag` pivot for the Link ↔ Tag many-to-many; lean by design (no surrogate id, no timestamps), both FKs cascade on delete.
+
+### Onboarding + welcome email (2026-07-13 / 07-14)
+
+- `2026_07_13_000001_add_onboarding_to_users_table.php` — adds `users.onboarding` (nullable JSON map): "user has seen X" markers keyed by dotted flag name → dismissal timestamp; replaces localStorage-only persistence so the guided tour stops replaying per browser/device.
+- `2026_07_14_120000_add_welcome_email_sent_at_to_users.php` — adds `users.welcome_email_sent_at` (nullable timestamp): at-most-once guard claimed by `SendWelcomeEmailJob` via a conditional UPDATE, so job retries never send a duplicate welcome email.
+
+### Multiple subdomains per user (2026-07-15)
+
+- `2026_07_15_000001_allow_multiple_user_subdomains.php` — drops `UNIQUE(user_id)` on `user_subdomains` (replaced by a plain index), allowing several subdomains per user; the global partial unique on active `subdomain` labels remains.
+
+### Clicks IP index (2026-07-27)
+
+- `2026_07_27_000001_add_ip_index_to_clicks_table.php` — adds composite index `(ip, created_at)` (`idx_clicks_ip_created_at`): `ProcessLinkClickJob::analyzeVisitorBehavior` queries `WHERE ip = ? AND created_at >= ?` on every click (24h/1h windows), which was a full table scan without it.
+
 ---
 
 ## Policy
