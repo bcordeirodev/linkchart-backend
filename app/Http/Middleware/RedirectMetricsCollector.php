@@ -42,7 +42,11 @@ class RedirectMetricsCollector
         AppLogger::event('redirect', 'debug', 'redirect_metrics.starting', [
             'slug' => $slug,
             'ip' => $ip,
-            'user_agent' => substr($userAgent, 0, 100),
+            // userAgent() é null quando a request não manda o header (scanners fazem
+            // isso). Truncar direto passava null para substr() — deprecation hoje,
+            // TypeError num PHP futuro, no hot path de cliques. Mantém null em vez de
+            // virar '' para o log continuar distinguindo "não veio" de "veio vazio".
+            'user_agent' => $userAgent === null ? null : substr($userAgent, 0, 100),
         ]);
 
         // Processar redirecionamento
