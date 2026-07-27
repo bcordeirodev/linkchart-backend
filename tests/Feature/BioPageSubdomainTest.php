@@ -94,8 +94,12 @@ class BioPageSubdomainTest extends TestCase
         ], $this->auth())->assertStatus(422);
     }
 
-    public function test_upsert_with_explicit_null_removes_association(): void
+    public function test_upsert_rejects_explicit_null_subdomain_id_on_update(): void
     {
+        // A bio page's subdomain is now mandatory (product decision recorded
+        // 2026-07-27) — detaching it via an explicit `subdomain_id: null` on
+        // update is no longer allowed; see BioPageSubdomainRequiredTest for
+        // the full matrix of this rule.
         $sub = UserSubdomain::factory()->create(['user_id' => $this->user->id]);
         $this->putJson('/api/bio', [
             'handle' => 'joaosilva', 'title' => 'João', 'subdomain_id' => $sub->id,
@@ -107,10 +111,9 @@ class BioPageSubdomainTest extends TestCase
             'subdomain_id' => null,
         ], $this->auth());
 
-        $response->assertOk();
-        $this->assertNull($response->json('data.subdomain_id'));
-        $this->assertSame('/@joaosilva', $response->json('data.url'));
-        $this->assertDatabaseHas('bio_pages', ['handle' => 'joaosilva', 'subdomain_id' => null]);
+        $response->assertStatus(422);
+        // Rejected before persisting — the existing association survives untouched.
+        $this->assertDatabaseHas('bio_pages', ['handle' => 'joaosilva', 'subdomain_id' => $sub->id]);
     }
 
     public function test_upsert_without_subdomain_id_key_keeps_current_association(): void
@@ -147,12 +150,16 @@ class BioPageSubdomainTest extends TestCase
         $this->assertSame('/@joaosilva', $response->json('data.url'));
     }
 
-    public function test_page_without_subdomain_has_path_based_url_by_default(): void
+    public function test_legacy_page_without_subdomain_has_path_based_url(): void
     {
-        $response = $this->putJson('/api/bio', [
-            'handle' => 'joaosilva',
-            'title' => 'João Silva',
-        ], $this->auth());
+        // A subdomain is now mandatory on every PUT /api/bio (see
+        // BioPageSubdomainRequiredTest) — a page without one can only exist
+        // as a pre-existing legacy row, created directly via the model
+        // factory here (bypassing the service/validation), not through the
+        // HTTP endpoint.
+        BioPage::factory()->create(['user_id' => $this->user->id, 'handle' => 'joaosilva']);
+
+        $response = $this->getJson('/api/bio', $this->auth());
 
         $response->assertOk();
         $this->assertNull($response->json('data.subdomain_id'));

@@ -2505,7 +2505,7 @@
             },
             "put": {
                 "operationId": "bioPage.upsert",
-                "description": "Create the authenticated user's bio page on first call, update it on\nevery subsequent call (upsert \u2014 `bio_pages.user_id` is unique, so this\nnever inserts a second row for the same user).\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nBody: { handle, title, bio?, theme?, is_active?, subdomain_id? } \u2014 see\nUpsertBioPageRequest. `subdomain_id` absent keeps the current\nassociation, `null` removes it, an int must be an active subdomain\nowned by the caller (422 otherwise \u2014 mirrors LinkService::resolveShortDomain).\nResponse shape: NormalizeApiResponse envelope: { data: BioPage } \u2014 includes\nthe computed `url` and, in this management shape, `subdomain_id`.",
+                "description": "Create the authenticated user's bio page on first call, update it on\nevery subsequent call (upsert \u2014 `bio_pages.user_id` is unique, so this\nnever inserts a second row for the same user).\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nBody: { handle, title, bio?, theme?, is_active?, subdomain_id? } \u2014 see\nUpsertBioPageRequest. A subdomain association is now MANDATORY (product\ndecision recorded 2026-07-27 \u2014 the subdomain IS the page's identity):\ncreating a page requires `subdomain_id` as a non-null int; on update,\n`null` is always rejected (422) and an absent key keeps the current\nassociation UNLESS the existing page is legacy (no association yet),\nwhich also requires one. Any provided int must be an active subdomain\nowned by the caller (422 otherwise \u2014 mirrors LinkService::resolveShortDomain).\nSee BioPageService::upsert() for the full rule and BioPageSubdomainRequiredTest\nfor the test matrix.\nResponse shape: NormalizeApiResponse envelope: { data: BioPage } \u2014 includes\nthe computed `url` and, in this management shape, `subdomain_id`.",
                 "summary": "PUT /api/bio",
                 "tags": [
                     "BioPage"
@@ -4408,7 +4408,7 @@
         "/v1/links": {
             "post": {
                 "operationId": "v1.link.store",
-                "description": "POST /api/v1/links\n\nCreate a shortened link owned by the API token's user. The destination\nURL runs through the full safety pipeline (local anti-phishing\nheuristic + Google Safe Browsing) before anything is persisted; unsafe\nURLs are rejected with 422. When `slug` is omitted a unique slug is\ngenerated automatically.\n\nBody: { original_url (required), slug?, title?, expires_at?,\n        click_limit?, utm_source?, utm_medium?, utm_campaign?,\n        utm_term?, utm_content? }\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource } (201)\n\u2014 includes short_url, has_password, is_active, clicks etc.",
+                "description": "POST /api/v1/links\n\nCreate a shortened link owned by the API token's user. The destination\nURL runs through the full safety pipeline (local anti-phishing\nheuristic + Google Safe Browsing) before anything is persisted; unsafe\nURLs are rejected with 422. When `slug` is omitted a unique slug is\ngenerated automatically.\n\n`subdomain_id` follows the panel's tri-state semantics (see\nCreateLinkDTO::$subdomain_id_provided): absent \u2192 the user's default\n(oldest active) subdomain; explicit null \u2192 force the root domain; an id\n\u2192 that subdomain, which must be active and owned by the token's user\n(422 otherwise).\n\nBody: { original_url (required), slug?, title?, expires_at?,\n        click_limit?, subdomain_id?, utm_source?, utm_medium?,\n        utm_campaign?, utm_term?, utm_content? }\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource } (201)\n\u2014 includes short_url, has_password, is_active, clicks etc.",
                 "summary": "Criar link encurtado",
                 "tags": [
                     "Link"
@@ -5201,6 +5201,144 @@
                         "$ref": "#/components/responses/ValidationException"
                     }
                 }
+            }
+        },
+        "/public/bio/by-subdomain/{subdomain}": {
+            "get": {
+                "operationId": "publicBio.showBySubdomain",
+                "description": "Same as {@see self::show()} but resolves by the subdomain LABEL\ninstead of the bio page's own handle \u2014 used when the frontend renders\nthe bio page directly on the subdomain's own host (e.g.\n`bruno.linkcharts.com.br`), so it never sees the handle to look up by.\n\n404 when: the subdomain does not exist, the subdomain is not active,\nthe subdomain has no associated bio page (`bio_pages.subdomain_id`),\nor that bio page is inactive.\n\nRegistered BEFORE `/public/bio/{handle}` in routes/api.php so this\nmore specific two-segment route is matched first; see BioPagePublicBySubdomainTest\nfor a test proving both routes respond correctly, including the\nsharpest collision case (a bio page whose handle literally IS\n\"by-subdomain\").\n\nMiddleware: throttle:public-bio (same limiter as show())\nAuth: none\n\nResponse shape: identical envelope/shape to show():\n  { data: { handle, title, bio, theme, avatar_url, url, items: [{ id, label, url }] } }",
+                "summary": "GET /api/public/bio/by-subdomain/{subdomain}",
+                "tags": [
+                    "PublicBio"
+                ],
+                "parameters": [
+                    {
+                        "name": "subdomain",
+                        "in": "path",
+                        "required": true,
+                        "description": "Subdomain label from the URL path (case-insensitive).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao buscar p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "properties": {
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "integer"
+                                                            },
+                                                            "label": {
+                                                                "type": "string"
+                                                            },
+                                                            "url": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "id",
+                                                            "label",
+                                                            "url"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "avatar_url",
+                                                "url",
+                                                "items"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "P\u00e1gina n\u00e3o encontrada."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
             }
         },
         "/public/bio/{handle}": {
@@ -7271,7 +7409,7 @@
             },
             "StoreLinkRequest": {
                 "type": "object",
-                "description": "Form Request para cria\u00e7\u00e3o de link pela API p\u00fablica (POST /api/v1/links).\n\nEspelha as regras de {@see \\App\\Http\\Requests\\CreateLinkRequest} (painel)\npara o subconjunto de campos expostos no contrato v1 \u2014 original_url, slug,\ntitle, expires_at, click_limit e utm_* \u2014 com duas diferen\u00e7as deliberadas:\n\n  - o campo p\u00fablico chama-se `slug` (n\u00e3o `custom_slug`);\n  - a valida\u00e7\u00e3o falha com a ValidationException padr\u00e3o, renderizada pelo\n    handler global como {error: {code: VALIDATION_FAILED, ...}} (422).\n\nA verifica\u00e7\u00e3o de seguran\u00e7a da URL (heur\u00edstica local + Google Safe Browsing,\nvia {@see LinkSafetyService}) roda em withValidator exatamente como no\npainel \u2014 a API p\u00fablica N\u00c3O bypassa as camadas anti-phishing.",
+                "description": "Form Request para cria\u00e7\u00e3o de link pela API p\u00fablica (POST /api/v1/links).\n\nEspelha as regras de {@see \\App\\Http\\Requests\\CreateLinkRequest} (painel)\npara o subconjunto de campos expostos no contrato v1 \u2014 original_url, slug,\ntitle, expires_at, click_limit, subdomain_id e utm_* \u2014 com duas diferen\u00e7as\ndeliberadas:\n\n  - o campo p\u00fablico chama-se `slug` (n\u00e3o `custom_slug`);\n  - a valida\u00e7\u00e3o falha com a ValidationException padr\u00e3o, renderizada pelo\n    handler global como {error: {code: VALIDATION_FAILED, ...}} (422).\n\nA verifica\u00e7\u00e3o de seguran\u00e7a da URL (heur\u00edstica local + Google Safe Browsing,\nvia {@see LinkSafetyService}) roda em withValidator exatamente como no\npainel \u2014 a API p\u00fablica N\u00c3O bypassa as camadas anti-phishing.",
                 "properties": {
                     "original_url": {
                         "type": "string",
@@ -7308,6 +7446,13 @@
                         ],
                         "minimum": 1,
                         "maximum": 1000000
+                    },
+                    "subdomain_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "description": "Ownership e status ativo s\u00e3o validados no LinkService\n(resolveShortDomain), igual ao painel \u2014 ver\nCreateLinkRequest::rules() e CreateLinkDTO::$subdomain_id_provided."
                     },
                     "utm_source": {
                         "type": [
@@ -7524,10 +7669,11 @@
             },
             "UpsertBioPageRequest": {
                 "type": "object",
-                "description": "Form Request for PUT /api/bio (create-or-update the authenticated user's\nbio page).\n\n`handle` is validated against the fixed format regex (3\u201330 chars,\nlowercase alnum with internal hyphens only), the {@see BioHandleNotReserved}\nblocklist, and global uniqueness \u2014 ignoring the authenticated user's own\nexisting row, so resubmitting an unchanged handle never trips the\nuniqueness check against itself.\n\n`subdomain_id` only has its shape validated here (nullable integer).\nOwnership and active-status are business rules enforced in\n{@see \\App\\Services\\Bio\\BioPageService::upsert()}, mirroring how\n{@see \\App\\Services\\Links\\LinkService::resolveShortDomain()} validates the\nsame relationship for links \u2014 surfaced as 422 by the controller. The field\nis `sometimes`: absent from the payload leaves the current association\nuntouched; present as `null` explicitly removes it.",
+                "description": "Form Request for PUT /api/bio (create-or-update the authenticated user's\nbio page).\n\n`handle` is validated against the fixed format regex (3\u201330 chars,\nlowercase alnum with internal hyphens only), the {@see BioHandleNotReserved}\nblocklist, and global uniqueness \u2014 ignoring the authenticated user's own\nexisting row, so resubmitting an unchanged handle never trips the\nuniqueness check against itself.\n\n`subdomain_id` only has its shape validated here (nullable integer). Every\nother rule around it \u2014 ownership/active-status, AND the product rule that a\nbio page's subdomain is now mandatory (a page can no longer be created, nor\nknowingly re-saved, without one; product decision recorded 2026-07-27) \u2014 is\na business rule enforced in {@see \\App\\Services\\Bio\\BioPageService::upsert()}\n(ownership mirrors how {@see \\App\\Services\\Links\\LinkService::resolveShortDomain()}\nvalidates the same relationship for links), surfaced as 422 by the\ncontroller. The field is `sometimes` at THIS layer only: absent from the\npayload is shape-valid here and may still be rejected downstream (when\ncreating, or updating a legacy page that has no association yet); present\nas `null` is also shape-valid here and always rejected downstream now that\ndetaching a subdomain via update is no longer allowed.",
                 "properties": {
                     "handle": {
                         "type": "string",
+                        "description": "'sometimes': o editor nao envia handle (subdomain-first) \u2014 na\ncriacao o service deriva do label do subdominio; no update,\nausente mantem o atual. Explicito continua validado (API).",
                         "pattern": "^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$"
                     },
                     "title": {
@@ -7565,7 +7711,6 @@
                     }
                 },
                 "required": [
-                    "handle",
                     "title"
                 ],
                 "title": "UpsertBioPageRequest"

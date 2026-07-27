@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\UserSubdomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -13,7 +14,12 @@ use Tests\TestCase;
  *
  * Item CRUD and reorder are covered separately in BioPageItemsTest; the
  * public-facing GET /api/public/bio/{handle} contract is covered in
- * BioPagePublicTest.
+ * BioPagePublicTest. The subdomain-required product rule (a bio page can no
+ * longer be created, nor knowingly re-saved, without an active subdomain
+ * association) is covered in full in BioPageSubdomainRequiredTest — every
+ * PUT /api/bio call here that creates a page includes `subdomain_id` for an
+ * active `UserSubdomain` created in {@see self::setUp()} purely to satisfy
+ * that rule; it is not itself under test in this file.
  */
 class BioPageManagementTest extends TestCase
 {
@@ -22,6 +28,8 @@ class BioPageManagementTest extends TestCase
     private User $user;
 
     private string $token;
+
+    private int $subdomainId;
 
     protected function setUp(): void
     {
@@ -32,6 +40,7 @@ class BioPageManagementTest extends TestCase
             'email_verified_at' => now(),
         ]);
         $this->token = auth()->guard('api')->login($this->user);
+        $this->subdomainId = UserSubdomain::factory()->create(['user_id' => $this->user->id])->id;
     }
 
     /**
@@ -57,6 +66,7 @@ class BioPageManagementTest extends TestCase
             'title' => 'João Silva',
             'bio' => 'Desenvolvedor e criador de conteúdo.',
             'theme' => 'dark',
+            'subdomain_id' => $this->subdomainId,
         ], $this->auth());
 
         $response->assertOk()->assertJsonStructure([
@@ -78,6 +88,7 @@ class BioPageManagementTest extends TestCase
         $this->putJson('/api/bio', [
             'handle' => 'Ana',
             'title' => 'Ana',
+            'subdomain_id' => $this->subdomainId,
         ], $this->auth())->assertOk();
 
         $this->assertDatabaseHas('bio_pages', [
@@ -88,7 +99,9 @@ class BioPageManagementTest extends TestCase
 
     public function test_upsert_updates_existing_page(): void
     {
-        $this->putJson('/api/bio', ['handle' => 'joaosilva', 'title' => 'João'], $this->auth())->assertOk();
+        $this->putJson('/api/bio', [
+            'handle' => 'joaosilva', 'title' => 'João', 'subdomain_id' => $this->subdomainId,
+        ], $this->auth())->assertOk();
 
         $response = $this->putJson('/api/bio', [
             'handle' => 'joaosilva',
@@ -144,7 +157,9 @@ class BioPageManagementTest extends TestCase
 
     public function test_upsert_allows_keeping_own_unchanged_handle(): void
     {
-        $this->putJson('/api/bio', ['handle' => 'joaosilva', 'title' => 'João'], $this->auth())->assertOk();
+        $this->putJson('/api/bio', [
+            'handle' => 'joaosilva', 'title' => 'João', 'subdomain_id' => $this->subdomainId,
+        ], $this->auth())->assertOk();
 
         // Re-saving with the same handle (only title changes) must not be
         // treated as a duplicate of itself.
@@ -175,7 +190,9 @@ class BioPageManagementTest extends TestCase
 
     public function test_handle_available_true_for_own_current_handle(): void
     {
-        $this->putJson('/api/bio', ['handle' => 'joaosilva', 'title' => 'João'], $this->auth())->assertOk();
+        $this->putJson('/api/bio', [
+            'handle' => 'joaosilva', 'title' => 'João', 'subdomain_id' => $this->subdomainId,
+        ], $this->auth())->assertOk();
 
         $response = $this->getJson('/api/bio/handle-available?handle=joaosilva', $this->auth());
 

@@ -18,13 +18,18 @@ use Illuminate\Validation\Rule;
  * existing row, so resubmitting an unchanged handle never trips the
  * uniqueness check against itself.
  *
- * `subdomain_id` only has its shape validated here (nullable integer).
- * Ownership and active-status are business rules enforced in
- * {@see \App\Services\Bio\BioPageService::upsert()}, mirroring how
- * {@see \App\Services\Links\LinkService::resolveShortDomain()} validates the
- * same relationship for links — surfaced as 422 by the controller. The field
- * is `sometimes`: absent from the payload leaves the current association
- * untouched; present as `null` explicitly removes it.
+ * `subdomain_id` only has its shape validated here (nullable integer). Every
+ * other rule around it — ownership/active-status, AND the product rule that a
+ * bio page's subdomain is now mandatory (a page can no longer be created, nor
+ * knowingly re-saved, without one; product decision recorded 2026-07-27) — is
+ * a business rule enforced in {@see \App\Services\Bio\BioPageService::upsert()}
+ * (ownership mirrors how {@see \App\Services\Links\LinkService::resolveShortDomain()}
+ * validates the same relationship for links), surfaced as 422 by the
+ * controller. The field is `sometimes` at THIS layer only: absent from the
+ * payload is shape-valid here and may still be rejected downstream (when
+ * creating, or updating a legacy page that has no association yet); present
+ * as `null` is also shape-valid here and always rejected downstream now that
+ * detaching a subdomain via update is no longer allowed.
  */
 class UpsertBioPageRequest extends FormRequest
 {
@@ -42,8 +47,11 @@ class UpsertBioPageRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // 'sometimes': o editor nao envia handle (subdomain-first) — na
+            // criacao o service deriva do label do subdominio; no update,
+            // ausente mantem o atual. Explicito continua validado (API).
             'handle' => [
-                'required',
+                'sometimes',
                 'string',
                 'regex:/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/',
                 new BioHandleNotReserved,

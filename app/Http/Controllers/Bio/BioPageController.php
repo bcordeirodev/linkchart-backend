@@ -72,9 +72,15 @@ class BioPageController extends Controller
      * Auth: required
      *
      * Body: { handle, title, bio?, theme?, is_active?, subdomain_id? } — see
-     * UpsertBioPageRequest. `subdomain_id` absent keeps the current
-     * association, `null` removes it, an int must be an active subdomain
+     * UpsertBioPageRequest. A subdomain association is now MANDATORY (product
+     * decision recorded 2026-07-27 — the subdomain IS the page's identity):
+     * creating a page requires `subdomain_id` as a non-null int; on update,
+     * `null` is always rejected (422) and an absent key keeps the current
+     * association UNLESS the existing page is legacy (no association yet),
+     * which also requires one. Any provided int must be an active subdomain
      * owned by the caller (422 otherwise — mirrors LinkService::resolveShortDomain).
+     * See BioPageService::upsert() for the full rule and BioPageSubdomainRequiredTest
+     * for the test matrix.
      * Response shape: NormalizeApiResponse envelope: { data: BioPage } — includes
      * the computed `url` and, in this management shape, `subdomain_id`.
      *
