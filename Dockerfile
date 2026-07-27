@@ -91,7 +91,11 @@ RUN sed -i \
 RUN addgroup -g 1000 www && \
     adduser -D -s /bin/sh -u 1000 -G www www && \
     mkdir -p /var/log/supervisor /var/log/nginx && \
-    chown -R www:www /var/log/supervisor
+    chown -R www:www /var/log/supervisor && \
+    # /var/lib/nginx vem do pacote alpine como nginx:nginx, mas o worker roda
+    # como www-data (nginx.conf) — sem isto, corpo de request >16KB (upload de
+    # avatar) nao grava o temp de client_body e vira 500 do nginx.
+    chown -R www-data:www-data /var/lib/nginx
 
 # Definir diretório de trabalho
 WORKDIR /var/www
