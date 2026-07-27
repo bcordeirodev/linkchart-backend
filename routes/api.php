@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Analytics\AnalyticsController;
+use App\Http\Controllers\Api\ApiKeyController;
+use App\Http\Controllers\Api\V1\LinkController as V1LinkController;
 use App\Http\Controllers\Auth\AccountController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OnboardingController;
@@ -177,4 +179,36 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
     Route::post('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'claim'])
         ->middleware('throttle:subdomain-claim');
     Route::delete('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'release']);
+});
+
+/**
+ * ==============================
+ * GESTÃO DE API KEYS (painel)
+ * ==============================
+ * Emissão/listagem/revogação dos tokens Sanctum usados pela API pública /v1.
+ * Autenticação do PAINEL (JWT): um token Sanctum nunca autentica aqui — os
+ * dois guards coexistem isolados (JWT = sessão do SPA, Sanctum = API pública).
+ * O token completo aparece SÓ na resposta do POST (padrão plainTextToken).
+ */
+Route::middleware(['api.auth:api', 'verified', 'throttle:api-keys'])->controller(ApiKeyController::class)->group(function () {
+    Route::get('/api-keys', 'index');
+    Route::post('/api-keys', 'store');
+    Route::delete('/api-keys/{id}', 'destroy')->whereNumber('id');
+});
+
+/**
+ * ==============================
+ * API PÚBLICA v1 (Sanctum Bearer)
+ * ==============================
+ * Superfície programática para desenvolvedores — cada API key emitida é um
+ * cadastro verificado (motor de aquisição dev). auth:sanctum valida o Bearer
+ * token contra personal_access_tokens (last_used_at atualizado pelo guard a
+ * cada uso); throttle:public-api limita 60 req/min por token. A criação passa
+ * pelo LinkService — Safe Browsing + heurística anti-phishing INCLUSOS.
+ */
+Route::prefix('v1')->middleware(['auth:sanctum', 'throttle:public-api'])->controller(V1LinkController::class)->group(function () {
+    Route::post('/links', 'store');
+    Route::get('/links', 'index');
+    Route::get('/links/{id}', 'show')->whereNumber('id');
+    Route::get('/links/{id}/stats', 'stats')->whereNumber('id');
 });

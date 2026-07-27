@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
 /**
@@ -15,6 +16,12 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * Implements JWTSubject so tymon/jwt-auth can embed the user's primary key
  * in the `sub` claim. Observer: App\Models\Observers\UserObserver, registered
  * in AppServiceProvider::boot() via User::observe(UserObserver::class).
+ *
+ * Also uses Laravel Sanctum's HasApiTokens for the public API (/api/v1):
+ * the JWT guard keeps authenticating the SPA/panel session while Sanctum
+ * personal access tokens ("API keys", managed via /api/api-keys) authenticate
+ * the public API. The two guards coexist and are deliberately isolated — a
+ * panel JWT does not authenticate on auth:sanctum routes and vice-versa.
  *
  * Fillable: name, email, password, email_verified, email_verified_at,
  *           email_verification_sent_at, auth0_sub, onboarding.
@@ -40,11 +47,12 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Link>                        $links
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\EmailVerificationToken>      $emailVerificationTokens
  * @property-read \App\Models\UserSubdomain|null $subdomain
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \Laravel\Sanctum\PersonalAccessToken>    $tokens API keys da API pública (Sanctum).
  */
 class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.

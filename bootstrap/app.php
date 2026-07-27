@@ -14,7 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        health: '/health', // Health check customizado
+        // NOTE: withRouting(health: '/health') was removed on purpose. The
+        // framework health route it registered was ALWAYS shadowed by the
+        // hand-written GET /health in routes/web.php (same URI registered
+        // later wins the route-collection lookup — `php artisan route:list`
+        // resolved /health to routes/web.php). The web.php route is the live
+        // one and serves the payload consumed by monitoring and deploy checks.
         then: function () {
             // Fallback apenas para rotas não encontradas
             Route::fallback(function () {
@@ -26,21 +31,32 @@ return Application::configure(basePath: dirname(__DIR__))
         }
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // 🌐 MIDDLEWARE GLOBAL: TrustProxies e CORS devem ser os primeiros
         $middleware->web([
             \App\Http\Middleware\TrustProxies::class,
             \App\Http\Middleware\AssignRequestId::class,
-            \Illuminate\Http\Middleware\HandleCors::class,
         ]);
 
         $middleware->api([
             \App\Http\Middleware\TrustProxies::class,
             \App\Http\Middleware\AssignRequestId::class,
-            \Illuminate\Http\Middleware\HandleCors::class,
             \App\Http\Middleware\NormalizeApiResponse::class,
         ]);
 
-        // 🔧 CORS GLOBAL: Aplicar a todas as requisições para resolver problemas de desenvolvimento
+        // CORS: HandleCors is registered ONCE, here, as global middleware.
+        // Global is the only registration that answers preflight OPTIONS
+        // before routing, and it covers both the web and api groups — the
+        // former duplicate copies inside those groups were removed (they made
+        // HandleCors run twice per request). Path scoping ('api/*', 'r/*')
+        // lives in config/cors.php.
+        //
+        // ⚠️ Behavior note: $middleware->use() REPLACES Laravel's default
+        // global stack (TrimStrings, ConvertEmptyStringsToNull,
+        // ValidatePostSize, PreventRequestsDuringMaintenance, ...), it does
+        // not append to it. This app has always run with that reduced global
+        // stack, so this registration is kept as `use()` deliberately —
+        // switching to append() would silently re-enable input trimming and
+        // empty-string-to-null conversion, a real behavior change that must
+        // not ride along with a CORS cleanup.
         $middleware->use([
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
@@ -63,6 +79,13 @@ return Application::configure(basePath: dirname(__DIR__))
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
             'resolve.subdomain' => \App\Http\Middleware\ResolveSubdomainContext::class,
         ]);
+
+        // Este backend não tem página de login (SPA separado): o default do
+        // Authenticate resolve route('login') EAGERMENTE ao lançar a
+        // AuthenticationException — RouteNotFoundException viraria 500 antes
+        // do renderer custom de 401 rodar (consumidores de API sem o header
+        // Accept caem exatamente nesse caminho). Guest nunca redireciona.
+        $middleware->redirectGuestsTo(fn () => null);
 
         // NOTA: Rota /r/* configurada em web.php com middlewares específicos
     })

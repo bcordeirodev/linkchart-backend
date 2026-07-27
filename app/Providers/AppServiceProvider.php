@@ -131,5 +131,28 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('resend-verification', function (Request $request) {
             return Limit::perMinute(5)->by($request->user()?->id ?: $request->ip());
         });
+
+        // 10 req/min por usuário nas rotas de gestão de API keys (/api/api-keys:
+        // criar/listar/revogar). Chaveado pelo usuário do guard do painel (JWT),
+        // com fallback para IP em requests não autenticadas (que o api.auth já
+        // rejeita com 401, mas o limiter roda para toda a rota).
+        RateLimiter::for('api-keys', function (Request $request) {
+            return Limit::perMinute(10)->by('api-keys:'.($request->user('api')?->id ?: $request->ip()));
+        });
+
+        // 60 req/min por token Sanctum em toda a API pública /api/v1. Chave
+        // preferencial = id do personal access token (revogar e recriar a key
+        // zera o bucket de propósito); fallback para o id do usuário (ex.:
+        // autenticação stateful sem token) e, por fim, IP quando anônimo.
+        RateLimiter::for('public-api', function (Request $request) {
+            $user = $request->user('sanctum');
+            $token = $user?->currentAccessToken();
+
+            $key = $token instanceof \Laravel\Sanctum\PersonalAccessToken
+                ? 'token:'.$token->id
+                : ($user?->id ? 'user:'.$user->id : 'ip:'.$request->ip());
+
+            return Limit::perMinute(60)->by('public-api:'.$key);
+        });
     }
 }

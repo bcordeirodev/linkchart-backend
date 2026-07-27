@@ -777,6 +777,194 @@
                 }
             }
         },
+        "/api-keys": {
+            "get": {
+                "operationId": "apiKey.index",
+                "description": "GET /api/api-keys\n\nReturn the authenticated user's API keys, newest first. Each item shows\nonly the identifying metadata \u2014 the full token is unrecoverable after\ncreation (Sanctum stores its sha256 hash); `token_preview` carries the\nlast 4 characters (\"\u2026a1b2\") so keys can be told apart.\n\nMiddleware: api.auth:api, verified, throttle:api-keys\nAuth: required (panel JWT)\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: [{ id, name, token_preview, last_used_at, created_at }] }",
+                "summary": "Listar API keys",
+                "tags": [
+                    "ApiKey"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "token_preview": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    },
+                                                    "last_used_at": {
+                                                        "type": "string"
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "name",
+                                                    "token_preview",
+                                                    "last_used_at",
+                                                    "created_at"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "apiKey.store",
+                "description": "POST /api/api-keys\n\nCreate a new Sanctum personal access token for the authenticated user.\nThe plaintext token (format \"{id}|{random}\") is returned ONLY in this\nresponse \u2014 store it immediately; it cannot be retrieved again. The last\n4 characters are persisted as `token_preview` for later identification.\n\nBusiness rule: at most 5 keys per user (422 when exceeded).\n\nMiddleware: api.auth:api, verified, throttle:api-keys\nAuth: required (panel JWT)\n\nResponse shape: NormalizeApiResponse envelope: { data: { id, name, token } } (201)",
+                "summary": "Criar API key",
+                "tags": [
+                    "ApiKey"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StoreApiKeyRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "token": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "name",
+                                                "token"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/api-keys/{id}": {
+            "delete": {
+                "operationId": "apiKey.destroy",
+                "description": "DELETE /api/api-keys/{id}\n\nPermanently revoke one of the authenticated user's API keys. Requests\nauthenticated with the revoked token start failing with 401 immediately.\nReturns 404 when the key does not exist OR belongs to another user \u2014\nthe response never reveals foreign key ids.\n\nMiddleware: api.auth:api, verified, throttle:api-keys\nAuth: required (panel JWT)\nOwner check: yes \u2014 lookup scoped to the user's tokens.\n\nResponse shape: NormalizeApiResponse envelope: { data: { deleted: true } }",
+                "summary": "Revogar API key",
+                "tags": [
+                    "ApiKey"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric API key ID (route-constrained to digits).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "deleted": {
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "deleted"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Chave de API n\u00e3o encontrada."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "operationId": "auth.login",
@@ -950,12 +1138,10 @@
                                         "maxLength": 255
                                     },
                                     "password": {
-                                        "type": "string",
-                                        "minLength": 6
+                                        "type": "string"
                                     },
                                     "password_confirmation": {
-                                        "type": "string",
-                                        "minLength": 6
+                                        "type": "string"
                                     }
                                 },
                                 "required": [
@@ -1337,12 +1523,10 @@
                                         "maxLength": 64
                                     },
                                     "password": {
-                                        "type": "string",
-                                        "minLength": 6
+                                        "type": "string"
                                     },
                                     "password_confirmation": {
-                                        "type": "string",
-                                        "minLength": 6
+                                        "type": "string"
                                     }
                                 },
                                 "required": [
@@ -1807,7 +1991,7 @@
         "/resend-verification-email": {
             "post": {
                 "operationId": "auth.resendVerificationEmail",
-                "description": "Re-send the email verification message for the authenticated user, unless\nthe email is already verified.\n\nMiddleware: api.auth:api (no verified, no throttle)\nAuth: required (JWT)\nOwner check: no (operates on the authenticated user's own record)\n\nNOTE: This action carries NO rate limit despite sending email. This is a\nknown gap surfaced in the audit (\u00a714). A dedicated throttle should be\nadded in a follow-up.\n\nResponse shape: service-defined { success, ... } (200 or 400)\n                { success: false, message, type: 'already_verified' } (400) if already done\n                { success: false, message, error_id } on server error (500)",
+                "description": "Re-send the email verification message for the authenticated user, unless\nthe email is already verified.\n\nMiddleware: api.auth:api, throttle:resend-verification (no verified)\nRate limit: resend-verification \u2014 5/min per authenticated user (IP\nfallback), defined in AppServiceProvider; the 2-minute cooldown in\nUser::canResendVerificationEmail applies on top of it.\nAuth: required (JWT)\nOwner check: no (operates on the authenticated user's own record)\n\nResponse shape: service-defined { success, ... } (200 or 400)\n                { success: false, message, type: 'already_verified' } (400) if already done\n                { success: false, message, error_id } on server error (500)",
                 "summary": "POST /api/resend-verification-email",
                 "tags": [
                     "Auth"
@@ -2043,12 +2227,10 @@
                                         "type": "string"
                                     },
                                     "new_password": {
-                                        "type": "string",
-                                        "minLength": 6
+                                        "type": "string"
                                     },
                                     "new_password_confirmation": {
-                                        "type": "string",
-                                        "minLength": 6
+                                        "type": "string"
                                     }
                                 },
                                 "required": [
@@ -2220,7 +2402,7 @@
         },
         "/links": {
             "get": {
-                "operationId": "link.index",
+                "operationId": "links.link.index",
                 "description": "Return the authenticated user's links, wrapped in a LinkResource collection.\n\nTwo response contracts, opt-in via the `page` query parameter, kept\nside-by-side for blue/green deploy compatibility (frontend and backend\ncontainers of different versions may serve traffic simultaneously):\n\n  - WITHOUT `page`: legacy behaviour, unchanged \u2014 returns the full list\n    of the user's links, newest first, no filtering/sorting/pagination.\n  - WITH `page`: paginated + filterable branch. Accepts:\n      page      int, >= 1\n      per_page  int, 1\u201350 (default 12)\n      q         string, max 255 \u2014 case-insensitive search over\n                title, original_url, and slug\n      status    active|inactive|expired\n      sort      created_at|clicks|title (default created_at)\n      order     asc|desc (default desc)\n    Invalid params (e.g. per_page > 50) yield a 422 validation response.\n\nThe per-item shape is identical in both branches \u2014 both ultimately\nserialise through LinkResource \u2014 only the envelope differs.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 LinkService filters by auth user id.\n\nResponse shape:\n  - Legacy: NormalizeApiResponse envelope: { data: LinkResource[] }\n  - Paginated: NormalizeApiResponse envelope: { data: LinkResource[], meta: { current_page, per_page, total, last_page } }",
                 "summary": "GET /api/links",
                 "tags": [
@@ -2385,7 +2567,7 @@
                 }
             },
             "post": {
-                "operationId": "link.store",
+                "operationId": "links.link.store",
                 "description": "Create a new shortened link for the authenticated user. Validates via\nCreateLinkRequest, maps to CreateLinkDTO, and writes an audit record.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 link is always created under the auth user id.\n\nResponse shape: NormalizeApiResponse envelope: { message, data: LinkResource } (201)",
                 "summary": "POST /api/links",
                 "tags": [
@@ -2559,7 +2741,7 @@
         },
         "/links/{id}": {
             "get": {
-                "operationId": "link.show",
+                "operationId": "links.link.show",
                 "description": "Return a single link that belongs to the authenticated user.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 LinkService::getUserLink enforces user_id match.\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource }",
                 "summary": "GET /api/links/{id}",
                 "tags": [
@@ -3264,6 +3446,334 @@
                 }
             }
         },
+        "/v1/links": {
+            "post": {
+                "operationId": "v1.link.store",
+                "description": "POST /api/v1/links\n\nCreate a shortened link owned by the API token's user. The destination\nURL runs through the full safety pipeline (local anti-phishing\nheuristic + Google Safe Browsing) before anything is persisted; unsafe\nURLs are rejected with 422. When `slug` is omitted a unique slug is\ngenerated automatically.\n\nBody: { original_url (required), slug?, title?, expires_at?,\n        click_limit?, utm_source?, utm_medium?, utm_campaign?,\n        utm_term?, utm_content? }\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource } (201)\n\u2014 includes short_url, has_password, is_active, clicks etc.",
+                "summary": "Criar link encurtado",
+                "tags": [
+                    "Link"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/StoreLinkRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/LinkResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                },
+                "security": []
+            },
+            "get": {
+                "operationId": "v1.link.index",
+                "description": "GET /api/v1/links\n\nReturn the token owner's links, newest first, paginated.\n\nQuery: page (int, >= 1, default 1), per_page (int, 1\u201350, default 15).\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: LinkResource[], meta: { current_page, per_page, total, last_page } }",
+                "summary": "Listar links",
+                "tags": [
+                    "Link"
+                ],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/LinkResource"
+                                            }
+                                        },
+                                        "meta": {
+                                            "type": "object",
+                                            "properties": {
+                                                "current_page": {
+                                                    "type": "integer"
+                                                },
+                                                "per_page": {
+                                                    "type": "integer"
+                                                },
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "last_page": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "current_page",
+                                                "per_page",
+                                                "total",
+                                                "last_page"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data",
+                                        "meta"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/links/{id}": {
+            "get": {
+                "operationId": "v1.link.show",
+                "description": "GET /api/v1/links/{id}\n\nReturn a single link owned by the token's user. Answers 404 both when\nthe id does not exist and when it belongs to another user.\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\nOwner check: yes \u2014 lookup scoped by user_id.\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource }",
+                "summary": "Detalhar link",
+                "tags": [
+                    "Link"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric link ID (route-constrained to digits).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/components/schemas/LinkResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Link n\u00e3o encontrado."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                },
+                "security": []
+            }
+        },
+        "/v1/links/{id}/stats": {
+            "get": {
+                "operationId": "link.stats",
+                "description": "GET /api/v1/links/{id}/stats\n\nReturn a compact stats summary for one link, reusing the same analytics\naggregations that power the panel dashboard (no bespoke SQL here):\n\n  - total_clicks / unique_visitors \u2192 dashboard summary (distinct IPs);\n  - top_countries \u2192 top 5 countries by clicks: [{ country, clicks }];\n  - devices \u2192 clicks per device type: [{ device, clicks }];\n  - clicks_last_30d \u2192 daily series, zero-filled, 30 entries:\n    [{ date: \"YYYY-MM-DD\", clicks }].\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\nOwner check: yes \u2014 404 for foreign/missing ids.\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: { total_clicks, unique_visitors, top_countries, devices, clicks_last_30d } }",
+                "summary": "Estat\u00edsticas do link",
+                "tags": [
+                    "Link"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric link ID (route-constrained to digits).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "total_clicks": {
+                                                    "type": "string"
+                                                },
+                                                "unique_visitors": {
+                                                    "type": "string"
+                                                },
+                                                "top_countries": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "country": {
+                                                                "type": "string"
+                                                            },
+                                                            "clicks": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "country",
+                                                            "clicks"
+                                                        ]
+                                                    }
+                                                },
+                                                "devices": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "device": {
+                                                                "type": "string"
+                                                            },
+                                                            "clicks": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "device",
+                                                            "clicks"
+                                                        ]
+                                                    }
+                                                },
+                                                "clicks_last_30d": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "properties": {
+                                                            "date": {
+                                                                "type": "string"
+                                                            },
+                                                            "clicks": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "date",
+                                                            "clicks"
+                                                        ]
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "total_clicks",
+                                                "unique_visitors",
+                                                "top_countries",
+                                                "devices",
+                                                "clicks_last_30d"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Link n\u00e3o encontrado."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
+                    }
+                },
+                "security": []
+            }
+        },
         "/links/url-meta": {
             "get": {
                 "operationId": "linkMeta.urlMeta",
@@ -3368,7 +3878,7 @@
         "/links/batch-meta": {
             "post": {
                 "operationId": "linkMeta.batchMeta",
-                "description": "Single round-trip to fetch sparkline + trend + OG preview + health for\nup to 50 link IDs owned by the authenticated user. Dispatches\nFetchLinkPreviewJob for any link whose preview is missing or older than\n24 hours (best-effort, does not block the response).\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 filters Link by user_id before processing.\n\nResponse shape (LOCKED): { data: { [linkId]: { sparkline, trend, preview, health } } }\n  preview: { favicon_url, og_title, og_image_url } | null\n  health:  { status, last_checked_at, http_code }",
+                "description": "Single round-trip to fetch sparkline + trend + OG preview + health for\nup to 50 link IDs owned by the authenticated user. Sparkline and trend\naggregates are computed in bulk (one grouped query each for all ids via\nMetricsService::getLinkSparklineBatch / getLinkTrendBatch) instead of\nper-link queries. Dispatches FetchLinkPreviewJob for links whose preview\nis missing or older than 24 hours (best-effort, does not block the\nresponse), capped at MAX_PREVIEW_DISPATCHES_PER_REQUEST (10) per\nrequest \u2014 remaining stale previews are refreshed by subsequent calls.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 filters Link by user_id before processing.\n\nResponse shape (LOCKED): { data: { [linkId]: { sparkline, trend, preview, health } } }\n  preview: { favicon_url, og_title, og_image_url } | null\n  health:  { status, last_checked_at, http_code }",
                 "summary": "POST /api/links/batch-meta",
                 "tags": [
                     "LinkMeta"
@@ -3515,17 +4025,20 @@
                                             "type": "object",
                                             "properties": {
                                                 "current": {
-                                                    "type": "integer",
-                                                    "minimum": 0
+                                                    "type": "integer"
                                                 },
                                                 "previous": {
-                                                    "type": "integer",
-                                                    "minimum": 0
+                                                    "type": "integer"
                                                 },
                                                 "percent_change": {
                                                     "type": "number"
                                                 },
-                                                "last_click_at": {}
+                                                "last_click_at": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
                                             },
                                             "required": [
                                                 "current",
@@ -3815,7 +4328,7 @@
         "/public/link/{slug}": {
             "get": {
                 "operationId": "publicLink.showBySlug",
-                "description": "Public-facing slug lookup. Returns basic link metadata (without click\ndetails) for an active, non-expired, already-started link. All validity\nchecks (is_active, expires_at, starts_in) are applied at the DB level\nin a single query \u2014 no differentiated error messages are returned to\nprevent slug enumeration of expired/scheduled links.\n\nMiddleware: none (no throttle, no auth)\nAuth: not required\nOwner check: no\n\nResponse shape: { data: PublicLinkResource } (200)\n                { message } (404) if not found or filtered out.\n                { error, message } on server error (500)",
+                "description": "Public-facing slug lookup. Returns basic link metadata (without click\ndetails) for an active, non-expired, already-started link. All validity\nchecks (is_active, expires_at, starts_in) are applied at the DB level\nin a single query \u2014 no differentiated error messages are returned to\nprevent slug enumeration of expired/scheduled links.\n\nMiddleware: throttle:60,1 (60 req/min per IP; no auth)\nAuth: not required\nOwner check: no\n\nResponse shape: { data: PublicLinkResource } (200)\n                { message } (404) if not found or filtered out.\n                { error, message } on server error (500)",
                 "summary": "GET /api/public/link/{slug}",
                 "tags": [
                     "PublicLink"
@@ -5608,6 +6121,102 @@
                 ],
                 "title": "PublicLinkResource"
             },
+            "StoreApiKeyRequest": {
+                "type": "object",
+                "description": "Form Request para cria\u00e7\u00e3o de uma API key (POST /api/api-keys).\n\nValida apenas o nome da chave; o limite de 5 chaves por usu\u00e1rio \u00e9 regra de\nneg\u00f3cio verificada no controller (depende do estado atual do banco, n\u00e3o do\npayload). Rota protegida por api.auth:api + verified \u2014 o token Sanctum\nemitido aqui NUNCA autentica nas rotas de gest\u00e3o (isolamento de guards).",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 60
+                    }
+                },
+                "required": [
+                    "name"
+                ],
+                "title": "StoreApiKeyRequest"
+            },
+            "StoreLinkRequest": {
+                "type": "object",
+                "description": "Form Request para cria\u00e7\u00e3o de link pela API p\u00fablica (POST /api/v1/links).\n\nEspelha as regras de {@see \\App\\Http\\Requests\\CreateLinkRequest} (painel)\npara o subconjunto de campos expostos no contrato v1 \u2014 original_url, slug,\ntitle, expires_at, click_limit e utm_* \u2014 com duas diferen\u00e7as deliberadas:\n\n  - o campo p\u00fablico chama-se `slug` (n\u00e3o `custom_slug`);\n  - a valida\u00e7\u00e3o falha com a ValidationException padr\u00e3o, renderizada pelo\n    handler global como {error: {code: VALIDATION_FAILED, ...}} (422).\n\nA verifica\u00e7\u00e3o de seguran\u00e7a da URL (heur\u00edstica local + Google Safe Browsing,\nvia {@see LinkSafetyService}) roda em withValidator exatamente como no\npainel \u2014 a API p\u00fablica N\u00c3O bypassa as camadas anti-phishing.",
+                "properties": {
+                    "original_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "pattern": "^https?:\\/\\/",
+                        "maxLength": 4096
+                    },
+                    "slug": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "minLength": 3,
+                        "maxLength": 100
+                    },
+                    "title": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 255
+                    },
+                    "expires_at": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date-time"
+                    },
+                    "click_limit": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 1,
+                        "maximum": 1000000
+                    },
+                    "utm_source": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "UTM Parameters",
+                        "maxLength": 100
+                    },
+                    "utm_medium": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 100
+                    },
+                    "utm_campaign": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 100
+                    },
+                    "utm_term": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 100
+                    },
+                    "utm_content": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "maxLength": 100
+                    }
+                },
+                "required": [
+                    "original_url"
+                ],
+                "title": "StoreLinkRequest"
+            },
             "TagResource": {
                 "type": "object",
                 "properties": {
@@ -5873,6 +6482,25 @@
             },
             "ModelNotFoundException": {
                 "description": "Not found",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "message": {
+                                    "type": "string",
+                                    "description": "Error overview."
+                                }
+                            },
+                            "required": [
+                                "message"
+                            ]
+                        }
+                    }
+                }
+            },
+            "AuthenticationException": {
+                "description": "Unauthenticated",
                 "content": {
                     "application/json": {
                         "schema": {
