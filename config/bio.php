@@ -24,4 +24,19 @@ return [
         'blog', 'docs', 'static', 'assets',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Avatar storage disk
+    |--------------------------------------------------------------------------
+    |
+    | Filesystem disk (see config/filesystems.php) used to store bio page
+    | avatar uploads. Defaults to the existing 'public' disk (local, served
+    | via the public/storage symlink created by `php artisan storage:link`).
+    | Swapping to object storage (e.g. an 's3'-driver disk pointed at
+    | DigitalOcean Spaces) later is a pure env change — no code change
+    | required — since {@see \App\Services\Bio\BioPageService} always reads
+    | this config key rather than hardcoding a disk name.
+    */
+    'avatar_disk' => env('BIO_AVATAR_DISK', 'public'),
+
 ];

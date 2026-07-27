@@ -29,7 +29,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $title Display title shown at the top of the page.
  * @property string|null $bio Short free-text description, max 280 chars.
  * @property string $theme Visual theme: 'dark' | 'light'. Default 'dark'.
- * @property string|null $avatar_url Reserved for a future avatar upload feature; unused today.
+ * @property string|null $avatar_url Publicly-servable URL of the uploaded avatar, or null.
+ *                                   Derived: always `Storage::disk(config('bio.avatar_disk'))->url($avatar_path)`
+ *                                   at the time of upload, kept in sync with `avatar_path` by
+ *                                   {@see \App\Services\Bio\BioPageService::uploadAvatar()} / `removeAvatar()`.
+ * @property string|null $avatar_path Storage-relative path of the uploaded avatar
+ *                                    (e.g. `bio-avatars/{random}.jpg`), or null. Not exposed in any
+ *                                    API response — used internally to delete the previous file on
+ *                                    replace/remove without re-deriving it from `avatar_url`.
  * @property bool $is_active Soft on/off switch; false makes the public endpoint 404.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
@@ -58,6 +65,7 @@ class BioPage extends Model
         'bio',
         'theme',
         'avatar_url',
+        'avatar_path',
         'is_active',
     ];
 

@@ -27,9 +27,10 @@ interface BioPageServiceInterface
      * PublicBioController. `url` is the computed shareable address: the
      * associated subdomain's root when one is set
      * (`https://{subdomain}.{app.domain}`), otherwise a path-based fallback
-     * (`/@{handle}`) — see BioPageService's `computeUrl()`.
+     * (`/@{handle}`) — see BioPageService's `computeUrl()`. `avatar_url` is
+     * null when no avatar has been uploaded.
      *
-     * @return array{handle: string, title: string, bio: ?string, theme: string, url: string, items: array<int, array{id: int, label: string, url: string}>}|null
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}|null
      */
     public function getPublicByHandle(string $handle): ?array;
 
@@ -37,7 +38,7 @@ interface BioPageServiceInterface
      * Return the authenticated user's bio page in the management shape, or
      * null if they haven't created one yet.
      *
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}|null
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}|null
      */
     public function getForUser(int $userId): ?array;
 
@@ -57,7 +58,7 @@ interface BioPageServiceInterface
      *     check), otherwise throws.
      *
      * @param  array{handle: string, title: string, bio?: ?string, theme?: ?string, is_active?: ?bool, subdomain_id?: ?int}  $data  Validated input (see UpsertBioPageRequest).
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
      *
      * @throws \InvalidArgumentException When `subdomain_id` is present and not an
      *                                   active subdomain owned by `$userId`.
@@ -116,7 +117,7 @@ interface BioPageServiceInterface
      * operation is rejected without applying any change.
      *
      * @param  array<int, int>  $ids  Full ordered list of the page's item ids.
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
      *
      * @throws \InvalidArgumentException When the user has no bio page yet, or `$ids`
      *                                   does not exactly match the page's current item ids.
@@ -137,4 +138,32 @@ interface BioPageServiceInterface
      * {@see \App\Http\Controllers\Bio\PublicBioController::redirectFromSubdomainRoot()}).
      */
     public function findActiveHandleBySubdomainId(int $subdomainId): ?string;
+
+    /**
+     * Upload (or replace) the avatar of `$userId`'s bio page.
+     *
+     * Stores `$file` under `bio-avatars/{random}.{ext}` on the disk
+     * configured by `config('bio.avatar_disk')` (a non-enumerable random
+     * filename — never derived from `$userId` or the page id). When the page
+     * already has an avatar, the previous file is deleted from the same disk
+     * before the new one is persisted.
+     *
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
+     *
+     * @throws \InvalidArgumentException When `$userId` has no bio page yet.
+     */
+    public function uploadAvatar(int $userId, \Illuminate\Http\UploadedFile $file): array;
+
+    /**
+     * Remove the avatar of `$userId`'s bio page, deleting the stored file (if
+     * any) and clearing `avatar_url`/`avatar_path`.
+     *
+     * A no-op success (not an error) when the page has no avatar set — only
+     * the absence of the bio page itself is an error.
+     *
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, subdomain_id: ?int, url: string, items: array<int, array<string, mixed>>}
+     *
+     * @throws \InvalidArgumentException When `$userId` has no bio page yet.
+     */
+    public function removeAvatar(int $userId): array;
 }

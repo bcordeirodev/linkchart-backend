@@ -8,6 +8,9 @@ use App\Models\BioPage;
 use App\Models\BioPageItem;
 use App\Models\Link;
 use App\Models\UserSubdomain;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Business-logic layer for the "link-in-bio" module.
@@ -40,6 +43,7 @@ class BioPageService implements BioPageServiceInterface
             'title' => $page->title,
             'bio' => $page->bio,
             'theme' => $page->theme,
+            'avatar_url' => $page->avatar_url,
             'url' => $this->computeUrl($page),
             'items' => $items->map(fn ($item) => [
                 'id' => $item->id,
@@ -239,6 +243,89 @@ class BioPageService implements BioPageServiceInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function uploadAvatar(int $userId, UploadedFile $file): array
+    {
+        $page = BioPage::where('user_id', $userId)->first();
+        if (! $page) {
+            throw new \InvalidArgumentException('Página bio ainda não foi criada.');
+        }
+
+        $disk = config('bio.avatar_disk', 'public');
+        $this->deleteAvatarFile($page, $disk);
+
+        // Random, non-enumerable filename — deliberately not derived from
+        // $userId or the bio page id, so knowing/guessing either never
+        // yields a working avatar URL.
+        $filename = Str::random(40).'.'.$file->extension();
+        $path = $file->storeAs('bio-avatars', $filename, $disk);
+
+        $page->avatar_path = $path;
+        $page->avatar_url = Storage::disk($disk)->url($path);
+        $page->save();
+
+        AppLogger::event('app', 'info', 'bio.avatar_uploaded', [
+            'user_id' => $userId,
+            'bio_page_id' => $page->id,
+        ]);
+
+        return $this->formatManagement($page->fresh());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function removeAvatar(int $userId): array
+    {
+        $page = BioPage::where('user_id', $userId)->first();
+        if (! $page) {
+            throw new \InvalidArgumentException('Página bio ainda não foi criada.');
+        }
+
+        $disk = config('bio.avatar_disk', 'public');
+        $hadAvatar = $this->deleteAvatarFile($page, $disk);
+
+        $page->avatar_path = null;
+        $page->avatar_url = null;
+        $page->save();
+
+        if ($hadAvatar) {
+            AppLogger::event('app', 'info', 'bio.avatar_removed', [
+                'user_id' => $userId,
+                'bio_page_id' => $page->id,
+            ]);
+        }
+
+        return $this->formatManagement($page->fresh());
+    }
+
+    /**
+     * Delete the bio page's currently stored avatar file from disk, if any.
+     *
+     * Always operates against the currently configured `$disk` — the only
+     * disk this codebase ever stores or deletes avatar files on within a
+     * single request/response cycle. If `avatar_path` was written under a
+     * since-changed `bio.avatar_disk` value, this silently no-ops instead of
+     * reaching across disks (deleting a path that does not exist on the
+     * current disk is not an error for Laravel's Storage facade). Migrating
+     * existing files after a disk change is an explicit operational step,
+     * not something this method attempts.
+     *
+     * @return bool Whether the page had a stored avatar path to delete.
+     */
+    private function deleteAvatarFile(BioPage $page, string $disk): bool
+    {
+        if ($page->avatar_path === null) {
+            return false;
+        }
+
+        Storage::disk($disk)->delete($page->avatar_path);
+
+        return true;
+    }
+
+    /**
      * Find a bio page item by id, scoped to items whose bio page belongs to $userId.
      *
      * Returns null both when the item does not exist and when it belongs to
@@ -310,7 +397,7 @@ class BioPageService implements BioPageServiceInterface
      * `link_id`/`position`/`is_active`/`clicks` — everything the editor UI
      * needs, none of which is exposed on the public endpoint.
      *
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, is_active: bool, items: array<int, array<string, mixed>>}
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, items: array<int, array<string, mixed>>}
      */
     private function formatManagement(BioPage $page): array
     {
@@ -322,6 +409,7 @@ class BioPageService implements BioPageServiceInterface
             'title' => $page->title,
             'bio' => $page->bio,
             'theme' => $page->theme,
+            'avatar_url' => $page->avatar_url,
             'is_active' => $page->is_active,
             'subdomain_id' => $page->subdomain_id,
             'url' => $this->computeUrl($page),

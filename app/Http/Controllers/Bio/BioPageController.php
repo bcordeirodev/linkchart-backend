@@ -6,6 +6,7 @@ use App\Contracts\Services\BioPageServiceInterface;
 use App\Http\Requests\Bio\CreateBioPageItemRequest;
 use App\Http\Requests\Bio\ReorderBioPageItemsRequest;
 use App\Http\Requests\Bio\UpdateBioPageItemRequest;
+use App\Http\Requests\Bio\UploadBioAvatarRequest;
 use App\Http\Requests\Bio\UpsertBioPageRequest;
 use App\Logging\AppLogger;
 use Illuminate\Http\JsonResponse;
@@ -232,6 +233,66 @@ class BioPageController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao reordenar itens da página bio.', $e);
+        }
+    }
+
+    /**
+     * POST /api/bio/avatar
+     *
+     * Upload (or replace) the avatar image of the authenticated user's bio
+     * page. Multipart field: `avatar`.
+     *
+     * Middleware: api.auth:api, verified, throttle:bio-avatar (10/min per user)
+     * Auth: required
+     *
+     * Body: multipart/form-data, field `avatar` — image, jpeg/png/webp,
+     * max 2MB, min 100x100px (see UploadBioAvatarRequest).
+     * Response shape: NormalizeApiResponse envelope: { data: BioPage } —
+     * same management shape as GET/PUT /api/bio, now with `avatar_url` set.
+     *
+     * @throws \Illuminate\Validation\ValidationException (handled by UploadBioAvatarRequest)
+     */
+    public function uploadAvatar(UploadBioAvatarRequest $request): JsonResponse
+    {
+        try {
+            $page = $this->bioPageService->uploadAvatar($request->user()->id, $request->file('avatar'));
+
+            return response()->json(['data' => $page]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'Dados inválidos.',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Exception $e) {
+            return $this->serverError('Erro ao enviar avatar da página bio.', $e);
+        }
+    }
+
+    /**
+     * DELETE /api/bio/avatar
+     *
+     * Remove the avatar image of the authenticated user's bio page, deleting
+     * the stored file. A no-op success when there was no avatar set.
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     *
+     * Response shape: NormalizeApiResponse envelope: { data: BioPage } —
+     * same management shape as GET/PUT /api/bio, now with `avatar_url: null`.
+     */
+    public function removeAvatar(Request $request): JsonResponse
+    {
+        try {
+            $page = $this->bioPageService->removeAvatar($request->user()->id);
+
+            return response()->json(['data' => $page]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => 'Dados inválidos.',
+                'message' => $e->getMessage(),
+            ], 422);
+        } catch (\Exception $e) {
+            return $this->serverError('Erro ao remover avatar da página bio.', $e);
         }
     }
 

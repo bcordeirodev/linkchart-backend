@@ -2460,6 +2460,9 @@
                                                 "theme": {
                                                     "type": "string"
                                                 },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
                                                 "is_active": {
                                                     "type": "boolean"
                                                 },
@@ -2483,6 +2486,7 @@
                                                 "title",
                                                 "bio",
                                                 "theme",
+                                                "avatar_url",
                                                 "is_active",
                                                 "subdomain_id",
                                                 "url",
@@ -2568,6 +2572,9 @@
                                                 "theme": {
                                                     "type": "string"
                                                 },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
                                                 "is_active": {
                                                     "type": "boolean"
                                                 },
@@ -2591,6 +2598,7 @@
                                                 "title",
                                                 "bio",
                                                 "theme",
+                                                "avatar_url",
                                                 "is_active",
                                                 "subdomain_id",
                                                 "url",
@@ -2659,6 +2667,245 @@
                                             },
                                             "required": [
                                                 "available"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/bio/avatar": {
+            "post": {
+                "operationId": "bioPage.uploadAvatar",
+                "description": "Upload (or replace) the avatar image of the authenticated user's bio\npage. Multipart field: `avatar`.\n\nMiddleware: api.auth:api, verified, throttle:bio-avatar (10/min per user)\nAuth: required\n\nBody: multipart/form-data, field `avatar` \u2014 image, jpeg/png/webp,\nmax 2MB, min 100x100px (see UploadBioAvatarRequest).\nResponse shape: NormalizeApiResponse envelope: { data: BioPage } \u2014\nsame management shape as GET/PUT /api/bio, now with `avatar_url` set.",
+                "summary": "POST /api/bio/avatar",
+                "tags": [
+                    "BioPage"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UploadBioAvatarRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao enviar avatar da p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "subdomain_id": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "additionalProperties": {}
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "avatar_url",
+                                                "is_active",
+                                                "subdomain_id",
+                                                "url",
+                                                "items"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "bioPage.removeAvatar",
+                "description": "Remove the avatar image of the authenticated user's bio page, deleting\nthe stored file. A no-op success when there was no avatar set.\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nResponse shape: NormalizeApiResponse envelope: { data: BioPage } \u2014\nsame management shape as GET/PUT /api/bio, now with `avatar_url: null`.",
+                "summary": "DELETE /api/bio/avatar",
+                "tags": [
+                    "BioPage"
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao remover avatar da p\u00e1gina bio."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "const": "Dados inv\u00e1lidos."
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "error",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
+                                                "handle": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "bio": {
+                                                    "type": "string"
+                                                },
+                                                "theme": {
+                                                    "type": "string"
+                                                },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
+                                                "is_active": {
+                                                    "type": "boolean"
+                                                },
+                                                "subdomain_id": {
+                                                    "type": "string"
+                                                },
+                                                "url": {
+                                                    "type": "string"
+                                                },
+                                                "items": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object",
+                                                        "additionalProperties": {}
+                                                    }
+                                                }
+                                            },
+                                            "required": [
+                                                "id",
+                                                "handle",
+                                                "title",
+                                                "bio",
+                                                "theme",
+                                                "avatar_url",
+                                                "is_active",
+                                                "subdomain_id",
+                                                "url",
+                                                "items"
                                             ]
                                         }
                                     },
@@ -2843,6 +3090,9 @@
                                                 "theme": {
                                                     "type": "string"
                                                 },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
                                                 "is_active": {
                                                     "type": "boolean"
                                                 },
@@ -2866,6 +3116,7 @@
                                                 "title",
                                                 "bio",
                                                 "theme",
+                                                "avatar_url",
                                                 "is_active",
                                                 "subdomain_id",
                                                 "url",
@@ -5020,6 +5271,9 @@
                                                 "theme": {
                                                     "type": "string"
                                                 },
+                                                "avatar_url": {
+                                                    "type": "string"
+                                                },
                                                 "url": {
                                                     "type": "string"
                                                 },
@@ -5051,6 +5305,7 @@
                                                 "title",
                                                 "bio",
                                                 "theme",
+                                                "avatar_url",
                                                 "url",
                                                 "items"
                                             ]
@@ -7250,6 +7505,22 @@
                     }
                 },
                 "title": "UpdateTagRequest"
+            },
+            "UploadBioAvatarRequest": {
+                "type": "object",
+                "description": "Form Request for POST /api/bio/avatar (upload/replace the authenticated\nuser's bio page avatar).\n\nOnly bounds the shape of the uploaded file here \u2014 whether the user already\nhas a bio page to attach the avatar to is a business rule enforced by\n{@see \\App\\Services\\Bio\\BioPageService::uploadAvatar()} and surfaced as 422\nby the controller, mirroring how {@see CreateBioPageItemRequest} defers\n`link_id` ownership to the service layer.\n\nNo image-processing library is used (no Intervention Image, etc.) \u2014 the\nfile is stored exactly as uploaded once these rules pass. Resize/optimize\nis an explicitly deferred follow-up.",
+                "properties": {
+                    "avatar": {
+                        "type": "string",
+                        "format": "binary",
+                        "contentMediaType": "application/octet-stream",
+                        "maxLength": 2048
+                    }
+                },
+                "required": [
+                    "avatar"
+                ],
+                "title": "UploadBioAvatarRequest"
             },
             "UpsertBioPageRequest": {
                 "type": "object",

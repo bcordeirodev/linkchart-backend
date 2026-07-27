@@ -172,5 +172,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('public-bio', function (Request $request) {
             return Limit::perMinute(60)->by($request->ip());
         });
+
+        // 10 uploads/min por usuário no avatar da página bio — cada request
+        // grava um arquivo em disco, então o limite é mais apertado que os
+        // outros endpoints de leitura/gestão do módulo.
+        RateLimiter::for('bio-avatar', function (Request $request) {
+            return Limit::perMinute(10)->by('bio-avatar:'.($request->user('api')?->id ?: $request->ip()));
+        });
     }
 }
