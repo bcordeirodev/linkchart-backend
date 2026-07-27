@@ -27,6 +27,17 @@ class RedirectMetricsCollector
     /**
      * Collects detailed redirect metrics for the request and forwards it down the pipeline.
      *
+     * Quando a request não tem slug resolvível (`$request->route('slug')` devolve
+     * null — sem route resolver, rota sem parâmetro, 404 fora do grupo, etc.), o
+     * slug vira o sentinela 'unknown' já no ponto de coleta. A alternativa —
+     * tornar o parâmetro nullable em `AppLogger::redirectMetricsCollected` —
+     * afrouxaria o shape estável do evento para todos os chamadores; o sentinela
+     * mantém o contrato do AppLogger estrito e as agregações (`top_slugs`,
+     * eventos key=value) com chave consistente, alinhado aos sentinelas já usados
+     * aqui (`$metrics['slug'] ?? 'unknown'`) e no Otel (`country ?? 'unknown'`).
+     * Sem isso, o TypeError caía no catch, `redirectMetricsFailed(null)` falhava
+     * de novo e a telemetria da request era perdida no `error_log` de fallback.
+     *
      * @param  Request  $request  The incoming HTTP request.
      * @param  Closure  $next  The next middleware in the pipeline.
      * @return Response The downstream response.
@@ -34,7 +45,7 @@ class RedirectMetricsCollector
     public function handle(Request $request, Closure $next): Response
     {
         $startTime = microtime(true);
-        $slug = $request->route('slug');
+        $slug = $request->route('slug') ?? 'unknown';
         $ip = $this->getRealUserIP($request); // 🌐 USAR MESMA LÓGICA DO LinkTrackingService
         $userAgent = $request->userAgent();
         $referer = $request->headers->get('referer');

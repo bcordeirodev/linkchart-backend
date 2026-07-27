@@ -12,6 +12,7 @@ use App\Models\Tag;
 use App\Models\UserSubdomain;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -151,6 +152,14 @@ class LinkService implements LinkServiceInterface
 
         $link = $this->linkRepository->create($data);
 
+        // Senha do link: write-only e fora do mass-assignment (password_hash
+        // não é fillable de propósito). Só o hash bcrypt toca o banco; o texto
+        // puro nunca é persistido nem logado.
+        if ($linkDTO->password !== null && $linkDTO->password !== '') {
+            $link->password_hash = Hash::make($linkDTO->password);
+            $link->save();
+        }
+
         if ($linkDTO->tag_ids !== null) {
             $this->syncLinkTags($link, $linkDTO->tag_ids, $linkDTO->user_id);
         } else {
@@ -246,6 +255,18 @@ class LinkService implements LinkServiceInterface
 
         if (! $link) {
             return null;
+        }
+
+        // Senha do link (write-only, fora do mass-assignment): presente com
+        // valor => troca pelo novo hash; presente como null/vazio => remove;
+        // ausente => não mexe. O save() dispara a invalidação do cache de slug
+        // (password_hash está na lista de relevância de Link::booted()), então
+        // a proteção vale imediatamente no hot path /r/{slug}.
+        if ($linkDTO->hasPasswordField()) {
+            $link->password_hash = ($linkDTO->password !== null && $linkDTO->password !== '')
+                ? Hash::make($linkDTO->password)
+                : null;
+            $link->save();
         }
 
         if ($linkDTO->hasTagIds()) {

@@ -58,13 +58,15 @@ class CreatePublicLinkDTO
     }
 
     /**
-     * Serialize the DTO to an array for direct database insertion.
+     * Serialize the DTO to an array for `Link::create()` mass assignment.
      *
-     * Unlike {@see CreateLinkDTO::toArray()}, null values are NOT stripped — the
-     * resulting array is used for a raw `DB::table()->insert()` call and must include
-     * all columns. `clicks` is initialized to 0 and timestamps are set to `now()`.
+     * Unlike {@see CreateLinkDTO::toArray()}, null values are NOT stripped.
+     * The payload flows through LinkService::createPublicLink() into
+     * LinkRepository::create() (Eloquent). `clicks` and the timestamps are
+     * intentionally absent: they are not fillable on the Link model — the
+     * database defaults `clicks` to 0 and Eloquent manages the timestamps.
      *
-     * @return array<string, mixed> Full column map for the `links` table.
+     * @return array<string, mixed> Column map for the `links` table.
      */
     public function toArray(): array
     {
@@ -74,9 +76,6 @@ class CreatePublicLinkDTO
             'slug' => $this->slug,
             'is_active' => $this->is_active,
             'user_id' => $this->user_id,
-            'clicks' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
         ];
     }
 

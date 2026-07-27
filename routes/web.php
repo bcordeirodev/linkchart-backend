@@ -68,6 +68,15 @@ Route::get('/health', function () {
 // Clean URL alias: redirect.linkcharts.com.br/{slug} (no /r/ prefix)
 // NEXT_PUBLIC_REDIRECT_URL is set without /r/ in production, so frontend-generated
 // short URLs use this path. Must be last to avoid shadowing other routes.
+// Unlock de link protegido por senha. Rota web (grupo web => sessão + CSRF do
+// ValidateCsrfToken padrão) com throttle próprio, mais restrito que o do
+// redirect: 10/min por IP+slug contra brute-force de senha. Não usa
+// metrics.redirect — as métricas de redirect medem o hot path GET; o clique só
+// é contado (job + increment) quando o unlock é bem-sucedido.
+Route::post('/r/{slug}/unlock', [RedirectController::class, 'unlock'])
+    ->middleware(['resolve.subdomain', 'throttle:redirect-unlock'])
+    ->name('public.redirect.unlock');
+
 Route::middleware(['resolve.subdomain', 'throttle:redirect', 'metrics.redirect'])
     ->group(function () {
         Route::get('/r/{slug}', [RedirectController::class, 'redirect'])

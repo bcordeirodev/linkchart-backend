@@ -167,8 +167,11 @@ return [
     */
 
     'persistent_claims' => [
-        // 'foo',
-        // 'bar',
+        // Epoch of users.password_changed_at at issue time (see
+        // User::getJWTCustomClaims). Persisted so a refreshed token keeps the
+        // original value: refreshing must never resurrect a token issued
+        // before a password change — ApiAuthenticate still rejects it.
+        'pwd_ts',
     ],
 
     /*

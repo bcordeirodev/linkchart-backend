@@ -95,12 +95,21 @@ class LinkRepository implements LinkRepositoryInterface
      * Typically called by {@see \App\Services\Links\LinkService::createLink()} after
      * slug generation and DTO serialization via {@see \App\DTOs\CreateLinkDTO::toArray()}.
      *
+     * The refresh() after create is load-bearing: `clicks` is NOT fillable
+     * (denormalised counter), so the in-memory model returned by Link::create()
+     * has no `clicks` attribute — and because the model also defines a
+     * `clicks()` relationship, reading `$link->clicks` on the unhydrated
+     * instance would return an Eloquent Collection instead of the int column
+     * (see the name-collision note on the Link model). Refreshing hydrates the
+     * DB defaults (clicks = 0, timestamps) so downstream consumers such as
+     * PublicLinkResource read the counter correctly.
+     *
      * @param  array<string, mixed>  $data  Column map for the `links` table (must include `original_url` and `slug`).
      * @return Link The freshly created and hydrated model instance.
      */
     public function create(array $data): Link
     {
-        return Link::create($data);
+        return tap(Link::create($data))->refresh();
     }
 
     /**

@@ -15,6 +15,9 @@ use Illuminate\Http\Request;
  * Token persistence is handled by EmailVerificationToken model:
  *   - Email verification tokens expire after 24 hours.
  *   - Password reset tokens expire after 1 hour.
+ *   - Tokens are hashed at rest: the raw token lives only in the outgoing
+ *     email (read from $token->plainTextToken right after creation); the
+ *     database stores sha256(raw), and lookups hash before comparing.
  *
  * Known issue (deferred, R-18 from audit): token creation is NOT wrapped in a
  * database transaction. A partial failure (token created but email not sent)
@@ -67,15 +70,17 @@ class EmailVerificationService
                 $request ? $request->userAgent() : null
             );
 
-            // Gerar link de verificação
-            $verificationUrl = $this->generateVerificationUrl($token->token);
+            // Gerar link de verificação — usa o token CRU, que existe apenas
+            // nesta instância recém-criada ($plainTextToken). O banco guarda
+            // somente o digest sha256 dele.
+            $verificationUrl = $this->generateVerificationUrl($token->plainTextToken);
 
             // Preparar dados para o template
             $emailData = [
                 'user_name' => $user->name,
                 'user_email' => $user->email,
                 'verification_url' => $verificationUrl,
-                'token' => $token->token,
+                'token' => $token->plainTextToken,
                 'expires_at' => $token->expires_at->format('d/m/Y H:i'),
                 'app_name' => config('app.name', 'Link Charts'),
                 'app_url' => config('app.url'),
@@ -243,15 +248,17 @@ class EmailVerificationService
                 $request ? $request->userAgent() : null
             );
 
-            // Gerar link de recuperação
-            $resetUrl = $this->generatePasswordResetUrl($token->token);
+            // Gerar link de recuperação — usa o token CRU, que existe apenas
+            // nesta instância recém-criada ($plainTextToken). O banco guarda
+            // somente o digest sha256 dele.
+            $resetUrl = $this->generatePasswordResetUrl($token->plainTextToken);
 
             // Preparar dados para o template
             $emailData = [
                 'user_name' => $user->name,
                 'user_email' => $user->email,
                 'reset_url' => $resetUrl,
-                'token' => $token->token,
+                'token' => $token->plainTextToken,
                 'expires_at' => $token->expires_at->format('d/m/Y H:i'),
                 'app_name' => config('app.name', 'Link Charts'),
                 'app_url' => config('app.url'),
@@ -296,8 +303,14 @@ class EmailVerificationService
      * bcrypt-hashed password, and marks the token as used.
      * NOT idempotent — each call updates the password and consumes the token.
      *
-     * Side effects: writes users.password; marks token as used;
-     * logs via AppLogger::authPasswordResetCompleted.
+     * Also stamps users.password_changed_at, which invalidates every JWT
+     * issued before the reset (ApiAuthenticate compares the `pwd_ts` claim
+     * against it) — a stolen token dies when the victim recovers the account.
+     * No new JWT is issued here: this flow is unauthenticated and the user
+     * logs in again with the new password.
+     *
+     * Side effects: writes users.password + users.password_changed_at; marks
+     * token as used; logs via AppLogger::authPasswordResetCompleted.
      *
      * @param  string  $token  Raw reset token from the password-reset link.
      * @param  string  $newPassword  The new plaintext password (will be bcrypt-hashed).
@@ -331,9 +344,12 @@ class EmailVerificationService
                 ];
             }
 
-            // Atualizar senha
+            // Atualizar senha. password_changed_at é a âncora da invalidação
+            // de JWT: tokens emitidos antes deste instante carregam um claim
+            // `pwd_ts` antigo e passam a ser rejeitados pelo ApiAuthenticate.
             $user->update([
                 'password' => bcrypt($newPassword),
+                'password_changed_at' => now(),
             ]);
 
             // Marcar token como usado

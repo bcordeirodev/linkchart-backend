@@ -501,17 +501,20 @@ class LinkTrackingService
     private function analyzeVisitorBehavior(string $ip, int $linkId, ?string $referer): array
     {
         try {
-            $recentClicks = Click::where('ip', $ip)
+            // Uma query cobre as duas janelas (24h e 1h): o filtro externo pega
+            // o dia e a agregação condicional conta o subconjunto da última hora.
+            // Atende pelo índice (ip, created_at) sem varrer a tabela.
+            $counts = Click::where('ip', $ip)
                 ->where('created_at', '>=', now()->subDay())
-                ->count();
-
-            $sessionClicks = Click::where('ip', $ip)
-                ->where('created_at', '>=', now()->subHour())
-                ->count() + 1;
+                ->selectRaw(
+                    'COUNT(*) as last_day, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as last_hour',
+                    [now()->subHour()]
+                )
+                ->first();
 
             return [
-                'is_return_visitor' => $recentClicks > 0,
-                'session_clicks' => $sessionClicks,
+                'is_return_visitor' => (int) $counts->last_day > 0,
+                'session_clicks' => (int) $counts->last_hour + 1,
                 'click_source' => $this->categorizeClickSource($referer),
                 'social_platform' => $this->detectSocialPlatform($referer),
             ];

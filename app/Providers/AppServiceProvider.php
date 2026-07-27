@@ -66,10 +66,14 @@ class AppServiceProvider extends ServiceProvider
                 ->setKey(\App\Http\Controllers\Auth\AuthController::AUTH_COOKIE)
         );
 
-        // 5 tentativas/min por email (ou IP quando email ausente) para evitar
-        // brute-force em login/reset e abuso de reenvio de verificação.
+        // Duas dimensões: 5/min por email contra brute-force numa conta, e
+        // 20/min por IP contra password spraying (um IP testando uma senha em
+        // muitos emails distintos — o limite por email nunca dispara nesse ataque).
         RateLimiter::for('login', function (Request $request) {
-            return Limit::perMinute(5)->by($request->input('email') ?: $request->ip());
+            return [
+                Limit::perMinute(5)->by('login-email:'.($request->input('email') ?: $request->ip())),
+                Limit::perMinute(20)->by('login-ip:'.$request->ip()),
+            ];
         });
 
         // 10 encurtamentos/min por IP para a rota pública (sem auth).
@@ -86,6 +90,15 @@ class AppServiceProvider extends ServiceProvider
         // Limite permissivo para /r/{slug} — só previne flood por IP.
         RateLimiter::for('redirect', function (Request $request) {
             return Limit::perMinute(600)->by($request->ip());
+        });
+
+        // 10 tentativas/min por IP+slug no unlock de link protegido por senha
+        // (POST /r/{slug}/unlock) — contém brute-force da senha de um link sem
+        // consumir o limite permissivo do redirect nem travar outros slugs
+        // acessados pelo mesmo IP.
+        RateLimiter::for('redirect-unlock', function (Request $request) {
+            return Limit::perMinute(10)
+                ->by('redirect-unlock:'.$request->ip().':'.(string) $request->route('slug'));
         });
 
         // 10 trocas/min por IP no endpoint de exchange Auth0 — previne abuso de token.

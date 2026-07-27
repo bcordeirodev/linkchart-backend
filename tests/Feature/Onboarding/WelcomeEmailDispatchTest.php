@@ -45,7 +45,8 @@ class WelcomeEmailDispatchTest extends TestCase
 
         $token = EmailVerificationToken::createEmailVerificationToken($user->email);
 
-        $result = app(EmailVerificationService::class)->verifyEmail($token->token);
+        // O banco guarda só o sha256; o token cru vive em $plainTextToken.
+        $result = app(EmailVerificationService::class)->verifyEmail($token->plainTextToken);
 
         $this->assertTrue($result['success']);
         $this->assertSame('verified', $result['type']);

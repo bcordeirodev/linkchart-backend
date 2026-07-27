@@ -43,6 +43,11 @@ class LinkResource extends JsonResource
             'utm_campaign' => $this->utm_campaign,
             'utm_term' => $this->utm_term,
             'utm_content' => $this->utm_content,
+            // Derived boolean only — the underlying password_hash is in
+            // Link::$hidden and must never be serialized. The `password` API
+            // field is write-only (create/update), so this is the single way
+            // clients learn whether a link is protected.
+            'has_password' => $this->hasPassword(),
             // Present as [] when the relation was eager-loaded (even if the link
             // has no tags); the key is simply absent if 'tags' was never loaded
             // (whenLoaded returns a MissingValue, which json_encode drops).

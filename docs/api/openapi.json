@@ -16,10 +16,38 @@
         }
     ],
     "paths": {
+        "/account": {
+            "delete": {
+                "operationId": "account.destroy",
+                "description": "Validates the confirmation appropriate to the account's auth method,\nthen permanently deletes the authenticated user and all of their data\n(links, clicks, subdomain claims) inside a single transaction.\n\nDeletion goes through Eloquent (not a raw cascading DB delete) so that\nmodel-level `deleted` events fire \u2014 these invalidate\n`Link::findActiveBySlugCached()` and `UserSubdomain` caches. Skipping\nthat would leave the public redirect hot path serving a deleted link\nfrom cache for up to 10 minutes after the account is gone.\n\nMiddleware: api.auth:api (no `verified`)\nAuth: required (JWT)\nOwner check: n/a \u2014 always operates on the authenticated user's own record\n\nBody (local account): { password: string }\nBody (Auth0 account, password === null): { confirmation: string } \u2014 must equal the user's email\n\nResponse shape: 204 No Content on success\n                 { error: { code: 'INVALID_PASSWORD', message } } (422) \u2014 local account, wrong password\n                 { error: { code: 'INVALID_CONFIRMATION', message } } (422) \u2014 Auth0 account, confirmation mismatch",
+                "summary": "DELETE /api/account",
+                "tags": [
+                    "Account"
+                ],
+                "parameters": [
+                    {
+                        "name": "password",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
         "/links/{id}/analytics": {
             "get": {
                 "operationId": "analytics.getLinkSummaryAnalytics",
-                "description": "Legacy analytics endpoint cross-mounted from the /api/links route group.\nAlthough the URL looks like a LinkController route, this action lives in\nAnalyticsController and is wired in routes/api.php via:\n  Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkSummaryAnalytics'])\n\nReturns aggregate statistics using SQL (no full Click model load): total\nand unique clicks, avg daily clicks, conversion rate, 30-day timeline,\ntop countries/devices/referrers. Returns a zero-click stub when there are\nno clicks yet.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 uses findOwnedLink.\n\nResponse shape: raw JSON \u2014 not wrapped by NormalizeApiResponse.\n  Zero clicks: { has_sufficient_data: false, total_clicks: 0, link_info }\n  With clicks:  { total_clicks, unique_visitors, avg_daily_clicks,\n                  conversion_rate, clicks_over_time, clicks_by_country,\n                  clicks_by_device, clicks_by_referer, link_info }",
+                "description": "Legacy analytics endpoint cross-mounted from the /api/links route group.\nAlthough the URL looks like a LinkController route, this action lives in\nAnalyticsController and is wired in routes/api.php via:\n  Route::get('/{id}/analytics', [AnalyticsController::class, 'getLinkSummaryAnalytics'])\n\nReturns aggregate statistics using SQL (no full Click model load): total\nand unique clicks, avg daily clicks, conversion rate, 30-day timeline,\ntop countries/devices/referrers. Returns a zero-click stub when there are\nno clicks yet.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 uses findOwnedLink.\n\nResponse shape (wrapped in `data` by NormalizeApiResponse):\n  Zero clicks: { has_sufficient_data: false, total_clicks: 0, link_info }\n  With clicks:  { total_clicks, unique_visitors, avg_daily_clicks,\n                  conversion_rate, clicks_over_time, clicks_by_country,\n                  clicks_by_device, clicks_by_referer, link_info }",
                 "summary": "GET /api/links/{id}/analytics",
                 "tags": [
                     "Analytics"
@@ -462,7 +490,7 @@
         "/analytics/link/{linkId}/geographic": {
             "get": {
                 "operationId": "analytics.getGeographicAnalytics",
-                "description": "Return detailed geographic analytics (country, city, continent breakdowns)\nwith heatmap data folded in (heatmap was merged here in commit 00e6a3f).\nDelegates to LinkAnalyticsOrchestratorInterface::getLinkGeographicAnalytics,\nwhich returns a { data, meta } payload that is forwarded directly.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 uses findOwnedLink.\n\nResponse shape: { success: true, data: GeographicData, meta: GeographicMeta }",
+                "description": "Return detailed geographic analytics (country, city, continent breakdowns)\nwith heatmap data folded in (heatmap was merged here in commit 00e6a3f).\nDelegates to LinkAnalyticsOrchestratorInterface::getLinkGeographicAnalytics,\nwhich returns a { data, meta } payload that is forwarded directly.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 uses findOwnedLink.\n\nResponse shape: { success: true, data: GeographicData, meta: GeographicMeta }\n\n`continent` (like `country`, `device`, `channel`) is read entirely through\n`AnalyticsFilters::fromRequest()` \u2014 it is no longer extracted as a loose\nargument, so it now participates in the orchestrator's cache key and never\nconflicts with the `country` drill-down filter.",
                 "summary": "GET /api/analytics/link/{linkId}/geographic",
                 "tags": [
                     "Analytics"
@@ -1474,6 +1502,9 @@
                                                 "token": {
                                                     "type": "string"
                                                 },
+                                                "is_new": {
+                                                    "type": "boolean"
+                                                },
                                                 "user": {
                                                     "type": "object",
                                                     "additionalProperties": {}
@@ -1481,6 +1512,7 @@
                                             },
                                             "required": [
                                                 "token",
+                                                "is_new",
                                                 "user"
                                             ]
                                         }
@@ -1995,7 +2027,7 @@
         "/change-password": {
             "put": {
                 "operationId": "auth.changePassword",
-                "description": "Verify the current password and replace it with a new one.\n\nMiddleware: api.auth:api, verified\nAuth: required (JWT + verified email)\nOwner check: no (operates on the authenticated user's own record)\n\nResponse shape: { success, message } (200)\n                { error, message } on wrong current password (422)\n                { error, message, errors } on validation failure (422)\n                { error, message, error_id } on server error (500)",
+                "description": "Verify the current password and replace it with a new one.\n\nStamps users.password_changed_at, which invalidates every previously\nissued JWT (ApiAuthenticate compares the `pwd_ts` claim against it) \u2014\nincluding the very token that authenticated this request. So the user\ndoes not get logged out mid-session, the response carries a freshly\nminted JWT and re-sets the httpOnly auth_token cookie, following the\nsame pattern as auth0Exchange (see makeAuthCookie / AUTH_COOKIE).\n\nMiddleware: api.auth:api, verified\nAuth: required (JWT + verified email)\nOwner check: no (operates on the authenticated user's own record)\n\nResponse shape: { success, message, token } (200, + auth_token cookie)\n                { error, message } on wrong current password (422)\n                { error, message, errors } on validation failure (422)\n                { error, message, error_id } on server error (500)",
                 "summary": "PUT /api/change-password",
                 "tags": [
                     "Auth"
@@ -2070,11 +2102,15 @@
                                         "message": {
                                             "type": "string",
                                             "const": "Senha alterada com sucesso"
+                                        },
+                                        "token": {
+                                            "type": "string"
                                         }
                                     },
                                     "required": [
                                         "success",
-                                        "message"
+                                        "message",
+                                        "token"
                                     ]
                                 }
                             }
@@ -2185,10 +2221,84 @@
         "/links": {
             "get": {
                 "operationId": "link.index",
-                "description": "Return all links belonging to the authenticated user, wrapped in a\nLinkResource collection.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 LinkService filters by auth user id.\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource[] }",
+                "description": "Return the authenticated user's links, wrapped in a LinkResource collection.\n\nTwo response contracts, opt-in via the `page` query parameter, kept\nside-by-side for blue/green deploy compatibility (frontend and backend\ncontainers of different versions may serve traffic simultaneously):\n\n  - WITHOUT `page`: legacy behaviour, unchanged \u2014 returns the full list\n    of the user's links, newest first, no filtering/sorting/pagination.\n  - WITH `page`: paginated + filterable branch. Accepts:\n      page      int, >= 1\n      per_page  int, 1\u201350 (default 12)\n      q         string, max 255 \u2014 case-insensitive search over\n                title, original_url, and slug\n      status    active|inactive|expired\n      sort      created_at|clicks|title (default created_at)\n      order     asc|desc (default desc)\n    Invalid params (e.g. per_page > 50) yield a 422 validation response.\n\nThe per-item shape is identical in both branches \u2014 both ultimately\nserialise through LinkResource \u2014 only the envelope differs.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 LinkService filters by auth user id.\n\nResponse shape:\n  - Legacy: NormalizeApiResponse envelope: { data: LinkResource[] }\n  - Paginated: NormalizeApiResponse envelope: { data: LinkResource[], meta: { current_page, per_page, total, last_page } }",
                 "summary": "GET /api/links",
                 "tags": [
                     "Link"
+                ],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                        }
+                    },
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "maxLength": 255
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "enum": [
+                                "active",
+                                "inactive",
+                                "expired"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "enum": [
+                                "created_at",
+                                "clicks",
+                                "title"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "order",
+                        "in": "query",
+                        "schema": {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
+                        }
+                    }
                 ],
                 "responses": {
                     "500": {
@@ -2219,13 +2329,58 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/LinkResource"
-                                    }
+                                    "anyOf": [
+                                        {
+                                            "type": "object",
+                                            "properties": {
+                                                "data": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "$ref": "#/components/schemas/LinkResource"
+                                                    }
+                                                },
+                                                "meta": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "current_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer"
+                                                        },
+                                                        "total": {
+                                                            "type": "integer"
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "current_page",
+                                                        "per_page",
+                                                        "total",
+                                                        "last_page"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "data",
+                                                "meta"
+                                            ]
+                                        },
+                                        {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/LinkResource"
+                                            }
+                                        }
+                                    ]
                                 }
                             }
                         }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
                     }
                 }
             },
@@ -2298,6 +2453,106 @@
                     },
                     "403": {
                         "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/links/bulk-action": {
+            "post": {
+                "operationId": "link.bulkAction",
+                "description": "Execute an action (activate/deactivate/delete) over up to 50 links\nowned by the authenticated user in a single request. Ids that belong\nto another user are silently ignored \u2014 the response never reveals\nwhether a foreign id exists, only how many of the requested ids were\nactually affected.\n\nRegistered BEFORE the `links/{id}` wildcard routes in routes/api.php so\nthe literal \"bulk-action\" path segment cannot collide with the numeric\n`{id}` constraint.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 LinkService::bulkAction scopes by auth user id.\n\nBody: { action: \"activate\"|\"deactivate\"|\"delete\", ids: number[] } (1\u201350 ids)\nResponse shape: NormalizeApiResponse envelope: { data: { affected: number, requested: number } }",
+                "summary": "POST /api/links/bulk-action",
+                "tags": [
+                    "Link"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "action": {
+                                        "type": "string",
+                                        "enum": [
+                                            "activate",
+                                            "deactivate",
+                                            "delete"
+                                        ]
+                                    },
+                                    "ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer"
+                                        },
+                                        "minItems": 1,
+                                        "maxItems": 50
+                                    }
+                                },
+                                "required": [
+                                    "action",
+                                    "ids"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao executar a\u00e7\u00e3o em massa."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "affected": {
+                                                    "type": "integer"
+                                                },
+                                                "requested": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "affected",
+                                                "requested"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
                     }
                 }
             }
@@ -2660,7 +2915,7 @@
         "/link/{id}/clicks-list": {
             "get": {
                 "operationId": "link.getClicksList",
-                "description": "Return a paginated, sortable, and searchable list of individual click\nrecords for use in the ClicksTable tab. Supports query parameters:\n  - page (int, default 1)\n  - per_page (int, 1\u2013100, default 25)\n  - search (string, matched against country/city/state/device/browser/os/ip/referer)\n  - sort_by (string, one of created_at|country|city|state|device|browser|os|ip|referer)\n  - sort_dir (asc|desc, default desc)\n  - date_from (string, ISO datetime, filters created_at >=)\n  - date_to (string, ISO datetime, filters created_at <=)\n  - exclude_bots (bool, default false)\n\nEach item in data includes social_platform (nullable, added 2026-05-19)\nand quality_tier (nullable, added Phase 3) so the frontend can render\nthem with appropriate NULL handling for older clicks.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 uses findOwnedLink.\n\nResponse shape: { data: Click[], meta: { total, per_page, current_page, last_page,\n                  from, to, sort_by, sort_dir, search, date_from, date_to, exclude_bots } }\n                Raw JSON \u2014 not wrapped by NormalizeApiResponse.",
+                "description": "Return a paginated, sortable, and searchable list of individual click\nrecords for use in the ClicksTable tab. Supports query parameters:\n  - page (int, default 1)\n  - per_page (int, 1\u2013100, default 25)\n  - search (string, matched against country/city/state/device/browser/os/ip/referer)\n  - sort_by (string, one of created_at|country|city|state|device|browser|os|ip|referer)\n  - sort_dir (asc|desc, default desc)\n  - date_from (string, ISO datetime, filters created_at >=)\n  - date_to (string, ISO datetime, filters created_at <=)\n  - exclude_bots (bool, default false)\n  - country, device, channel, continent (drill-down dimensions, same\n    semantics as the analytics endpoints \u2014 see AnalyticsFilters)\n\nFilters are parsed via AnalyticsFilters::fromRequest() and applied with\napplyToQuery() so this list always matches the same scope as the charts\non the same screen. `channel=direct` is a COALESCE bucket that also\nmatches rows with a NULL click_source (see AnalyticsFilters::applyChannel).\n\nEach item in data includes social_platform (nullable, added 2026-05-19)\nand quality_tier (nullable, added Phase 3) so the frontend can render\nthem with appropriate NULL handling for older clicks.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 uses findOwnedLink.\n\nResponse shape: { data: Click[], meta: { total, per_page, current_page, last_page,\n                  from, to, sort_by, sort_dir, search, date_from, date_to, exclude_bots } }\n                Raw JSON \u2014 not wrapped by NormalizeApiResponse.",
                 "summary": "GET /api/link/{id}/clicks-list",
                 "tags": [
                     "Link"
@@ -2696,29 +2951,6 @@
                         "in": "query",
                         "schema": {
                             "type": "string"
-                        }
-                    },
-                    {
-                        "name": "date_from",
-                        "in": "query",
-                        "description": "Date range filter (sent as \"yyyy-MM-dd HH:mm:ss\" strings by the frontend)",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "date_to",
-                        "in": "query",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "name": "exclude_bots",
-                        "in": "query",
-                        "schema": {
-                            "type": "string",
-                            "default": false
                         }
                     }
                 ],
@@ -2759,88 +2991,49 @@
                                                 "type": "object",
                                                 "properties": {
                                                     "id": {
-                                                        "type": "integer"
+                                                        "type": "string"
                                                     },
                                                     "created_at": {
                                                         "type": "string"
                                                     },
                                                     "local_time": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "country": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "iso_code": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "state": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "state_name": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "city": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "continent": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "timezone": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "device": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "browser": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "browser_version": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "os": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "os_version": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "is_mobile": {
                                                         "type": "boolean"
@@ -2878,37 +3071,22 @@
                                                         ]
                                                     },
                                                     "click_source": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "social_platform": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "navigation_context": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "is_return_visitor": {
                                                         "type": "boolean"
                                                     },
                                                     "response_time": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "quality_tier": {
-                                                        "type": [
-                                                            "string",
-                                                            "null"
-                                                        ]
+                                                        "type": "string"
                                                     },
                                                     "utm": {
                                                         "type": [
@@ -2917,34 +3095,19 @@
                                                         ],
                                                         "properties": {
                                                             "source": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
+                                                                "type": "string"
                                                             },
                                                             "medium": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
+                                                                "type": "string"
                                                             },
                                                             "campaign": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
+                                                                "type": "string"
                                                             },
                                                             "term": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
+                                                                "type": "string"
                                                             },
                                                             "content": {
-                                                                "type": [
-                                                                    "string",
-                                                                    "null"
-                                                                ]
+                                                                "type": "string"
                                                             }
                                                         },
                                                         "required": [
@@ -3026,13 +3189,14 @@
                                                 "search": {
                                                     "type": "string"
                                                 },
-                                                "date_from": {},
-                                                "date_to": {},
+                                                "date_from": {
+                                                    "type": "string"
+                                                },
+                                                "date_to": {
+                                                    "type": "string"
+                                                },
                                                 "exclude_bots": {
-                                                    "type": [
-                                                        "object",
-                                                        "null"
-                                                    ]
+                                                    "type": "boolean"
                                                 }
                                             },
                                             "required": [
@@ -3505,6 +3669,68 @@
                 }
             }
         },
+        "/onboarding/seen": {
+            "post": {
+                "operationId": "onboarding.seen",
+                "description": "Marks an onboarding flag as dismissed for the authenticated user.\nIdempotent \u2014 re-posting a flag already seen is a no-op and still 200s, so\nthe client can fire-and-forget without tracking whether it already sent it.\n\nAuth: JWT (email verification NOT required \u2014 the flag is harmless and we\nwant it recorded even if the user dismisses a tour before verifying).\n\nRequest: { key: string }  \u2014 must be one of User::ONBOARDING_KEYS\nResponse: { data: { onboarding: { \"<key>\": \"<iso8601>\" } } } (200)\n          422 when `key` is unknown.",
+                "summary": "POST /api/onboarding/seen",
+                "tags": [
+                    "Onboarding"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "key": {
+                                        "type": "string",
+                                        "enum": [
+                                            "links.tour"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "key"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "onboarding": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "onboarding"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
         "/public/shorten": {
             "post": {
                 "operationId": "publicLink.store",
@@ -3686,6 +3912,98 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": []
+            }
+        },
+        "/public/links/suggest-slug": {
+            "get": {
+                "operationId": "publicLink.suggestSlug",
+                "description": "Resolve a single available slug for the given target URL in one request,\nreplacing the previous client-side loop that issued one HTTP call per\ncandidate (base, base-2, \u2026). Derivation and availability are delegated to\n{@see SlugSuggestionService}: og:title \u2192 URL path \u2192 host label, with a\nshort random-token collision suffix and a fully-random fallback. The\nreturned slug is always currently available.\n\nMiddleware: throttle:suggest-slug (30/min per IP)\nAuth: not required\nOwner check: no\n\nResponse shape: { data: { slug: string, og_title: string|null } } (200)\n                { error } (422) when `url` is missing.\n                { error, message } on server error (500)",
+                "summary": "GET /api/public/links/suggest-slug",
+                "tags": [
+                    "PublicLink"
+                ],
+                "parameters": [
+                    {
+                        "name": "url",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "maxLength": 2048
+                        }
+                    }
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "const": "INTERNAL_ERROR"
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "const": "Ocorreu um erro interno. Tente novamente."
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "og_title": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "slug",
+                                                "og_title"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
                     }
                 },
                 "security": []
@@ -3979,6 +4297,409 @@
                 "security": []
             }
         },
+        "/reports/summary": {
+            "get": {
+                "operationId": "reports.summary",
+                "description": "Returns aggregated KPIs (total_clicks, unique_visitors, total_links,\nactive_links, avg_clicks_per_day, variation_pct) across the\nauthenticated user's own, non-demo links.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/summary",
+                "tags": [
+                    "Reports"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/timeseries": {
+            "get": {
+                "operationId": "reports.timeseries",
+                "description": "Returns daily click counts across the authenticated user's own,\nnon-demo links.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/timeseries",
+                "tags": [
+                    "Reports"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/top-links": {
+            "get": {
+                "operationId": "reports.topLinks",
+                "description": "Returns the authenticated user's top links by click count within the\nfilter window.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/top-links",
+                "tags": [
+                    "Reports"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/breakdown": {
+            "get": {
+                "operationId": "reports.breakdown",
+                "description": "Returns a click breakdown by a whitelisted dimension across the\nauthenticated user's own, non-demo links.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/breakdown",
+                "tags": [
+                    "Reports"
+                ],
+                "parameters": [
+                    {
+                        "name": "dimension",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "country",
+                                "city",
+                                "device",
+                                "os",
+                                "browser",
+                                "social_platform",
+                                "navigation_context",
+                                "quality_tier"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/reports/link-performance": {
+            "get": {
+                "operationId": "reports.linkPerformance",
+                "description": "Returns the authenticated user's own, non-demo links ranked by clicks\nin the filter window \u2014 the portfolio leaderboard. Each row also\ncarries the variation vs. the immediately preceding period of equal\nlength and this link's share of the user's total clicks.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/link-performance",
+                "tags": [
+                    "Reports"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/insights": {
+            "get": {
+                "operationId": "reports.insights",
+                "description": "Returns portfolio-level (account-wide) computed insights \u2014 best\nperforming link, fastest growing link, top-3 traffic concentration and\noverall account growth vs. the previous period. Values are raw and\nlanguage-agnostic; the frontend maps `key` to a localized label + icon.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/insights",
+                "tags": [
+                    "Reports"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/export/clicks": {
+            "get": {
+                "operationId": "reports.exportClicks",
+                "description": "Streams the user's clicks (across all own, non-demo links) as CSV,\nchunked in batches of 1000 rows so the full result set is never\nmaterialized in memory. Same date_from/date_to/exclude_bots filters as\nthe other endpoints. NOT cached \u2014 export is a one-off action, not a\ndashboard payload.\n\nLGPD: the `ip` column is intentionally never selected or written \u2014\nsee {@see \\App\\Contracts\\Analytics\\ReportsAnalyticsServiceInterface::exportClicksQuery}.\n\nMiddleware: api.auth:api, verified",
+                "summary": "GET /api/reports/export/clicks",
+                "tags": [
+                    "Reports"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "text/csv; charset=UTF-8": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "headers": {
+                            "Transfer-Encoding": {
+                                "required": true,
+                                "schema": {
+                                    "type": "string",
+                                    "enum": [
+                                        "chunked"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/subdomains": {
+            "get": {
+                "operationId": "subdomain.index",
+                "description": "Lists every active subdomain owned by the authenticated user, oldest first.",
+                "summary": "GET /api/subdomains",
+                "tags": [
+                    "Subdomain"
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "subdomain": {
+                                                        "type": "string"
+                                                    },
+                                                    "full_url": {
+                                                        "type": "string"
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "created_at": {
+                                                        "type": [
+                                                            "string",
+                                                            "null"
+                                                        ]
+                                                    }
+                                                },
+                                                "required": [
+                                                    "id",
+                                                    "subdomain",
+                                                    "full_url",
+                                                    "status",
+                                                    "created_at"
+                                                ]
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "subdomain.store",
+                "description": "Claims a new subdomain for the authenticated user. Always INSERTs a new\nrow \u2014 a released (inactive) subdomain is never reused/updated, since a\nuser may hold several active subdomains simultaneously. Rejects with\n422 SUBDOMAIN_LIMIT_REACHED once the user's active count reaches\n`config('app.max_subdomains_per_user')`.",
+                "summary": "POST /api/subdomains",
+                "tags": [
+                    "Subdomain"
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "id": {
+                                            "type": "integer"
+                                        },
+                                        "subdomain": {
+                                            "type": "string"
+                                        },
+                                        "full_url": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "string"
+                                        },
+                                        "created_at": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "id",
+                                        "subdomain",
+                                        "full_url",
+                                        "status",
+                                        "created_at"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    }
+                }
+            }
+        },
+        "/subdomains/{id}": {
+            "delete": {
+                "operationId": "subdomain.destroy",
+                "description": "Releases (soft-deletes: status = inactive) a specific subdomain owned\nby the authenticated user, leaving the user's other active subdomains\nuntouched. Returns 404 if the id does not exist, does not belong to the\nauthenticated user, or is already inactive.",
+                "summary": "DELETE /api/subdomains/{id}",
+                "tags": [
+                    "Subdomain"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No content"
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string",
+                                                    "const": "SUBDOMAIN_NOT_FOUND"
+                                                },
+                                                "message": {
+                                                    "type": "string",
+                                                    "const": "Subdom\u00ednio n\u00e3o encontrado."
+                                                }
+                                            },
+                                            "required": [
+                                                "code",
+                                                "message"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "error"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/subdomain/check": {
             "get": {
                 "operationId": "subdomain.check",
@@ -4027,6 +4748,9 @@
                                         {
                                             "type": "object",
                                             "properties": {
+                                                "id": {
+                                                    "type": "integer"
+                                                },
                                                 "subdomain": {
                                                     "type": "string"
                                                 },
@@ -4044,6 +4768,7 @@
                                                 }
                                             },
                                             "required": [
+                                                "id",
                                                 "subdomain",
                                                 "full_url",
                                                 "status",
@@ -4070,32 +4795,12 @@
             },
             "post": {
                 "operationId": "subdomain.claim",
-                "description": "Claim a subdomain for the authenticated user. The user must not already\nhave an active subdomain (409). If the user has an inactive (released)\nrow, it is updated to the new subdomain instead of inserting a new row\n(because user_id has a UNIQUE constraint on the table).",
+                "description": "Use POST /api/subdomains instead. Kept for one release so an\nold frontend build still in production during a blue/green deploy keeps\nworking. Delegates fully to {@see self::store()} \u2014 same per-user limit\nand always-INSERT semantics (a user may hold several active\nsubdomains now, so the old \"409 if already active\" / \"reuse the\n     * inactive row via UPDATE\" behavior no longer applies).",
                 "summary": "POST /api/subdomain",
+                "deprecated": true,
                 "tags": [
                     "Subdomain"
                 ],
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "subdomain": {
-                                        "type": "string",
-                                        "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
-                                        "minLength": 3,
-                                        "maxLength": 63
-                                    }
-                                },
-                                "required": [
-                                    "subdomain"
-                                ]
-                            }
-                        }
-                    }
-                },
                 "responses": {
                     "201": {
                         "description": "",
@@ -4104,6 +4809,9 @@
                                 "schema": {
                                     "type": "object",
                                     "properties": {
+                                        "id": {
+                                            "type": "integer"
+                                        },
                                         "subdomain": {
                                             "type": "string"
                                         },
@@ -4121,42 +4829,11 @@
                                         }
                                     },
                                     "required": [
+                                        "id",
                                         "subdomain",
                                         "full_url",
                                         "status",
                                         "created_at"
-                                    ]
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "type": "object",
-                                            "properties": {
-                                                "code": {
-                                                    "type": "string",
-                                                    "const": "SUBDOMAIN_ALREADY_ACTIVE"
-                                                },
-                                                "message": {
-                                                    "type": "string",
-                                                    "const": "Voc\u00ea j\u00e1 possui um subdom\u00ednio ativo. Libere-o antes de reivindicar um novo."
-                                                }
-                                            },
-                                            "required": [
-                                                "code",
-                                                "message"
-                                            ]
-                                        }
-                                    },
-                                    "required": [
-                                        "error"
                                     ]
                                 }
                             }
@@ -4205,6 +4882,319 @@
                                     },
                                     "required": [
                                         "error"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/tags": {
+            "get": {
+                "operationId": "tag.index",
+                "description": "Return all tags belonging to the authenticated user.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 TagService filters by auth user id.\n\nResponse shape: { data: TagResource[] }",
+                "summary": "GET /api/tags",
+                "tags": [
+                    "Tag"
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao buscar tags."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/TagResource"
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "tag.store",
+                "description": "Create a new tag for the authenticated user. Validates name/color via\nCreateTagRequest; TagService additionally enforces a 20-tag-per-user\ncap and per-user name uniqueness, both surfaced here as 422.\n\nMiddleware: api.auth:api, verified\nAuth: required\n\nResponse shape: { message, data: TagResource } (201)",
+                "summary": "POST /api/tags",
+                "tags": [
+                    "Tag"
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateTagRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao criar tag."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "201": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Tag criada com sucesso."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/TagResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            }
+        },
+        "/tags/{id}": {
+            "put": {
+                "operationId": "tag.update",
+                "description": "Update a tag owned by the authenticated user.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 verifies ownership before updating.\n\nResponse shape: { message, data: TagResource } (200)",
+                "summary": "PUT /api/tags/{id}",
+                "tags": [
+                    "Tag"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric tag ID (enforced by route constraint [0-9]+).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateTagRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao atualizar tag."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "$ref": "#/components/responses/ValidationException"
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Tag atualizada com sucesso."
+                                        },
+                                        "data": {
+                                            "$ref": "#/components/schemas/TagResource"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "data"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Tag n\u00e3o encontrada ou voc\u00ea n\u00e3o tem permiss\u00e3o para edit\u00e1-la."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "$ref": "#/components/responses/AuthorizationException"
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "tag.destroy",
+                "description": "Permanently delete a tag owned by the authenticated user. Detaching it\nfrom any linked links is handled at the database level by the\n`link_tag` pivot's `cascadeOnDelete()` foreign key.\n\nMiddleware: api.auth:api, verified\nAuth: required\nOwner check: yes \u2014 verifies ownership before deleting.\n\nResponse shape: { message } (200)",
+                "summary": "DELETE /api/tags/{id}",
+                "tags": [
+                    "Tag"
+                ],
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "description": "Numeric tag ID (enforced by route constraint [0-9]+).",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "500": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Erro ao remover tag."
+                                        },
+                                        "detail": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "message",
+                                        "detail"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Tag removida com sucesso."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "const": "Tag n\u00e3o encontrada ou voc\u00ea n\u00e3o tem permiss\u00e3o para remov\u00ea-la."
+                                        }
+                                    },
+                                    "required": [
+                                        "message"
                                     ]
                                 }
                             }
@@ -4280,6 +5270,15 @@
                     "is_active": {
                         "type": "boolean"
                     },
+                    "password": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Senha opcional (write-only): quando presente \u00e9 hasheada em\nLinkService e armazenada em links.password_hash. M\u00e1x. 72 pelo\nlimite de input do bcrypt. Nunca aparece em respostas \u2014 apenas\no boolean derivado has_password (LinkResource).",
+                        "minLength": 4,
+                        "maxLength": 72
+                    },
                     "utm_source": {
                         "type": [
                             "string",
@@ -4315,6 +5314,24 @@
                             "null"
                         ],
                         "maxLength": 100
+                    },
+                    "subdomain_id": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "description": "Subdomain selection \u2014 ownership and active status are verified\nin LinkService::resolveShortDomain(), not here (only the shape\nis bounded). A null value is meaningful (forces the default\ndomain) and must remain distinguishable from \"field absent\";\nsee CreateLinkDTO::$subdomain_id_provided."
+                    },
+                    "tag_ids": {
+                        "type": [
+                            "array",
+                            "null"
+                        ],
+                        "description": "Tags \u2014 ownership of each id is verified (and silently filtered)\nin LinkService, not here; this only bounds the shape/size.",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 5
                     }
                 },
                 "required": [
@@ -4352,6 +5369,25 @@
                     "original_url"
                 ],
                 "title": "CreatePublicLinkRequest"
+            },
+            "CreateTagRequest": {
+                "type": "object",
+                "description": "Form Request para cria\u00e7\u00e3o de tags\n\nCentraliza todas as regras de valida\u00e7\u00e3o para cria\u00e7\u00e3o de tags de link,\nseguindo o mesmo padr\u00e3o de {@see \\App\\Http\\Requests\\CreateLinkRequest}\n(mensagens customizadas + envelope de erro 422 padronizado).\n\nA cor \u00e9 obrigat\u00f3ria e validada apenas quanto ao formato hexadecimal \u2014 o\nfrontend \u00e9 respons\u00e1vel por atribuir valores de uma paleta fixa; o backend\nn\u00e3o valida contra essa paleta, apenas o formato \"#RRGGBB\".",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 50
+                    },
+                    "color": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$"
+                    }
+                },
+                "required": [
+                    "name",
+                    "color"
+                ],
+                "title": "CreateTagRequest"
             },
             "LinkResource": {
                 "type": "object",
@@ -4410,6 +5446,10 @@
                     "is_active_valid": {
                         "type": "boolean"
                     },
+                    "is_demo": {
+                        "type": "boolean",
+                        "description": "Seeded by SeedDemoLinkJob on signup. Exposed so the UI can label it\nas an example \u2014 its 1247 clicks are synthetic, and a new user who\ncan't tell that would read the analytics as real traffic."
+                    },
                     "short_url": {
                         "type": "string"
                     },
@@ -4449,6 +5489,17 @@
                             "string",
                             "null"
                         ]
+                    },
+                    "has_password": {
+                        "type": "boolean",
+                        "description": "Derived boolean only \u2014 the underlying password_hash is in\nLink::$hidden and must never be serialized. The `password` API\nfield is write-only (create/update), so this is the single way\nclients learn whether a link is protected."
+                    },
+                    "tags": {
+                        "type": "array",
+                        "description": "Present as [] when the relation was eager-loaded (even if the link\nhas no tags); the key is simply absent if 'tags' was never loaded\n(whenLoaded returns a MissingValue, which json_encode drops).",
+                        "items": {
+                            "$ref": "#/components/schemas/TagResource"
+                        }
                     }
                 },
                 "required": [
@@ -4465,6 +5516,7 @@
                     "updated_at",
                     "is_expired",
                     "is_active_valid",
+                    "is_demo",
                     "short_url",
                     "shorted_url",
                     "clicks",
@@ -4472,7 +5524,8 @@
                     "utm_medium",
                     "utm_campaign",
                     "utm_term",
-                    "utm_content"
+                    "utm_content",
+                    "has_password"
                 ],
                 "title": "LinkResource"
             },
@@ -4555,6 +5608,26 @@
                 ],
                 "title": "PublicLinkResource"
             },
+            "TagResource": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "color": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "color"
+                ],
+                "title": "TagResource"
+            },
             "UpdateLinkRequest": {
                 "type": "object",
                 "description": "Form Request para atualiza\u00e7\u00e3o de links\n\nCentraliza todas as regras de valida\u00e7\u00e3o para atualiza\u00e7\u00e3o de links,\nseguindo o princ\u00edpio DRY e SRP.",
@@ -4603,6 +5676,15 @@
                         "minimum": 1,
                         "maximum": 1000000
                     },
+                    "password": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Senha do link (write-only). Sem\u00e2ntica de update: presente com\nvalor => define/troca (hash em LinkService); presente como\nnull/vazio => remove; ausente => n\u00e3o mexe. M\u00e1x. 72 pelo limite\nde input do bcrypt.",
+                        "minLength": 4,
+                        "maxLength": 72
+                    },
                     "utm_source": {
                         "type": [
                             "string",
@@ -4637,9 +5719,35 @@
                             "null"
                         ],
                         "maxLength": 100
+                    },
+                    "tag_ids": {
+                        "type": [
+                            "array",
+                            "null"
+                        ],
+                        "description": "Tags \u2014 ownership of each id is verified (and silently filtered)\nin LinkService, not here; this only bounds the shape/size. When\npresent, tag_ids fully replaces the link's tag set (sync, not merge).",
+                        "items": {
+                            "type": "integer"
+                        },
+                        "maxItems": 5
                     }
                 },
                 "title": "UpdateLinkRequest"
+            },
+            "UpdateTagRequest": {
+                "type": "object",
+                "description": "Form Request para atualiza\u00e7\u00e3o de tags\n\nCentraliza todas as regras de valida\u00e7\u00e3o para atualiza\u00e7\u00e3o de tags de link,\nseguindo o mesmo padr\u00e3o de {@see \\App\\Http\\Requests\\UpdateLinkRequest}.\nAmbos os campos s\u00e3o opcionais (`sometimes`) para permitir atualiza\u00e7\u00e3o\nparcial, mas quando enviados seguem as mesmas regras de formato do\n{@see \\App\\Http\\Requests\\CreateTagRequest}.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "maxLength": 50
+                    },
+                    "color": {
+                        "type": "string",
+                        "pattern": "^#[0-9a-fA-F]{6}$"
+                    }
+                },
+                "title": "UpdateTagRequest"
             },
             "User": {
                 "type": "object",
@@ -4689,6 +5797,13 @@
                             "string",
                             "null"
                         ]
+                    },
+                    "onboarding": {
+                        "type": [
+                            "array",
+                            "null"
+                        ],
+                        "items": {}
                     }
                 },
                 "required": [
@@ -4700,7 +5815,8 @@
                     "updated_at",
                     "email_verified",
                     "email_verification_sent_at",
-                    "auth0_sub"
+                    "auth0_sub",
+                    "onboarding"
                 ],
                 "title": "User"
             }

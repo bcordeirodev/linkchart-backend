@@ -28,6 +28,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property string $name Display name.
  * @property string $email Unique e-mail address (login identifier).
  * @property string|null $password Bcrypt hash (auto-cast via 'hashed'); null for Auth0-only users who have no password.
+ * @property \Illuminate\Support\Carbon|null $password_changed_at Moment of the last password reset/change; null if never changed (includes Auth0-only users). Its epoch travels in the JWT `pwd_ts` claim so ApiAuthenticate can kill tokens issued before a change.
  * @property string|null $remember_token Laravel session remember token.
  * @property string|null $auth0_sub Auth0 subject identifier (e.g. "google-oauth2|123"); null for legacy accounts.
  * @property bool $email_verified Whether the user has confirmed their e-mail address.
@@ -54,6 +55,7 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
+        'password_changed_at',
         'email_verified',
         'email_verified_at',
         'email_verification_sent_at',
@@ -85,11 +87,20 @@ class User extends Authenticatable implements JWTSubject
     /**
      * Retorna um array de claims customizados para serem adicionados ao JWT.
      *
-     * @return array
+     * `pwd_ts`: epoch (segundos) de password_changed_at, ou 0 se a senha nunca
+     * foi trocada (inclui usuários Auth0, que não têm senha local). O
+     * ApiAuthenticate compara este claim com o valor atual do banco — tokens
+     * emitidos antes de um reset/troca de senha carregam o epoch antigo e são
+     * rejeitados com 401. O claim está em `persistent_claims` (config/jwt.php)
+     * para sobreviver a JWTAuth::refresh().
+     *
+     * @return array{pwd_ts: int}
      */
     public function getJWTCustomClaims()
     {
-        return [];
+        return [
+            'pwd_ts' => $this->password_changed_at?->getTimestamp() ?? 0,
+        ];
     }
 
     /**
@@ -104,6 +115,9 @@ class User extends Authenticatable implements JWTSubject
         // No security impact (it's the user's own data), but it's not API surface anyone
         // asked for — keep it out of `register`/`me`/etc. responses.
         'welcome_email_sent_at',
+        // Internal anchor for JWT invalidation (pwd_ts claim) — bookkeeping,
+        // not API surface; keep it out of serialized user responses.
+        'password_changed_at',
     ];
 
     /**
@@ -117,6 +131,7 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'email_verification_sent_at' => 'datetime',
             'welcome_email_sent_at' => 'datetime',
+            'password_changed_at' => 'datetime',
             'email_verified' => 'boolean',
             'password' => 'hashed',
             'onboarding' => 'array',

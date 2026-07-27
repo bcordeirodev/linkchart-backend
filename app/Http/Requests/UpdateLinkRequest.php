@@ -72,6 +72,17 @@ class UpdateLinkRequest extends FormRequest
                 'min:1',
                 'max:1000000', // Máximo 1 milhão de cliques
             ],
+            // Senha do link (write-only). Semântica de update: presente com
+            // valor => define/troca (hash em LinkService); presente como
+            // null/vazio => remove; ausente => não mexe. Máx. 72 pelo limite
+            // de input do bcrypt.
+            'password' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'min:4',
+                'max:72',
+            ],
             'utm_source' => 'sometimes|nullable|string|max:100',
             'utm_medium' => 'sometimes|nullable|string|max:100',
             'utm_campaign' => 'sometimes|nullable|string|max:100',
@@ -107,6 +118,9 @@ class UpdateLinkRequest extends FormRequest
             'tag_ids.array' => 'As tags devem ser enviadas como uma lista.',
             'tag_ids.max' => 'Um link pode ter no máximo 5 tags.',
             'tag_ids.*.integer' => 'Cada tag deve ser um identificador numérico válido.',
+
+            'password.min' => 'A senha do link deve ter pelo menos 4 caracteres.',
+            'password.max' => 'A senha do link não pode ter mais de 72 caracteres.',
         ];
     }
 
@@ -187,13 +201,16 @@ class UpdateLinkRequest extends FormRequest
      * relation, synced separately) — otherwise a request that sends only
      * `tag_ids` would be rejected as "no data to update" before ever
      * reaching {@see \App\Services\Links\LinkService::updateLink()}.
+     * `password` is included for the same reason: it never goes through
+     * mass-assignment (LinkService hashes it into `password_hash` explicitly),
+     * but a request that only sets/removes the password is a valid update.
      */
     public function hasDataToUpdate(): bool
     {
         $updateableFields = [
             'original_url', 'title', 'slug', 'description', 'expires_at',
             'starts_in', 'is_active', 'utm_source', 'utm_medium',
-            'utm_campaign', 'utm_term', 'utm_content', 'tag_ids',
+            'utm_campaign', 'utm_term', 'utm_content', 'tag_ids', 'password',
         ];
 
         foreach ($updateableFields as $field) {

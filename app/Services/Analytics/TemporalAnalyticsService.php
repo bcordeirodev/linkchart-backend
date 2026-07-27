@@ -6,6 +6,7 @@ use App\DTOs\Analytics\AnalyticsFilters;
 use App\Models\Click;
 use App\Models\Link;
 use App\Services\Analytics\Support\SqlDateExpr;
+use Carbon\Carbon;
 
 /**
  * Computes temporal analytics (hourly/daily patterns, weekends, business hours,
@@ -14,8 +15,10 @@ use App\Services\Analytics\Support\SqlDateExpr;
  * @see \App\Contracts\Analytics\TemporalAnalyticsInterface
  *
  * getLinkTemporalAnalytics — standard API endpoint payload.
- * getAdvancedTemporalAnalytics — richer payload used by the heatmap endpoint,
- *   loads all clicks into memory for pattern computation.
+ * getAdvancedTemporalAnalytics — richer payload used by the heatmap endpoint.
+ *   Every aggregation runs as GROUP BY SQL; only peak_analysis and
+ *   weekly_trends are composed in PHP, and strictly from SQL aggregates
+ *   (never from raw click rows).
  *
  * Dual-path DB expressions: hour/DOW extraction uses COALESCE of the pre-computed
  * column (hour_of_day / day_of_week, Phase 1) with a fallback to DB-native
@@ -100,8 +103,11 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     /**
      * Returns an extended temporal analytics payload for heatmap and trend views.
      *
-     * Loads all clicks for the link into a Laravel Collection in memory — may be
-     * expensive for high-traffic links. Used by the heatmap API endpoint.
+     * All aggregations run as GROUP BY queries in the database — no click rows
+     * are loaded into memory. peak_analysis is composed in PHP from the
+     * hourly/daily SQL aggregates and weekly_trends from a per-day SQL
+     * aggregate (see each helper), so memory stays O(buckets) instead of
+     * O(clicks).
      *
      * @param  int  $linkId  Link primary key.
      * @return array<string, mixed> Keys: hourly_patterns, daily_patterns, weekly_trends, monthly_trends, peak_analysis, timezone_analysis, heatmap_data, daily_timeline, device_by_period, holiday_impact, seasonal_distribution.
@@ -109,18 +115,21 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     public function getAdvancedTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         $filters ??= new AnalyticsFilters;
-        $clicks = $this->baseQuery($linkId, $filters, $segment)->get();
+
+        $hourlyPatterns = $this->getHourlyPatterns($linkId, $filters, $segment);
+        $dailyPatterns = $this->getDailyPatterns($linkId, $filters, $segment);
+        $hasClicks = $this->baseQuery($linkId, $filters, $segment)->exists();
 
         return [
-            'hourly_patterns' => $this->getHourlyPatterns($clicks),
-            'daily_patterns' => $this->getDailyPatterns($clicks),
-            'weekly_trends' => $this->getWeeklyTrends($clicks),
-            'monthly_trends' => $this->getMonthlyTrends($clicks),
-            'peak_analysis' => $this->getPeakAnalysis($clicks),
-            'timezone_analysis' => $this->getTimezoneAnalysis($clicks),
-            'heatmap_data' => $this->getHourDayHeatmap($clicks),
+            'hourly_patterns' => $hourlyPatterns,
+            'daily_patterns' => $dailyPatterns,
+            'weekly_trends' => $this->getWeeklyTrends($linkId, $filters, $segment),
+            'monthly_trends' => $this->getMonthlyTrends($linkId, $filters, $segment),
+            'peak_analysis' => $this->getPeakAnalysis($hourlyPatterns, $dailyPatterns, $hasClicks),
+            'timezone_analysis' => $this->getTimezoneAnalysis($linkId, $filters, $segment),
+            'heatmap_data' => $this->getHourDayHeatmap($linkId, $filters, $segment),
             'daily_timeline' => $this->getDailyTimeline($linkId, $filters, $segment),
-            'device_by_period' => $this->getDeviceByPeriodWithKeys($clicks),
+            'device_by_period' => $this->getDeviceByPeriodWithKeys($linkId, $filters, $segment),
             'holiday_impact' => $this->getHolidayImpact($linkId, $filters, $segment),
             'seasonal_distribution' => $this->getSeasonalDistribution($linkId, $filters, $segment),
         ];
@@ -235,85 +244,147 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         ];
     }
 
-    // Advanced methods migrated from UserAgentAnalyticsService
+    // Advanced aggregations (GROUP BY SQL; formerly in-memory over all click rows)
 
-    private function getHourlyPatterns($clicks): array
+    /**
+     * Aggregate click counts by hour of day (0–23) for the advanced payload.
+     *
+     * Same GROUP BY as {@see getClicksByHour} (COALESCE of the pre-computed
+     * hour_of_day column with the driver-native extraction fallback) but
+     * without the `label` key, matching the advanced payload shape.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{hour: int, clicks: int}> 24-element array indexed 0–23.
+     */
+    private function getHourlyPatterns(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $patterns = array_fill(0, 24, 0);
-        foreach ($clicks as $click) {
-            $h = $click->hour_of_day ?? (int) $click->created_at->format('H');
-            if ($h >= 0 && $h <= 23) {
-                $patterns[$h]++;
-            }
-        }
+        $expr = SqlDateExpr::hourOfDay();
+
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$expr} as hour, count(*) as clicks")
+            ->groupByRaw($expr)
+            ->get()->keyBy('hour');
+
         $result = [];
         for ($h = 0; $h < 24; $h++) {
-            $result[] = ['hour' => $h, 'clicks' => $patterns[$h]];
+            $result[] = ['hour' => $h, 'clicks' => (int) ($rows->get($h)?->clicks ?? 0)];
         }
 
         return $result;
     }
 
-    private function getDailyPatterns($clicks): array
+    /**
+     * Aggregate click counts by ISO day of week (1=Monday … 7=Sunday) for the
+     * advanced payload.
+     *
+     * Same GROUP BY as {@see getClicksByDayOfWeek} but keyed `name` instead of
+     * `day_name`, matching the advanced payload shape.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{day: int, name: string, clicks: int}> 7-element array indexed 1–7.
+     */
+    private function getDailyPatterns(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $patterns = array_fill(1, 7, 0);
-        foreach ($clicks as $click) {
-            $d = $click->day_of_week ?? (int) $click->created_at->format('N');
-            if ($d >= 1 && $d <= 7) {
-                $patterns[$d] = ($patterns[$d] ?? 0) + 1;
-            }
-        }
+        $expr = SqlDateExpr::dayOfWeek();
+
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$expr} as dow, count(*) as clicks")
+            ->groupByRaw($expr)
+            ->get()->keyBy('dow');
+
         $names = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 7 => 'Domingo'];
         $result = [];
         for ($d = 1; $d <= 7; $d++) {
-            $result[] = ['day' => $d, 'name' => $names[$d], 'clicks' => $patterns[$d]];
+            $result[] = ['day' => $d, 'name' => $names[$d], 'clicks' => (int) ($rows->get($d)?->clicks ?? 0)];
         }
 
         return $result;
     }
 
-    private function getWeeklyTrends($clicks): array
+    /**
+     * Aggregate click counts by ISO week, keyed `{calendar year of the week's
+     * Monday}-{ISO week number}` (e.g. "2025-01" for the week of 2025-12-29).
+     *
+     * Composed in PHP from a per-day SQL aggregate (GROUP BY calendar date) —
+     * never from raw click rows — because the legacy key comes from Carbon's
+     * `startOfWeek()->format('Y-W')`, whose calendar-year/ISO-week mix has no
+     * portable SQLite/Postgres expression (SQLite only gained `%G`/`%V` in
+     * 3.46, and PHP's key uses the *calendar* year of the Monday, not the ISO
+     * year). Memory is O(distinct days), not O(clicks).
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{week: string, clicks: int}> Ordered by week key ascending.
+     */
+    private function getWeeklyTrends(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
+        $expr = SqlDateExpr::date();
+
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$expr} as date, count(*) as clicks")
+            ->groupByRaw($expr)
+            ->get();
+
         $weekly = [];
-        foreach ($clicks as $click) {
-            $w = $click->created_at->startOfWeek()->format('Y-W');
-            $weekly[$w] = ($weekly[$w] ?? 0) + 1;
+        foreach ($rows as $row) {
+            $w = Carbon::parse($row->date)->startOfWeek()->format('Y-W');
+            $weekly[$w] = ($weekly[$w] ?? 0) + (int) $row->clicks;
         }
         ksort($weekly);
 
         return array_map(fn ($w, $n) => ['week' => $w, 'clicks' => $n], array_keys($weekly), $weekly);
     }
 
-    private function getMonthlyTrends($clicks): array
+    /**
+     * Aggregate click counts by calendar month (Y-m), ordered ascending.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{month: string, clicks: int}> Ordered by month key ascending.
+     */
+    private function getMonthlyTrends(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $monthly = [];
-        foreach ($clicks as $click) {
-            $m = $click->created_at->format('Y-m');
-            $monthly[$m] = ($monthly[$m] ?? 0) + 1;
-        }
-        ksort($monthly);
+        $expr = SqlDateExpr::yearMonth();
 
-        return array_map(fn ($m, $n) => ['month' => $m, 'clicks' => $n], array_keys($monthly), $monthly);
+        return $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$expr} as month, count(*) as clicks")
+            ->groupByRaw($expr)
+            ->orderByRaw('1')
+            ->get()
+            ->map(fn ($r) => ['month' => $r->month, 'clicks' => (int) $r->clicks])
+            ->toArray();
     }
 
-    private function getPeakAnalysis($clicks): array
+    /**
+     * Determine the peak hour and peak day from the already-computed SQL
+     * aggregates.
+     *
+     * Composed in PHP from the outputs of {@see getHourlyPatterns} and
+     * {@see getDailyPatterns} (never from raw rows): an extra MAX query would
+     * re-scan the table for data these aggregates already contain, and the
+     * first-bucket-wins tie-breaking of `array_search(max(...))` is preserved
+     * exactly.
+     *
+     * @param  array<int, array{hour: int, clicks: int}>  $hourlyPatterns  Output of getHourlyPatterns.
+     * @param  array<int, array{day: int, name: string, clicks: int}>  $dailyPatterns  Output of getDailyPatterns.
+     * @param  bool  $hasClicks  Whether the filtered scope contains any click at all.
+     * @return array{peak_hour: ?int, peak_day: ?int, peak_day_name: ?string, peak_hour_clicks: int, peak_day_clicks: int}
+     */
+    private function getPeakAnalysis(array $hourlyPatterns, array $dailyPatterns, bool $hasClicks): array
     {
-        if ($clicks->isEmpty()) {
+        if (! $hasClicks) {
             return ['peak_hour' => null, 'peak_day' => null, 'peak_day_name' => null, 'peak_hour_clicks' => 0, 'peak_day_clicks' => 0];
         }
 
-        $hourly = array_fill(0, 24, 0);
-        $daily = array_fill(1, 7, 0);
-        foreach ($clicks as $click) {
-            $h = $click->hour_of_day ?? (int) $click->created_at->format('H');
-            $d = $click->day_of_week ?? (int) $click->created_at->format('N');
-            if ($h >= 0 && $h <= 23) {
-                $hourly[$h]++;
-            }
-            if ($d >= 1 && $d <= 7) {
-                $daily[$d] = ($daily[$d] ?? 0) + 1;
-            }
-        }
+        $hourly = array_column($hourlyPatterns, 'clicks', 'hour');
+        $daily = array_column($dailyPatterns, 'clicks', 'day');
+
         $peakHour = (int) array_search(max($hourly), $hourly);
         $peakDay = (int) array_search(max($daily), $daily);
         $names = [1 => 'Segunda', 2 => 'Terça', 3 => 'Quarta', 4 => 'Quinta', 5 => 'Sexta', 6 => 'Sábado', 7 => 'Domingo'];
@@ -327,31 +398,65 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
         ];
     }
 
-    private function getTimezoneAnalysis($clicks): array
+    /**
+     * Aggregate click counts by timezone, most-clicked first.
+     *
+     * NULL timezones (pre-Phase 1 clicks) are folded into the 'Unknown'
+     * bucket via COALESCE, mirroring the legacy `?? 'Unknown'` fallback.
+     * Ties are broken by timezone name ascending so the ordering is
+     * deterministic across drivers.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{name: string, clicks: int}> Ordered by clicks descending.
+     */
+    private function getTimezoneAnalysis(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $tzs = [];
-        foreach ($clicks as $click) {
-            $tz = $click->timezone ?? 'Unknown';
-            $tzs[$tz] = ($tzs[$tz] ?? 0) + 1;
-        }
-        arsort($tzs);
-
-        return array_map(fn ($tz, $n) => ['name' => $tz, 'clicks' => $n], array_keys($tzs), $tzs);
+        return $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("COALESCE(timezone, 'Unknown') as name, count(*) as clicks")
+            ->groupByRaw("COALESCE(timezone, 'Unknown')")
+            ->orderByRaw('count(*) desc')
+            ->orderByRaw("COALESCE(timezone, 'Unknown') asc")
+            ->get()
+            ->map(fn ($r) => ['name' => $r->name, 'clicks' => (int) $r->clicks])
+            ->toArray();
     }
 
-    private function getHourDayHeatmap($clicks): array
+    /**
+     * Build the 7-day × 24-hour click heatmap from a single two-dimension
+     * GROUP BY (day of week, hour of day).
+     *
+     * Rows whose COALESCE'd hour/day fall outside the valid ranges (possible
+     * only with corrupt stored values) are silently skipped, matching the
+     * legacy in-memory range guard.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
+     * @return array<int, array{name: string, data: array<int, array{x: string, y: int}>}> 7 series (Seg…Dom) × 24 points.
+     */
+    private function getHourDayHeatmap(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
+        $hourExpr = SqlDateExpr::hourOfDay();
+        $dowExpr = SqlDateExpr::dayOfWeek();
+
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$dowExpr} as dow, {$hourExpr} as hour, count(*) as clicks")
+            ->groupByRaw("{$dowExpr}, {$hourExpr}")
+            ->get();
+
         // 7 days × 24 hours matrix
         $matrix = [];
         for ($d = 1; $d <= 7; $d++) {
             $matrix[$d] = array_fill(0, 24, 0);
         }
 
-        foreach ($clicks as $click) {
-            $h = $click->hour_of_day ?? (int) $click->created_at->format('H');
-            $d = $click->day_of_week ?? (int) $click->created_at->format('N');
+        foreach ($rows as $row) {
+            $h = (int) $row->hour;
+            $d = (int) $row->dow;
             if ($h >= 0 && $h <= 23 && $d >= 1 && $d <= 7) {
-                $matrix[$d][$h]++;
+                $matrix[$d][$h] = (int) $row->clicks;
             }
         }
 
@@ -540,58 +645,46 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
      * 'evening') without translated labels — the frontend is responsible for
      * mapping each key to a localised label via i18n.
      *
-     * @param  \Illuminate\Support\Collection  $clicks  Click collection (already filtered).
+     * Single GROUP BY on the period bucket with conditional SUMs per device.
+     * LOWER(device) mirrors the legacy `strtolower($click->device ?? '')`;
+     * NULL or unrecognised devices match no SUM branch and are not counted,
+     * exactly as before.
+     *
+     * @param  int  $linkId  Link primary key.
+     * @param  AnalyticsFilters  $filters  Applied filter state.
+     * @param  string  $segment  Segment constraint passed to baseQuery.
      * @return array<int, array{period: string, desktop: int, mobile: int, tablet: int}>
      */
-    private function getDeviceByPeriodWithKeys($clicks): array
+    private function getDeviceByPeriodWithKeys(int $linkId, AnalyticsFilters $filters, string $segment = 'all'): array
     {
-        $periods = [
-            'dawn' => ['range' => [0, 5],   'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'morning' => ['range' => [6, 11],  'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'afternoon' => ['range' => [12, 17], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-            'evening' => ['range' => [18, 23], 'desktop' => 0, 'mobile' => 0, 'tablet' => 0],
-        ];
+        $hourExpr = SqlDateExpr::hourOfDay();
+        $periodExpr = "CASE
+            WHEN ({$hourExpr}) BETWEEN 0 AND 5   THEN 'dawn'
+            WHEN ({$hourExpr}) BETWEEN 6 AND 11  THEN 'morning'
+            WHEN ({$hourExpr}) BETWEEN 12 AND 17 THEN 'afternoon'
+            WHEN ({$hourExpr}) BETWEEN 18 AND 23 THEN 'evening'
+        END";
 
-        foreach ($clicks as $click) {
-            $h = $click->hour_of_day ?? (int) $click->created_at->format('H');
-            $device = strtolower($click->device ?? '');
+        $rows = $this->baseQuery($linkId, $filters, $segment)
+            ->selectRaw("{$periodExpr} as period,
+                SUM(CASE WHEN LOWER(device) = 'desktop' THEN 1 ELSE 0 END) as desktop,
+                SUM(CASE WHEN LOWER(device) = 'mobile'  THEN 1 ELSE 0 END) as mobile,
+                SUM(CASE WHEN LOWER(device) = 'tablet'  THEN 1 ELSE 0 END) as tablet")
+            ->groupByRaw($periodExpr)
+            ->get()->keyBy('period');
 
-            foreach ($periods as $key => &$period) {
-                if ($h >= $period['range'][0] && $h <= $period['range'][1]) {
-                    if (in_array($device, ['desktop', 'mobile', 'tablet'])) {
-                        $period[$device]++;
-                    }
-                    break;
-                }
-            }
-            unset($period);
+        $result = [];
+        foreach (['dawn', 'morning', 'afternoon', 'evening'] as $period) {
+            $row = $rows->get($period);
+            $result[] = [
+                'period' => $period,
+                'desktop' => (int) ($row?->desktop ?? 0),
+                'mobile' => (int) ($row?->mobile ?? 0),
+                'tablet' => (int) ($row?->tablet ?? 0),
+            ];
         }
 
-        return array_values(array_map(fn ($key, $p) => [
-            'period' => $key,
-            'desktop' => $p['desktop'],
-            'mobile' => $p['mobile'],
-            'tablet' => $p['tablet'],
-        ], array_keys($periods), $periods));
-    }
-
-    /**
-     * @deprecated Use {@see getDeviceByPeriodWithKeys()} instead.
-     *   Kept only to avoid breaking callers that may still reference this method.
-     *   Will be removed in a future cleanup pass.
-     *
-     * @param  \Illuminate\Support\Collection  $clicks  Click collection.
-     * @return array<int, array{period: string, label: string, desktop: int, mobile: int, tablet: int}>
-     */
-    private function getDeviceByPeriod($clicks): array
-    {
-        $withKeys = $this->getDeviceByPeriodWithKeys($clicks);
-        $labels = [
-            'dawn' => 'Madrugada', 'morning' => 'Manhã',
-            'afternoon' => 'Tarde', 'evening' => 'Noite',
-        ];
-
-        return array_map(fn ($p) => array_merge($p, ['label' => $labels[$p['period']] ?? $p['period']]), $withKeys);
+        return $result;
     }
 
     /**

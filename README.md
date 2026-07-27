@@ -76,7 +76,7 @@ backend/
 ├── config/                       # config files (logging, tracking, geoip, …)
 ├── database/
 │   ├── factories/
-│   ├── migrations/               # 24 migrations — append-only — see database/migrations/README.md
+│   ├── migrations/               # 38 migrations — append-only — see database/migrations/README.md
 │   └── seeders/
 ├── docs/                         # specs, plans, audits, ADRs, diagrams
 │   ├── _audit/                   # snapshot inventories
@@ -155,6 +155,10 @@ docker exec linkchartapi-dev vendor/bin/phpunit
   - `app/Jobs/README.md`
   - `app/Models/README.md`
   - `database/migrations/README.md`
+
+## Operações / Troubleshooting
+
+Investigating a production incident? Start at the **incident runbook**: [`../docs/observability/triage.md`](../docs/observability/triage.md) (workspace-level `docs/`, outside this Git repo) — where to look first (overview dashboard, Loki/Tempo queries, Alloy counters) before touching anything. Local logs live in `storage/logs/` split by channel (see `CLAUDE.md` "Logging"); correlate a full request with `grep -r 'request_id=…' storage/logs/`.
 
 ## Deploy
 

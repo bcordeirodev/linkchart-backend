@@ -17,10 +17,11 @@ use Illuminate\Support\Facades\Cache;
  * the denormalised `clicks` counter is updated directly via DB::table()->increment()
  * (bypassing model events) to avoid cache churn.
  *
- * Fillable: id, slug, original_url, title, description, user_id, expires_at,
- *           starts_in, is_active, is_demo, clicks, click_limit, utm_source,
- *           utm_medium, utm_campaign, utm_term, utm_content, created_at,
- *           updated_at, health_status, health_checked_at, short_domain.
+ * Fillable: slug, original_url, title, description, user_id, expires_at,
+ *           starts_in, is_active, is_demo, click_limit, utm_source,
+ *           utm_medium, utm_campaign, utm_term, utm_content, health_status,
+ *           health_checked_at, short_domain. (id, clicks and the timestamps
+ *           are intentionally NOT fillable — see $fillable PHPDoc.)
  *
  * Casts: expires_at → datetime, starts_in → datetime, is_active → boolean,
  *        is_demo → boolean, health_checked_at → datetime.
@@ -51,6 +52,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string $health_status Enum-like: 'unknown' | 'healthy' | 'broken'. Default 'unknown'. Populated by FetchLinkPreviewJob.
  * @property \Illuminate\Support\Carbon|null $health_checked_at Timestamp of the most recent health check; null until first check.
  * @property string|null $short_domain Full hostname, e.g. "acme.linkcharts.com.br"; null uses the default redirect URL.
+ * @property string|null $password_hash Bcrypt hash of the link password; null = no password. NOT fillable (set explicitly by LinkService) and hidden from serialization — clients only see the derived `has_password` boolean.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\User|null        $user    Owning user; null for anonymous links.
@@ -67,8 +69,22 @@ class Link extends Model
 
     public const CACHE_TTL_SECONDS = 600;
 
+    /**
+     * Mass-assignable attributes.
+     *
+     * Deliberately excluded: `id` (auto-increment PK), `clicks` (denormalised
+     * counter maintained exclusively via direct `DB::table()->increment()` /
+     * `->update()` queries) and `created_at`/`updated_at` (managed by Eloquent
+     * timestamps). None of them has a legitimate mass-assignment path, and
+     * keeping them fillable would let a forged payload overwrite them.
+     *
+     * `user_id` IS fillable on purpose: CreateLinkDTO / CreatePublicLinkDTO
+     * pass it through LinkRepository::create(); it is derived from the
+     * authenticated user upstream, never from raw client input.
+     *
+     * @var array<int, string>
+     */
     protected $fillable = [
-        'id',
         'slug',
         'original_url',
         'title',
@@ -78,18 +94,28 @@ class Link extends Model
         'starts_in',
         'is_active',
         'is_demo',
-        'clicks',
         'click_limit',
         'utm_source',
         'utm_medium',
         'utm_campaign',
         'utm_term',
         'utm_content',
-        'created_at',
-        'updated_at',
         'health_status',
         'health_checked_at',
         'short_domain',
+    ];
+
+    /**
+     * Attributes excluded from array / JSON serialization.
+     *
+     * `password_hash` must NEVER leave the backend: API responses expose only
+     * the derived `has_password` boolean (see LinkResource), and the audit
+     * trail snapshots links via toArray(), which honours this list.
+     *
+     * @var array<int, string>
+     */
+    protected $hidden = [
+        'password_hash',
     ];
 
     protected $casts = [
@@ -158,6 +184,18 @@ class Link extends Model
     }
 
     /**
+     * Returns true when this link is protected by a password.
+     *
+     * A non-empty `password_hash` means GET /r/{slug} must render the password
+     * challenge page instead of redirecting; the visitor unlocks via
+     * POST /r/{slug}/unlock, verified with Hash::check against the stored hash.
+     */
+    public function hasPassword(): bool
+    {
+        return $this->password_hash !== null && $this->password_hash !== '';
+    }
+
+    /**
      * Returns the full public short URL for this link.
      *
      * When short_domain is set (link was created after user activated a subdomain),
@@ -216,7 +254,7 @@ class Link extends Model
      *
      * Cache invalidation strategy: on save, only when one of the relevance fields
      * changed:
-     *     ['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit']
+     *     ['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit', 'password_hash']
      *
      * This avoids spurious cache churn from unrelated saves (e.g. the
      * denormalised `clicks` column being incremented by LinkTrackingService
@@ -233,7 +271,7 @@ class Link extends Model
     protected static function booted(): void
     {
         static::saved(function (self $link): void {
-            if (! $link->wasRecentlyCreated && ! $link->wasChanged(['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit'])) {
+            if (! $link->wasRecentlyCreated && ! $link->wasChanged(['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit', 'password_hash'])) {
                 return;
             }
 
