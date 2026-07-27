@@ -5,12 +5,11 @@ namespace App\Http\Controllers\Subdomain;
 use App\Models\UserSubdomain;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 use Illuminate\Validation\Rule;
 
 /**
- * Manages subdomain claim, release, and availability check for authenticated users.
+ * Manages subdomain claim (create/list/release) and availability check for authenticated users.
  *
  * All routes require auth:api + verified middleware (configured in routes/api.php).
  * Responses are wrapped by NormalizeApiResponse middleware — return raw data, not wrapped.
@@ -19,37 +18,16 @@ use Illuminate\Validation\Rule;
  *
  * Since the multi-subdomain support was added, a user may hold several active
  * subdomains simultaneously (up to `config('app.max_subdomains_per_user')`).
- * The plural endpoints (`index`/`store`/`destroy`, mounted at `/api/subdomains`)
- * are the current API surface consumed by the frontend. The singular endpoints
- * (`show`/`claim`/`release`, mounted at `/api/subdomain`) are `@deprecated` —
- * kept for one release so an old frontend build still in production during a
- * blue/green deploy does not break — and are thin aliases: `claim()` delegates
- * fully to `store()` so both share identical limit/insert semantics.
+ * The plural endpoints (`index`/`store`/`destroy`/`check`, mounted at
+ * `/api/subdomains`) are the only API surface — the legacy singular endpoints
+ * (`show`/`claim`/`release`, mounted at `/api/subdomain`) were removed once
+ * the frontend's last caller (`checkAvailability`) migrated to
+ * `GET /api/subdomains/check`.
  */
 class SubdomainController extends Controller
 {
     /**
-     * GET /api/subdomain
-     *
-     * Returns the authenticated user's active subdomain or null.
-     *
-     * Note: response()->json(null) produces {} in Laravel, which the NormalizeApiResponse
-     * middleware wraps as {"data": []}. We explicitly pass ['data' => null] so the
-     * middleware's array_key_exists('data') branch preserves the null value correctly.
-     */
-    public function show(Request $request): JsonResponse
-    {
-        $sub = UserSubdomain::findByUserCached($request->user()->id);
-
-        if (! $sub) {
-            return response()->json(['data' => null]);
-        }
-
-        return response()->json($this->formatSubdomain($sub));
-    }
-
-    /**
-     * GET /api/subdomain/check?name=acme
+     * GET /api/subdomains/check?name=acme
      *
      * Returns whether the requested subdomain label is available to claim.
      * Only checks active records; inactive (released) subdomains are available.
@@ -67,23 +45,6 @@ class SubdomainController extends Controller
             ->exists();
 
         return response()->json(['available' => ! $taken]);
-    }
-
-    /**
-     * POST /api/subdomain
-     *
-     * @deprecated Use POST /api/subdomains instead. Kept for one release so an
-     * old frontend build still in production during a blue/green deploy keeps
-     * working. Delegates fully to {@see self::store()} — same per-user limit
-     * and always-INSERT semantics (a user may hold several active
-     * subdomains now, so the old "409 if already active" / "reuse the
-     * inactive row via UPDATE" behavior no longer applies).
-     *
-     * @throws \Illuminate\Validation\ValidationException on invalid input.
-     */
-    public function claim(Request $request): JsonResponse
-    {
-        return $this->store($request);
     }
 
     /**
@@ -163,10 +124,9 @@ class SubdomainController extends Controller
     /**
      * Validates and returns a candidate subdomain label from the request.
      *
-     * Shared by {@see self::store()} (and, transitively, the deprecated
-     * {@see self::claim()}) so both entry points enforce the exact same rules:
-     * lowercase alphanumeric + hyphen format, length bounds, not on the
-     * reserved list, and not already claimed by another active record.
+     * Used by {@see self::store()} to enforce: lowercase alphanumeric +
+     * hyphen format, length bounds, not on the reserved list, and not
+     * already claimed by another active record.
      *
      * @throws \Illuminate\Validation\ValidationException on invalid input.
      */
@@ -189,35 +149,7 @@ class SubdomainController extends Controller
     }
 
     /**
-     * DELETE /api/subdomain
-     *
-     * Release the authenticated user's active subdomain. The record is soft-deleted
-     * (status = inactive) so the label can be reclaimed by others. Returns 404 if
-     * the user has no active subdomain.
-     */
-    public function release(Request $request): JsonResponse|Response
-    {
-        $sub = UserSubdomain::where('user_id', $request->user()->id)
-            ->where('status', 'active')
-            ->first();
-
-        if (! $sub) {
-            return response()->json([
-                'error' => ['code' => 'NOT_FOUND', 'message' => 'Nenhum subdomínio ativo encontrado.'],
-            ], 404);
-        }
-
-        $sub->update(['status' => 'inactive']);
-
-        return response()->noContent();
-    }
-
-    /**
      * Serialize a UserSubdomain to the API response shape.
-     *
-     * `id` is required by the plural endpoints (`index`/`destroy` operate on
-     * it) and is harmless additional data on the deprecated singular
-     * `show`/`claim` responses.
      *
      * @return array{id: int, subdomain: string, full_url: string, status: string, created_at: string}
      */

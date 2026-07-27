@@ -7,40 +7,30 @@ use App\Models\UserSubdomain;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * Covers the plural /api/subdomains endpoints for claim (store) and
+ * availability check (check). List (index) and release-by-id (destroy) have
+ * their own dedicated coverage in {@see SubdomainMultiTest}.
+ *
+ * @see \App\Http\Controllers\Subdomain\SubdomainController
+ */
 class SubdomainClaimTest extends TestCase
 {
     use RefreshDatabase;
 
-    // ── GET /api/subdomain ──────────────────────────────────────────────
+    // ── auth ─────────────────────────────────────────────────────────────
 
-    public function test_show_returns_null_when_user_has_no_subdomain(): void
+    public function test_index_requires_authentication(): void
     {
-        $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
-        $response = $this->actingAs($user, 'api')->getJson('/api/subdomain');
-        $response->assertOk()->assertJsonPath('data', null);
+        $this->getJson('/api/subdomains')->assertUnauthorized();
     }
 
-    public function test_show_returns_subdomain_when_user_has_one(): void
-    {
-        $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
-        UserSubdomain::factory()->create(['user_id' => $user->id, 'subdomain' => 'acme']);
-        $response = $this->actingAs($user, 'api')->getJson('/api/subdomain');
-        $response->assertOk()
-            ->assertJsonPath('data.subdomain', 'acme')
-            ->assertJsonPath('data.status', 'active');
-    }
-
-    public function test_show_requires_authentication(): void
-    {
-        $this->getJson('/api/subdomain')->assertUnauthorized();
-    }
-
-    // ── GET /api/subdomain/check ────────────────────────────────────────
+    // ── GET /api/subdomains/check ───────────────────────────────────────
 
     public function test_check_returns_available_when_subdomain_is_free(): void
     {
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
-        $response = $this->actingAs($user, 'api')->getJson('/api/subdomain/check?name=acme');
+        $response = $this->actingAs($user, 'api')->getJson('/api/subdomains/check?name=acme');
         $response->assertOk()->assertJsonPath('data.available', true);
     }
 
@@ -49,7 +39,7 @@ class SubdomainClaimTest extends TestCase
         $owner = User::factory()->create();
         UserSubdomain::factory()->create(['user_id' => $owner->id, 'subdomain' => 'acme']);
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
-        $response = $this->actingAs($user, 'api')->getJson('/api/subdomain/check?name=acme');
+        $response = $this->actingAs($user, 'api')->getJson('/api/subdomains/check?name=acme');
         $response->assertOk()->assertJsonPath('data.available', false);
     }
 
@@ -58,18 +48,18 @@ class SubdomainClaimTest extends TestCase
         $owner = User::factory()->create();
         UserSubdomain::factory()->inactive()->create(['user_id' => $owner->id, 'subdomain' => 'acme']);
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
-        $response = $this->actingAs($user, 'api')->getJson('/api/subdomain/check?name=acme');
+        $response = $this->actingAs($user, 'api')->getJson('/api/subdomains/check?name=acme');
         $response->assertOk()->assertJsonPath('data.available', true);
     }
 
-    // ── POST /api/subdomain ─────────────────────────────────────────────
+    // ── POST /api/subdomains ────────────────────────────────────────────
 
     public function test_user_can_claim_a_subdomain(): void
     {
         config(['app.domain' => 'linkcharts.com.br']);
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         $response = $this->actingAs($user, 'api')
-            ->postJson('/api/subdomain', ['subdomain' => 'acme']);
+            ->postJson('/api/subdomains', ['subdomain' => 'acme']);
         $response->assertCreated()
             ->assertJsonPath('data.subdomain', 'acme')
             ->assertJsonPath('data.status', 'active')
@@ -90,7 +80,7 @@ class SubdomainClaimTest extends TestCase
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         UserSubdomain::factory()->create(['user_id' => $user->id, 'subdomain' => 'acme']);
         $response = $this->actingAs($user, 'api')
-            ->postJson('/api/subdomain', ['subdomain' => 'clientb']);
+            ->postJson('/api/subdomains', ['subdomain' => 'clientb']);
         $response->assertCreated()->assertJsonPath('data.subdomain', 'clientb');
         $this->assertDatabaseHas('user_subdomains', [
             'user_id' => $user->id, 'subdomain' => 'acme', 'status' => 'active',
@@ -106,7 +96,7 @@ class SubdomainClaimTest extends TestCase
         UserSubdomain::factory()->create(['user_id' => $owner->id, 'subdomain' => 'acme']);
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         $response = $this->actingAs($user, 'api')
-            ->postJson('/api/subdomain', ['subdomain' => 'acme']);
+            ->postJson('/api/subdomains', ['subdomain' => 'acme']);
         $response->assertUnprocessable();
     }
 
@@ -114,7 +104,7 @@ class SubdomainClaimTest extends TestCase
     {
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         $response = $this->actingAs($user, 'api')
-            ->postJson('/api/subdomain', ['subdomain' => 'api']);
+            ->postJson('/api/subdomains', ['subdomain' => 'api']);
         $response->assertUnprocessable();
     }
 
@@ -123,7 +113,7 @@ class SubdomainClaimTest extends TestCase
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         foreach (['-acme', 'ACME', 'ab', 'acme-'] as $invalid) {
             $this->actingAs($user, 'api')
-                ->postJson('/api/subdomain', ['subdomain' => $invalid])
+                ->postJson('/api/subdomains', ['subdomain' => $invalid])
                 ->assertUnprocessable("Failed for: {$invalid}");
         }
     }
@@ -134,7 +124,7 @@ class SubdomainClaimTest extends TestCase
         $user = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
         $old = UserSubdomain::factory()->inactive()->create(['user_id' => $user->id, 'subdomain' => 'olddomain']);
         $response = $this->actingAs($user, 'api')
-            ->postJson('/api/subdomain', ['subdomain' => 'newdomain']);
+            ->postJson('/api/subdomains', ['subdomain' => 'newdomain']);
         $response->assertCreated()->assertJsonPath('data.subdomain', 'newdomain');
         $this->assertDatabaseHas('user_subdomains', [
             'user_id' => $user->id, 'subdomain' => 'newdomain', 'status' => 'active',
@@ -146,6 +136,20 @@ class SubdomainClaimTest extends TestCase
             'id' => $old->id, 'subdomain' => 'olddomain', 'status' => 'inactive',
         ]);
         $this->assertDatabaseCount('user_subdomains', 2);
+    }
+
+    public function test_released_subdomain_can_be_claimed_by_another_user(): void
+    {
+        config(['app.domain' => 'linkcharts.com.br']);
+        $ownerA = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
+        UserSubdomain::factory()->inactive()->create(['user_id' => $ownerA->id, 'subdomain' => 'acme']);
+        $ownerB = User::factory()->create(['email_verified' => true, 'email_verified_at' => now()]);
+        $response = $this->actingAs($ownerB, 'api')
+            ->postJson('/api/subdomains', ['subdomain' => 'acme']);
+        $response->assertCreated()->assertJsonPath('data.subdomain', 'acme');
+        $this->assertDatabaseHas('user_subdomains', [
+            'user_id' => $ownerB->id, 'subdomain' => 'acme', 'status' => 'active',
+        ]);
     }
 
     public function test_link_created_with_subdomain_gets_short_domain_set(): void

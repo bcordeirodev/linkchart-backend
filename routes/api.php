@@ -184,6 +184,9 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         ->middleware('throttle:subdomain-claim');
     Route::delete('/subdomains/{id}', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'destroy'])
         ->whereNumber('id');
+    // check must be registered before /subdomains/{id} would matter for GET,
+    // but there's no GET /subdomains/{id} route, so no collision risk here.
+    Route::get('/subdomains/check', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'check']);
 
     // === PÁGINA "LINK-IN-BIO" (gestão) ===
     // Recurso singular por usuário (MVP: uma página por conta) — sem id
@@ -201,14 +204,6 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::delete('/items/{id}', 'destroyItem')->whereNumber('id');
     });
 
-    // Singulares — @deprecated, mantidos por um release (compat com frontend antigo
-    // durante o deploy blue/green). check must be registered before the bare GET
-    // /subdomain to avoid route collision.
-    Route::get('/subdomain/check', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'check']);
-    Route::get('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'show']);
-    Route::post('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'claim'])
-        ->middleware('throttle:subdomain-claim');
-    Route::delete('/subdomain', [\App\Http\Controllers\Subdomain\SubdomainController::class, 'release']);
 });
 
 /**
