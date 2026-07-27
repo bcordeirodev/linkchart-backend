@@ -100,8 +100,9 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     /**
      * Returns an extended temporal analytics payload for heatmap and trend views.
      *
-     * Loads all clicks for the link into a Laravel Collection in memory — may be
-     * expensive for high-traffic links. Used by the heatmap API endpoint.
+     * Loads all click rows for the link into memory, restricted to the 5
+     * columns the in-memory aggregations actually read (~50 columns skipped).
+     * Still O(n) rows — for further scale the aggregations should move to SQL.
      *
      * @param  int  $linkId  Link primary key.
      * @return array<string, mixed> Keys: hourly_patterns, daily_patterns, weekly_trends, monthly_trends, peak_analysis, timezone_analysis, heatmap_data, daily_timeline, device_by_period, holiday_impact, seasonal_distribution.
@@ -109,7 +110,8 @@ class TemporalAnalyticsService implements \App\Contracts\Analytics\TemporalAnaly
     public function getAdvancedTemporalAnalytics(int $linkId, ?AnalyticsFilters $filters = null, string $segment = 'all'): array
     {
         $filters ??= new AnalyticsFilters;
-        $clicks = $this->baseQuery($linkId, $filters, $segment)->get();
+        $clicks = $this->baseQuery($linkId, $filters, $segment)
+            ->get(['created_at', 'hour_of_day', 'day_of_week', 'timezone', 'device']);
 
         return [
             'hourly_patterns' => $this->getHourlyPatterns($clicks),
