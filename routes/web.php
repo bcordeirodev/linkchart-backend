@@ -1,17 +1,30 @@
 <?php
 
+use App\Http\Controllers\Bio\PublicBioController;
 use App\Http\Controllers\Links\RedirectController;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return response()->json([
-        'message' => 'Link Charts API is running!',
-        'version' => '1.0.0',
-        'status' => 'active',
-    ]);
-});
+/**
+ * GET / — was a raw closure returning the static "API is running" welcome
+ * JSON, host-agnostic (Laravel routes match by path only, unless ->domain()
+ * is used — this route matched the root domain AND every subdomain root
+ * identically, since none of them carry a domain constraint).
+ *
+ * Now delegates to PublicBioController::redirectFromSubdomainRoot(), which
+ * reproduces that exact payload for every case except one new one: a
+ * subdomain host with an ACTIVE bio page associated with it
+ * (bio_pages.subdomain_id) now 302s to the frontend bio page instead. See
+ * that method's docblock for the full behavior matrix and
+ * tests/Feature/Subdomain/SubdomainRootTest.php for the characterization +
+ * new-behavior coverage. resolve.subdomain resolves the Host header the
+ * same way it already does for /{slug} and /r/{slug} below; throttle:redirect
+ * is the same 600/min-per-IP limiter already protecting those routes — this
+ * root path previously had no rate limit at all.
+ */
+Route::middleware(['resolve.subdomain', 'throttle:redirect'])
+    ->get('/', [PublicBioController::class, 'redirectFromSubdomainRoot']);
 
 Route::get('/health', function () {
     try {

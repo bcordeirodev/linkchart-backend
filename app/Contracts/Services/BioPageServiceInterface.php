@@ -122,4 +122,19 @@ interface BioPageServiceInterface
      *                                   does not exactly match the page's current item ids.
      */
     public function reorderItems(int $userId, array $ids): array;
+
+    /**
+     * Return the handle of the ACTIVE bio page associated with a given
+     * `user_subdomains` row, or null when that subdomain has no associated
+     * bio page, or has one that is inactive.
+     *
+     * Association is per-subdomain (`bio_pages.subdomain_id`), not "any bio
+     * page owned by the subdomain's user" — a user with several subdomains
+     * only redirects on the one their bio is actually linked to.
+     *
+     * Used by the subdomain-root -> bio redirect (Option B of the
+     * bio<->subdomain integration; see routes/web.php and
+     * {@see \App\Http\Controllers\Bio\PublicBioController::redirectFromSubdomainRoot()}).
+     */
+    public function findActiveHandleBySubdomainId(int $subdomainId): ?string;
 }

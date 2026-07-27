@@ -231,6 +231,14 @@ class BioPageService implements BioPageServiceInterface
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function findActiveHandleBySubdomainId(int $subdomainId): ?string
+    {
+        return BioPage::where('subdomain_id', $subdomainId)->where('is_active', true)->value('handle');
+    }
+
+    /**
      * Find a bio page item by id, scoped to items whose bio page belongs to $userId.
      *
      * Returns null both when the item does not exist and when it belongs to
