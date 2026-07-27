@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rules\Password;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 /**
@@ -24,15 +25,12 @@ use Tymon\JWTAuth\Facades\JWTAuth;
  *
  * Route groups in routes/api.php:
  *   - `throttle:login` group  — register, login, verifyEmail, forgotPassword, resetPassword
- *   - `api.auth:api` only     — me, logout, checkEmailVerificationStatus, resendVerificationEmail
+ *   - `api.auth:api` only     — me, logout, checkEmailVerificationStatus
+ *   - `api.auth:api` + `throttle:resend-verification` — resendVerificationEmail
  *   - `api.auth:api, verified` — updateProfile, changePassword, stats
  *
  * All responses are raw JSON (not wrapped by NormalizeApiResponse, which only
  * applies to the `api` route group containing links and analytics).
- *
- * Known issue: resendVerificationEmail carries NO rate limit despite sending
- * email — the throttle:login middleware does not cover that route. See audit
- * §14 for context.
  */
 class AuthController extends Controller
 {
@@ -72,7 +70,7 @@ class AuthController extends Controller
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|string|email|max:255|unique:users',
-                'password' => 'required|string|min:6|confirmed',
+                'password' => ['required', 'string', 'confirmed', Password::defaults()],
             ]);
 
             if ($validator->fails()) {
@@ -441,7 +439,7 @@ class AuthController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'current_password' => 'required|string',
-                'new_password' => 'required|string|min:6|confirmed',
+                'new_password' => ['required', 'string', 'confirmed', Password::defaults()],
             ]);
 
             if ($validator->fails()) {
@@ -543,13 +541,12 @@ class AuthController extends Controller
      * Re-send the email verification message for the authenticated user, unless
      * the email is already verified.
      *
-     * Middleware: api.auth:api (no verified, no throttle)
+     * Middleware: api.auth:api, throttle:resend-verification (no verified)
+     * Rate limit: resend-verification — 5/min per authenticated user (IP
+     * fallback), defined in AppServiceProvider; the 2-minute cooldown in
+     * User::canResendVerificationEmail applies on top of it.
      * Auth: required (JWT)
      * Owner check: no (operates on the authenticated user's own record)
-     *
-     * NOTE: This action carries NO rate limit despite sending email. This is a
-     * known gap surfaced in the audit (§14). A dedicated throttle should be
-     * added in a follow-up.
      *
      * Response shape: service-defined { success, ... } (200 or 400)
      *                 { success: false, message, type: 'already_verified' } (400) if already done
@@ -663,7 +660,7 @@ class AuthController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'token' => 'required|string|size:64',
-                'password' => 'required|string|min:6|confirmed',
+                'password' => ['required', 'string', 'confirmed', Password::defaults()],
             ]);
 
             if ($validator->fails()) {

@@ -139,7 +139,8 @@ class ChangePasswordTest extends TestCase
     }
 
     /**
-     * New passwords shorter than 6 characters fail validation with 422.
+     * New passwords shorter than 8 characters (Password::defaults()) fail
+     * validation with 422 — a 7-character password must be rejected.
      */
     public function test_change_password_rejects_short_new_password(): void
     {
@@ -148,11 +149,13 @@ class ChangePasswordTest extends TestCase
         $this->actingAs($user, 'api')
             ->putJson('/api/change-password', [
                 'current_password' => 'password',
-                'new_password' => 'abc',
-                'new_password_confirmation' => 'abc',
+                'new_password' => 'abc1234',
+                'new_password_confirmation' => 'abc1234',
             ])
             ->assertStatus(422)
             ->assertJsonStructure(['error' => ['details' => ['errors' => ['new_password']]]]);
+
+        $this->assertTrue(Hash::check('password', $user->fresh()->password));
     }
 
     /**

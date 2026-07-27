@@ -339,7 +339,9 @@ class PasswordResetTest extends TestCase
 
     /**
      * The token must be exactly 64 characters and the new password must be
-     * confirmed and at least 6 characters — otherwise 422.
+     * confirmed and at least 8 characters (Password::defaults()) — otherwise
+     * 422. A 7-character password must fail validation before the token is
+     * even looked up.
      */
     public function test_reset_password_validates_token_size_and_password_rules(): void
     {
@@ -358,8 +360,8 @@ class PasswordResetTest extends TestCase
 
         $this->postJson('/api/auth/reset-password', [
             'token' => str_repeat('c', 64),
-            'password' => 'abc',
-            'password_confirmation' => 'abc',
+            'password' => 'abc1234',
+            'password_confirmation' => 'abc1234',
         ])->assertStatus(422)
             ->assertJsonStructure(['error' => ['details' => ['errors' => ['password']]]]);
     }

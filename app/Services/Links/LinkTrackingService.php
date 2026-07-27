@@ -8,6 +8,7 @@ use App\Models\Link;
 use App\Models\LinkUtm;
 use App\Support\ClientIpResolver;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Jenssegers\Agent\Agent;
 
@@ -218,6 +219,7 @@ class LinkTrackingService
         }
 
         DB::table('links')->where('id', $link->id)->increment('clicks');
+        $this->invalidateSlugCacheIfLimitReached($link);
 
         $utm = $this->extractUtm($queryParams, $referer);
 
@@ -235,6 +237,47 @@ class LinkTrackingService
             'referer' => $referer,
             'utm_data' => $utm,
         ]);
+    }
+
+    /**
+     * Busts the slug cache the moment the click counter reaches click_limit.
+     *
+     * The counter increment above deliberately bypasses model events so it
+     * never invalidates Link::findActiveBySlugCached() — which meant a link at
+     * its limit kept redirecting for up to CACHE_TTL_SECONDS (10 min) until
+     * the cached model expired. This hook closes that window at the only
+     * write point of the counter.
+     *
+     * Cost profile:
+     *   - click_limit null (the common case): zero extra work — returns
+     *     immediately without touching the DB or the cache.
+     *   - click_limit set: ONE extra indexed SELECT of the fresh counter.
+     *     Re-reading (instead of assuming $link->clicks + 1) makes the check
+     *     race-proof: with concurrent workers, whichever increment lands the
+     *     counter at/past the limit still observes clicks >= click_limit here,
+     *     so the invalidation can never be skipped by interleaved reads. The
+     *     >= comparison also covers late clicks processed after the limit.
+     *
+     * @param  Link  $link  The link whose counter was just incremented (loaded fresh at job start).
+     */
+    private function invalidateSlugCacheIfLimitReached(Link $link): void
+    {
+        if ($link->click_limit === null) {
+            return;
+        }
+
+        $clicks = (int) DB::table('links')->where('id', $link->id)->value('clicks');
+
+        if ($clicks >= $link->click_limit) {
+            Cache::forget(Link::slugCacheKey($link->slug));
+
+            AppLogger::event('tracking', 'info', 'tracking.click_limit_cache_invalidated', [
+                'link_id' => $link->id,
+                'slug' => $link->slug,
+                'clicks' => $clicks,
+                'click_limit' => $link->click_limit,
+            ]);
+        }
     }
 
     /**

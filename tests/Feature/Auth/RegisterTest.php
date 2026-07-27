@@ -195,15 +195,16 @@ class RegisterTest extends TestCase
     }
 
     /**
-     * Passwords shorter than 6 characters are rejected with 422.
+     * Passwords shorter than 8 characters (Password::defaults()) are rejected
+     * with 422 — a 7-character password must not create an account.
      */
-    public function test_register_rejects_password_shorter_than_six_chars(): void
+    public function test_register_rejects_password_shorter_than_eight_chars(): void
     {
         $this->postJson('/api/auth/register', [
             'name' => 'Short Pwd',
             'email' => 'short@example.com',
-            'password' => 'abc',
-            'password_confirmation' => 'abc',
+            'password' => 'abc1234',
+            'password_confirmation' => 'abc1234',
         ])->assertStatus(422)
             ->assertJsonStructure(['error' => ['details' => ['errors' => ['password']]]]);
 

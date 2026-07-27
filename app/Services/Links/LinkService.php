@@ -12,6 +12,7 @@ use App\Models\Tag;
 use App\Models\UserSubdomain;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -144,13 +145,14 @@ class LinkService implements LinkServiceInterface
         );
 
         // Gera slug único se não fornecido
-        if (empty($data['slug'])) {
+        $slugWasGenerated = empty($data['slug']);
+        if ($slugWasGenerated) {
             $data['slug'] = $this->generateUniqueSlug();
         } elseif ($this->linkRepository->slugExists($data['slug'])) {
             throw new \InvalidArgumentException('Slug personalizado já está em uso.');
         }
 
-        $link = $this->linkRepository->create($data);
+        $link = $this->createWithSlugCollisionRetry($data, $slugWasGenerated);
 
         // Senha do link: write-only e fora do mass-assignment (password_hash
         // não é fillable de propósito). Só o hash bcrypt toca o banco; o texto
@@ -321,13 +323,14 @@ class LinkService implements LinkServiceInterface
         $data = $linkDTO->toArray();
 
         // Gera slug único se não fornecido
-        if (empty($data['slug'])) {
+        $slugWasGenerated = empty($data['slug']);
+        if ($slugWasGenerated) {
             $data['slug'] = $this->generateUniqueSlug();
         } elseif ($this->linkRepository->slugExists($data['slug'])) {
             throw new \InvalidArgumentException('Slug personalizado já está em uso.');
         }
 
-        $link = $this->linkRepository->create($data);
+        $link = $this->createWithSlugCollisionRetry($data, $slugWasGenerated);
 
         \App\Logging\AppLogger::linkCreated($link, true);
 
@@ -344,6 +347,47 @@ class LinkService implements LinkServiceInterface
         }
 
         return $link;
+    }
+
+    /**
+     * Persists a new link, absorbing the slug TOCTOU race on the unique index.
+     *
+     * Between slugExists()/generateUniqueSlug() and the INSERT, a concurrent
+     * request can claim the same slug; the DB unique index then raises a
+     * {@see UniqueConstraintViolationException} that previously escaped as an
+     * HTTP 500. Recovery depends on who chose the slug:
+     *
+     *   - AUTO-generated slug: generate a fresh slug and retry the INSERT
+     *     exactly once (collision probability after one retry is negligible);
+     *     a second consecutive violation is rethrown untouched.
+     *   - CUSTOM (user-chosen) slug: never silently replaced — the violation
+     *     is translated into the same InvalidArgumentException the pre-check
+     *     raises, so the caller still answers "slug already in use".
+     *
+     * @param  array<string, mixed>  $data  Column map for links (slug already filled in).
+     * @param  bool  $slugWasGenerated  True when $data['slug'] came from generateUniqueSlug().
+     * @return Link The persisted link.
+     *
+     * @throws \InvalidArgumentException When a user-chosen slug lost the race.
+     * @throws UniqueConstraintViolationException When the single retry also collided.
+     */
+    private function createWithSlugCollisionRetry(array $data, bool $slugWasGenerated): Link
+    {
+        try {
+            return $this->linkRepository->create($data);
+        } catch (UniqueConstraintViolationException $e) {
+            if (! $slugWasGenerated) {
+                throw new \InvalidArgumentException('Slug personalizado já está em uso.', 0, $e);
+            }
+
+            \App\Logging\AppLogger::event('app', 'warning', 'link.slug_collision_retry', [
+                'collided_slug' => $data['slug'],
+            ]);
+
+            $data['slug'] = $this->generateUniqueSlug();
+
+            return $this->linkRepository->create($data);
+        }
     }
 
     /**

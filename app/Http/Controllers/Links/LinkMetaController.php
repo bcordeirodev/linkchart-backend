@@ -32,6 +32,14 @@ use Illuminate\Routing\Controller;
  */
 class LinkMetaController extends Controller
 {
+    /**
+     * Maximum FetchLinkPreviewJob dispatches a single batchMeta request may
+     * enqueue. Each job performs outbound HTTP fetches, so an uncapped 50-id
+     * request could flood the queue with 50 fetching jobs at once; the links
+     * left out are simply picked up by the next batch-meta call.
+     */
+    private const MAX_PREVIEW_DISPATCHES_PER_REQUEST = 10;
+
     public function __construct(private MetricsService $metricsService) {}
 
     /**
@@ -78,9 +86,13 @@ class LinkMetaController extends Controller
      * POST /api/links/batch-meta
      *
      * Single round-trip to fetch sparkline + trend + OG preview + health for
-     * up to 50 link IDs owned by the authenticated user. Dispatches
-     * FetchLinkPreviewJob for any link whose preview is missing or older than
-     * 24 hours (best-effort, does not block the response).
+     * up to 50 link IDs owned by the authenticated user. Sparkline and trend
+     * aggregates are computed in bulk (one grouped query each for all ids via
+     * MetricsService::getLinkSparklineBatch / getLinkTrendBatch) instead of
+     * per-link queries. Dispatches FetchLinkPreviewJob for links whose preview
+     * is missing or older than 24 hours (best-effort, does not block the
+     * response), capped at MAX_PREVIEW_DISPATCHES_PER_REQUEST (10) per
+     * request — remaining stale previews are refreshed by subsequent calls.
      *
      * Middleware: api.auth:api, verified
      * Auth: required
@@ -111,17 +123,24 @@ class LinkMetaController extends Controller
 
         $previews = LinkPreview::whereIn('link_id', $ids)->get()->keyBy('link_id');
 
+        $ownedIds = $links->keys()->map(fn ($id) => (int) $id)->all();
+        $sparklines = $this->metricsService->getLinkSparklineBatch($ownedIds, $days);
+        $trends = $this->metricsService->getLinkTrendBatch($ownedIds, 7);
+
         $result = [];
+        $previewDispatches = 0;
         foreach ($links as $id => $link) {
             $preview = $previews->get($id);
 
-            if (! $preview || $preview->fetched_at->lt(now()->subDay())) {
+            if ((! $preview || $preview->fetched_at->lt(now()->subDay()))
+                && $previewDispatches < self::MAX_PREVIEW_DISPATCHES_PER_REQUEST) {
                 FetchLinkPreviewJob::dispatch((int) $id, $link->original_url);
+                $previewDispatches++;
             }
 
             $result[$id] = [
-                'sparkline' => $this->metricsService->getLinkSparkline((int) $id, $days),
-                'trend' => $this->metricsService->getLinkTrend((int) $id, 7),
+                'sparkline' => $sparklines[(int) $id],
+                'trend' => $trends[(int) $id],
                 'preview' => $preview ? [
                     'favicon_url' => $preview->favicon_url,
                     'og_title' => $preview->og_title,

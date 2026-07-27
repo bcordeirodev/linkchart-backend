@@ -144,7 +144,7 @@ class PublicLinkController extends Controller
      * in a single query — no differentiated error messages are returned to
      * prevent slug enumeration of expired/scheduled links.
      *
-     * Middleware: none (no throttle, no auth)
+     * Middleware: throttle:60,1 (60 req/min per IP; no auth)
      * Auth: not required
      * Owner check: no
      *
