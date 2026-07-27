@@ -4,6 +4,7 @@ namespace App\Observability;
 
 use OpenTelemetry\API\Globals;
 use OpenTelemetry\API\Metrics\CounterInterface;
+use OpenTelemetry\API\Metrics\GaugeInterface;
 use OpenTelemetry\API\Metrics\HistogramInterface;
 use OpenTelemetry\API\Metrics\MeterInterface;
 use OpenTelemetry\API\Trace\TracerInterface;
@@ -52,6 +53,9 @@ final class Otel
 
     /** Memoized job duration histogram; created once per process. */
     private static ?HistogramInterface $jobHistogram = null;
+
+    /** Memoized "job last succeeded at" gauge; created once per process. */
+    private static ?GaugeInterface $jobLastSuccessGauge = null;
 
     /** Whether telemetry export is active for this process. */
     public static function enabled(): bool
@@ -137,6 +141,9 @@ final class Otel
      * so a telemetry failure never breaks job processing. Instruments memoized once
      * per process.
      *
+     * On success it also stamps {@see recordJobSuccessTimestamp}, which is the only
+     * one of these three that can answer "is this scheduled job still running?".
+     *
      * @param  string  $job  Fully-qualified job class name.
      * @param  string  $status  One of: succeeded|failed.
      * @param  float  $durationSeconds  Wall-clock time from job start to completion.
@@ -157,9 +164,46 @@ final class Otel
             $attributes = ['job.name' => $job, 'job.status' => $status];
             self::$jobCounter->add(1, $attributes);
             self::$jobHistogram->record($durationSeconds, $attributes);
+
+            if ($status === 'succeeded') {
+                self::recordJobSuccessTimestamp($job);
+            }
         } catch (Throwable) {
             // Telemetry must never break job processing.
         }
+    }
+
+    /**
+     * Stamps the wall-clock time a job last succeeded, as a gauge.
+     *
+     * Why a gauge and not the `job.count` counter: the queue workers run with
+     * `--max-time=3600`, so every process is replaced hourly. Each new process
+     * restarts the OTel stream's start timestamp, which Alloy's
+     * `deltatocumulative` reads as a counter reset — so the cumulative total goes
+     * back to 1 on every respawn. Jobs that fire several times inside one hour
+     * still accumulate; a job on an hourly (or slower) cadence lands in a fresh
+     * process every single run and can never climb above 1, which makes
+     * `increase(job_count_total[24h])` read 0 forever and reports its scheduler
+     * as dead. `LinkHealthCheckJob` ran 24×/day for weeks while being reported
+     * as stopped.
+     *
+     * A gauge carries no accumulation, so a restarted process cannot corrupt it:
+     * the last write wins. Liveness then reads as staleness, which is the
+     * standard dead-man's-switch for scheduled work:
+     *
+     *     time() - job_last_success_timestamp_seconds{job_name="…"} > 7200
+     *
+     * @param  string  $job  Fully-qualified job class name.
+     */
+    private static function recordJobSuccessTimestamp(string $job): void
+    {
+        self::$jobLastSuccessGauge ??= self::meter()->createGauge(
+            'job.last_success.timestamp',
+            's',
+            'Unix timestamp of the last successful run of this job.',
+        );
+
+        self::$jobLastSuccessGauge->record(time(), ['job.name' => $job]);
     }
 
     /** Maps an HTTP status code to its class string (caps metric cardinality). */
