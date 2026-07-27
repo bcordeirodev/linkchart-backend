@@ -27,7 +27,17 @@ return [
     */
 
     'deprecations' => [
-        'channel' => env('LOG_DEPRECATIONS_CHANNEL', 'null'),
+        // `?:` e não o default de env() de propósito: um `LOG_DEPRECATIONS_CHANNEL=null`
+        // no .env é convertido pelo dotenv em **PHP null**, e PHP null faz o Laravel
+        // usar o canal DEFAULT — o oposto de "descartar". Foi o que aconteceu em
+        // produção: 80 deprecations do symfony/console por dia (vindas de invocações
+        // de artisan) caíam no `stack`, iam para o OTLP e representavam 82% de tudo
+        // no canal de warning, afogando os warnings reais da aplicação.
+        //
+        // Vão para um arquivo próprio, e NÃO para o OTLP: ficam consultáveis em
+        // storage/logs/deprecations-*.log sem poluir o Grafana. Guardado por
+        // tests/Feature/Logging/DeprecationRoutingTest.php.
+        'channel' => env('LOG_DEPRECATIONS_CHANNEL') ?: 'deprecations_file',
         'trace' => env('LOG_DEPRECATIONS_TRACE', false),
     ],
 
@@ -234,6 +244,15 @@ return [
             'driver' => 'errorlog',
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+        ],
+
+        // Deprecations do PHP e de dependências. Arquivo próprio, sem OTLP, retenção
+        // curta — é informação de manutenção, não sinal operacional.
+        'deprecations_file' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/deprecations.log'),
+            'level' => 'debug',
+            'days' => env('LOG_DEPRECATIONS_DAYS', 7),
         ],
 
         'null' => [
