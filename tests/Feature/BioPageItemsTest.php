@@ -44,6 +44,36 @@ class BioPageItemsTest extends TestCase
         return ['Authorization' => "Bearer {$this->token}"];
     }
 
+    /**
+     * O payload de gestão expõe o favicon do destino (link_previews) por item
+     * — âncora visual da lista do editor. Sem preview buscado ainda, null.
+     */
+    public function test_management_items_expose_favicon_url_or_null(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $withPreview = Link::factory()->create(['user_id' => $this->user->id]);
+        $withoutPreview = Link::factory()->create(['user_id' => $this->user->id]);
+        $withPreview->preview()->create([
+            'favicon_url' => 'https://example.com/favicon.ico',
+            'fetched_at' => now(),
+        ]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id,
+            'link_id' => $withPreview->id,
+            'position' => 0,
+        ]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id,
+            'link_id' => $withoutPreview->id,
+            'position' => 1,
+        ]);
+
+        $items = $this->getJson('/api/bio', $this->auth())->json('data.items');
+
+        $this->assertSame('https://example.com/favicon.ico', $items[0]['favicon_url']);
+        $this->assertNull($items[1]['favicon_url']);
+    }
+
     public function test_store_item_defaults_label_to_link_title(): void
     {
         $page = BioPage::factory()->create(['user_id' => $this->user->id]);

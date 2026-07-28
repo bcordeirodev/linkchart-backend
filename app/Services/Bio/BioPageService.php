@@ -535,7 +535,11 @@ class BioPageService implements BioPageServiceInterface
     /**
      * Build the management-shape array for a single bio page item.
      *
-     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, url: string, clicks: int}
+     * `favicon_url` comes from the link's async-fetched preview
+     * (link_previews) — the editor list's visual anchor; null until the
+     * FetchLinkPreviewJob has run for that link.
+     *
+     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, url: string, clicks: int, favicon_url: ?string}
      */
     private function formatItem(BioPageItem $item): array
     {
@@ -547,6 +551,7 @@ class BioPageService implements BioPageServiceInterface
             'is_active' => $item->is_active,
             'url' => $item->link->getShortedUrl(),
             'clicks' => $item->link->clicks,
+            'favicon_url' => $item->link->preview?->favicon_url,
         ];
     }
 
@@ -561,7 +566,7 @@ class BioPageService implements BioPageServiceInterface
      */
     private function formatManagement(BioPage $page): array
     {
-        $items = $page->items()->with('link')->get();
+        $items = $page->items()->with('link.preview')->get();
 
         return [
             'id' => $page->id,
@@ -573,15 +578,7 @@ class BioPageService implements BioPageServiceInterface
             'is_active' => $page->is_active,
             'subdomain_id' => $page->subdomain_id,
             'url' => $this->computeUrl($page),
-            'items' => $items->map(fn ($item) => [
-                'id' => $item->id,
-                'link_id' => $item->link_id,
-                'label' => $item->label,
-                'position' => $item->position,
-                'is_active' => $item->is_active,
-                'url' => $item->link->getShortedUrl(),
-                'clicks' => $item->link->clicks,
-            ])->values()->all(),
+            'items' => $items->map(fn (BioPageItem $item) => $this->formatItem($item))->values()->all(),
         ];
     }
 }
