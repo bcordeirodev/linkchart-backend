@@ -185,8 +185,10 @@ class PublicApiLinksTest extends TestCase
     }
 
     // =========================================================
-    // POST /api/v1/links — subdomain_id (mesma semântica do painel;
-    // ver Tests\Feature\Subdomain\SubdomainLinkCreationTest)
+    // POST /api/v1/links — subdomain por NOME (contrato público).
+    // O painel continua selecionando por id; a API v1 recebe o label
+    // do endereço ("shop" de shop.linkcharts.com.br), que o dono
+    // conhece sem precisar descobrir identificador interno nenhum.
     // =========================================================
 
     /**
@@ -199,16 +201,16 @@ class PublicApiLinksTest extends TestCase
         Cache::flush();
     }
 
-    /** subdomain_id válido grava short_domain do subdomínio escolhido. */
-    public function test_create_link_uses_selected_subdomain(): void
+    /** subdomain com nome de endereço ativo do dono grava o short_domain dele. */
+    public function test_create_link_uses_named_subdomain(): void
     {
         $this->setUpSubdomains();
         UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'acme']);
-        $chosen = UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'shop']);
+        UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'shop']);
 
         $this->postJson('/api/v1/links', [
             'original_url' => 'https://example.com',
-            'subdomain_id' => $chosen->id,
+            'subdomain' => 'shop',
         ], $this->auth())->assertCreated();
 
         $this->assertDatabaseHas('links', [
@@ -217,22 +219,24 @@ class PublicApiLinksTest extends TestCase
         ]);
     }
 
-    /** subdomain_id de outro usuário → 422 e nada é criado. */
-    public function test_create_link_rejects_foreign_subdomain(): void
+    /** Case nunca quebra script: "Shop" e "shop" são o mesmo endereço. */
+    public function test_create_link_normalizes_subdomain_case(): void
     {
         $this->setUpSubdomains();
-        $owner = User::factory()->create();
-        $foreign = UserSubdomain::factory()->create(['user_id' => $owner->id, 'subdomain' => 'acme']);
+        UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'shop']);
 
         $this->postJson('/api/v1/links', [
             'original_url' => 'https://example.com',
-            'subdomain_id' => $foreign->id,
-        ], $this->auth())->assertStatus(422);
+            'subdomain' => 'Shop',
+        ], $this->auth())->assertCreated();
 
-        $this->assertDatabaseMissing('links', ['user_id' => $this->user->id]);
+        $this->assertDatabaseHas('links', [
+            'user_id' => $this->user->id,
+            'short_domain' => 'shop.linkcharts.com.br',
+        ]);
     }
 
-    /** subdomain_id null explícito força o domínio raiz mesmo havendo default. */
+    /** subdomain null explícito força o domínio raiz mesmo havendo default. */
     public function test_create_link_null_subdomain_forces_root_domain(): void
     {
         $this->setUpSubdomains();
@@ -240,7 +244,7 @@ class PublicApiLinksTest extends TestCase
 
         $this->postJson('/api/v1/links', [
             'original_url' => 'https://example.com',
-            'subdomain_id' => null,
+            'subdomain' => null,
         ], $this->auth())->assertCreated();
 
         $this->assertDatabaseHas('links', [
@@ -263,6 +267,104 @@ class PublicApiLinksTest extends TestCase
         $this->assertDatabaseHas('links', [
             'user_id' => $this->user->id,
             'short_domain' => 'acme.linkcharts.com.br',
+        ]);
+    }
+
+    /** Nome que não existe → 422 INVALID_SUBDOMAIN com mensagem que ensina a listar. */
+    public function test_create_link_rejects_unknown_subdomain_name(): void
+    {
+        $this->setUpSubdomains();
+
+        $response = $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain' => 'ghost',
+        ], $this->auth());
+
+        $response->assertStatus(422)
+            ->assertJsonPath('error.code', 'INVALID_SUBDOMAIN');
+        $this->assertStringContainsString(
+            'GET /api/v1/subdomains',
+            $response->json('error.message'),
+        );
+        $this->assertDatabaseMissing('links', ['user_id' => $this->user->id]);
+    }
+
+    /**
+     * Endereço de OUTRO usuário responde exatamente como um inexistente —
+     * nomes são adivinháveis e a resposta não pode confirmar que o endereço
+     * alheio existe (anti-enumeração).
+     */
+    public function test_create_link_rejects_foreign_subdomain_name_like_unknown(): void
+    {
+        $this->setUpSubdomains();
+        $owner = User::factory()->create();
+        UserSubdomain::factory()->create(['user_id' => $owner->id, 'subdomain' => 'acme']);
+
+        $foreign = $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain' => 'acme',
+        ], $this->auth());
+
+        $unknown = $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain' => 'ghost',
+        ], $this->auth());
+
+        $foreign->assertStatus(422);
+        $this->assertSame($unknown->json('error.code'), $foreign->json('error.code'));
+        $this->assertSame(
+            str_replace('ghost', 'acme', (string) $unknown->json('error.message')),
+            (string) $foreign->json('error.message'),
+        );
+        $this->assertDatabaseMissing('links', ['user_id' => $this->user->id]);
+    }
+
+    /** Endereço liberado (inactive) não assina mais links via API. */
+    public function test_create_link_rejects_inactive_subdomain_name(): void
+    {
+        $this->setUpSubdomains();
+        UserSubdomain::factory()->create([
+            'user_id' => $this->user->id,
+            'subdomain' => 'shop',
+            'status' => 'inactive',
+        ]);
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain' => 'shop',
+        ], $this->auth())
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'INVALID_SUBDOMAIN');
+    }
+
+    /** Tipo errado (número, hábito do contrato antigo) → erro de validação claro. */
+    public function test_create_link_rejects_non_string_subdomain(): void
+    {
+        $this->setUpSubdomains();
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain' => 3,
+        ], $this->auth())
+            ->assertStatus(422)
+            ->assertJsonPath('error.code', 'VALIDATION_FAILED');
+    }
+
+    /** subdomain_id (contrato descartado antes do deploy) é ignorado como campo desconhecido. */
+    public function test_create_link_ignores_legacy_subdomain_id(): void
+    {
+        $this->setUpSubdomains();
+        $oldest = UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'acme']);
+        $other = UserSubdomain::factory()->create(['user_id' => $this->user->id, 'subdomain' => 'shop']);
+
+        $this->postJson('/api/v1/links', [
+            'original_url' => 'https://example.com',
+            'subdomain_id' => $other->id,
+        ], $this->auth())->assertCreated();
+
+        $this->assertDatabaseHas('links', [
+            'user_id' => $this->user->id,
+            'short_domain' => $oldest->subdomain.'.linkcharts.com.br',
         ]);
     }
 

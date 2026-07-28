@@ -4408,7 +4408,7 @@
         "/v1/links": {
             "post": {
                 "operationId": "v1.link.store",
-                "description": "POST /api/v1/links\n\nCreate a shortened link owned by the API token's user. The destination\nURL runs through the full safety pipeline (local anti-phishing\nheuristic + Google Safe Browsing) before anything is persisted; unsafe\nURLs are rejected with 422. When `slug` is omitted a unique slug is\ngenerated automatically.\n\n`subdomain_id` follows the panel's tri-state semantics (see\nCreateLinkDTO::$subdomain_id_provided): absent \u2192 the user's default\n(oldest active) subdomain; explicit null \u2192 force the root domain; an id\n\u2192 that subdomain, which must be active and owned by the token's user\n(422 otherwise).\n\nBody: { original_url (required), slug?, title?, expires_at?,\n        click_limit?, subdomain_id?, utm_source?, utm_medium?,\n        utm_campaign?, utm_term?, utm_content? }\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource } (201)\n\u2014 includes short_url, has_password, is_active, clicks etc.",
+                "description": "POST /api/v1/links\n\nCreate a shortened link owned by the API token's user. The destination\nURL runs through the full safety pipeline (local anti-phishing\nheuristic + Google Safe Browsing) before anything is persisted; unsafe\nURLs are rejected with 422. When `slug` is omitted a unique slug is\ngenerated automatically.\n\n`subdomain` selects which of the user's custom addresses signs the\nshort link, BY NAME (the \"shop\" of shop.linkcharts.com.br \u2014 no internal\nid to discover), with the panel's tri-state semantics (see\nCreateLinkDTO::$subdomain_id_provided): absent \u2192 the user's default\n(oldest active) address; explicit null \u2192 force the root domain; a name\n\u2192 that address. A name that does not resolve to one of the user's own\nactive addresses \u2014 unknown, foreign or released \u2014 answers a single\nindistinguishable 422 INVALID_SUBDOMAIN (names are guessable; the\nresponse must not confirm a foreign address exists).\n\nBody: { original_url (required), slug?, title?, expires_at?,\n        click_limit?, subdomain?, utm_source?, utm_medium?,\n        utm_campaign?, utm_term?, utm_content? }\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope: { data: LinkResource } (201)\n\u2014 includes short_url, has_password, is_active, clicks etc.",
                 "summary": "Criar link encurtado",
                 "tags": [
                     "Link"
@@ -6283,7 +6283,7 @@
         },
         "/subdomains": {
             "get": {
-                "operationId": "subdomain.index",
+                "operationId": "subdomain.subdomain.index",
                 "description": "Lists every active subdomain owned by the authenticated user, oldest first.",
                 "summary": "GET /api/subdomains",
                 "tags": [
@@ -6448,11 +6448,11 @@
                 }
             }
         },
-        "/subdomain/check": {
+        "/subdomains/check": {
             "get": {
                 "operationId": "subdomain.check",
                 "description": "Returns whether the requested subdomain label is available to claim.\nOnly checks active records; inactive (released) subdomains are available.",
-                "summary": "GET /api/subdomain/check?name=acme",
+                "summary": "GET /api/subdomains/check?name=acme",
                 "tags": [
                     "Subdomain"
                 ],
@@ -6478,11 +6478,11 @@
                 }
             }
         },
-        "/subdomain": {
+        "/v1/subdomains": {
             "get": {
-                "operationId": "subdomain.show",
-                "description": "Returns the authenticated user's active subdomain or null.\n\nNote: response()->json(null) produces {} in Laravel, which the NormalizeApiResponse\nmiddleware wraps as {\"data\": []}. We explicitly pass ['data' => null] so the\nmiddleware's array_key_exists('data') branch preserves the null value correctly.",
-                "summary": "GET /api/subdomain",
+                "operationId": "v1.subdomain.index",
+                "description": "GET /api/v1/subdomains\n\nReturn the token owner's ACTIVE custom addresses, oldest first. The\nfirst item is the account default \u2014 the address POST /api/v1/links\nuses when the `subdomain` field is absent \u2014 flagged via `is_default`.\n\nMiddleware: auth:sanctum, throttle:public-api\nAuth: required (Bearer API key)\n\nResponse shape: NormalizeApiResponse envelope:\n  { data: [{ subdomain, host, is_default, created_at }] }",
+                "summary": "Listar endere\u00e7os personalizados",
                 "tags": [
                     "Subdomain"
                 ],
@@ -6492,150 +6492,47 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "anyOf": [
-                                        {
-                                            "type": "object",
-                                            "properties": {
-                                                "id": {
-                                                    "type": "integer"
-                                                },
-                                                "subdomain": {
-                                                    "type": "string"
-                                                },
-                                                "full_url": {
-                                                    "type": "string"
-                                                },
-                                                "status": {
-                                                    "type": "string"
-                                                },
-                                                "created_at": {
-                                                    "type": [
-                                                        "string",
-                                                        "null"
-                                                    ]
-                                                }
-                                            },
-                                            "required": [
-                                                "id",
-                                                "subdomain",
-                                                "full_url",
-                                                "status",
-                                                "created_at"
-                                            ]
-                                        },
-                                        {
-                                            "type": "object",
-                                            "properties": {
-                                                "data": {
-                                                    "type": "null"
-                                                }
-                                            },
-                                            "required": [
-                                                "data"
-                                            ]
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "operationId": "subdomain.claim",
-                "description": "Use POST /api/subdomains instead. Kept for one release so an\nold frontend build still in production during a blue/green deploy keeps\nworking. Delegates fully to {@see self::store()} \u2014 same per-user limit\nand always-INSERT semantics (a user may hold several active\nsubdomains now, so the old \"409 if already active\" / \"reuse the\n     * inactive row via UPDATE\" behavior no longer applies).",
-                "summary": "POST /api/subdomain",
-                "deprecated": true,
-                "tags": [
-                    "Subdomain"
-                ],
-                "responses": {
-                    "201": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
                                     "type": "object",
                                     "properties": {
-                                        "id": {
-                                            "type": "integer"
-                                        },
-                                        "subdomain": {
-                                            "type": "string"
-                                        },
-                                        "full_url": {
-                                            "type": "string"
-                                        },
-                                        "status": {
-                                            "type": "string"
-                                        },
-                                        "created_at": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "subdomain": {
+                                                        "type": "string"
+                                                    },
+                                                    "host": {
+                                                        "type": "string"
+                                                    },
+                                                    "is_default": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "subdomain",
+                                                    "host",
+                                                    "is_default",
+                                                    "created_at"
+                                                ]
+                                            }
                                         }
                                     },
                                     "required": [
-                                        "id",
-                                        "subdomain",
-                                        "full_url",
-                                        "status",
-                                        "created_at"
+                                        "data"
                                     ]
                                 }
                             }
                         }
                     },
-                    "422": {
-                        "$ref": "#/components/responses/ValidationException"
+                    "401": {
+                        "$ref": "#/components/responses/AuthenticationException"
                     }
-                }
-            },
-            "delete": {
-                "operationId": "subdomain.release",
-                "description": "Release the authenticated user's active subdomain. The record is soft-deleted\n(status = inactive) so the label can be reclaimed by others. Returns 404 if\nthe user has no active subdomain.",
-                "summary": "DELETE /api/subdomain",
-                "tags": [
-                    "Subdomain"
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No content"
-                    },
-                    "404": {
-                        "description": "",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "type": "object",
-                                            "properties": {
-                                                "code": {
-                                                    "type": "string",
-                                                    "const": "NOT_FOUND"
-                                                },
-                                                "message": {
-                                                    "type": "string",
-                                                    "const": "Nenhum subdom\u00ednio ativo encontrado."
-                                                }
-                                            },
-                                            "required": [
-                                                "code",
-                                                "message"
-                                            ]
-                                        }
-                                    },
-                                    "required": [
-                                        "error"
-                                    ]
-                                }
-                            }
-                        }
-                    }
-                }
+                },
+                "security": []
             }
         },
         "/tags": {
@@ -7409,7 +7306,7 @@
             },
             "StoreLinkRequest": {
                 "type": "object",
-                "description": "Form Request para cria\u00e7\u00e3o de link pela API p\u00fablica (POST /api/v1/links).\n\nEspelha as regras de {@see \\App\\Http\\Requests\\CreateLinkRequest} (painel)\npara o subconjunto de campos expostos no contrato v1 \u2014 original_url, slug,\ntitle, expires_at, click_limit, subdomain_id e utm_* \u2014 com duas diferen\u00e7as\ndeliberadas:\n\n  - o campo p\u00fablico chama-se `slug` (n\u00e3o `custom_slug`);\n  - a valida\u00e7\u00e3o falha com a ValidationException padr\u00e3o, renderizada pelo\n    handler global como {error: {code: VALIDATION_FAILED, ...}} (422).\n\nA verifica\u00e7\u00e3o de seguran\u00e7a da URL (heur\u00edstica local + Google Safe Browsing,\nvia {@see LinkSafetyService}) roda em withValidator exatamente como no\npainel \u2014 a API p\u00fablica N\u00c3O bypassa as camadas anti-phishing.",
+                "description": "Form Request para cria\u00e7\u00e3o de link pela API p\u00fablica (POST /api/v1/links).\n\nEspelha as regras de {@see \\App\\Http\\Requests\\CreateLinkRequest} (painel)\npara o subconjunto de campos expostos no contrato v1 \u2014 original_url, slug,\ntitle, expires_at, click_limit, subdomain (por NOME, n\u00e3o por id) e utm_* \u2014\ncom duas diferen\u00e7as deliberadas:\n\n  - o campo p\u00fablico chama-se `slug` (n\u00e3o `custom_slug`);\n  - a valida\u00e7\u00e3o falha com a ValidationException padr\u00e3o, renderizada pelo\n    handler global como {error: {code: VALIDATION_FAILED, ...}} (422).\n\nA verifica\u00e7\u00e3o de seguran\u00e7a da URL (heur\u00edstica local + Google Safe Browsing,\nvia {@see LinkSafetyService}) roda em withValidator exatamente como no\npainel \u2014 a API p\u00fablica N\u00c3O bypassa as camadas anti-phishing.",
                 "properties": {
                     "original_url": {
                         "type": "string",
@@ -7447,12 +7344,14 @@
                         "minimum": 1,
                         "maximum": 1000000
                     },
-                    "subdomain_id": {
+                    "subdomain": {
                         "type": [
-                            "integer",
+                            "string",
                             "null"
                         ],
-                        "description": "Ownership e status ativo s\u00e3o validados no LinkService\n(resolveShortDomain), igual ao painel \u2014 ver\nCreateLinkRequest::rules() e CreateLinkDTO::$subdomain_id_provided."
+                        "description": "Contrato p\u00fablico por NOME do endere\u00e7o (\"shop\" de\nshop.linkcharts.com.br) \u2014 o dono conhece o label; id interno n\u00e3o\n\u00e9 exposto. Exist\u00eancia/propriedade/status ativo s\u00e3o resolvidos no\ncontroller (422 INVALID_SUBDOMAIN); aqui s\u00f3 forma. Limites\nespelham a regra de claim (SubdomainController: min 3, max 63).",
+                        "minLength": 3,
+                        "maxLength": 63
                     },
                     "utm_source": {
                         "type": [

@@ -11,8 +11,8 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * Espelha as regras de {@see \App\Http\Requests\CreateLinkRequest} (painel)
  * para o subconjunto de campos expostos no contrato v1 — original_url, slug,
- * title, expires_at, click_limit, subdomain_id e utm_* — com duas diferenças
- * deliberadas:
+ * title, expires_at, click_limit, subdomain (por NOME, não por id) e utm_* —
+ * com duas diferenças deliberadas:
  *
  *   - o campo público chama-se `slug` (não `custom_slug`);
  *   - a validação falha com a ValidationException padrão, renderizada pelo
@@ -76,12 +76,16 @@ class StoreLinkRequest extends FormRequest
                 'max:1000000',
             ],
 
-            // Ownership e status ativo são validados no LinkService
-            // (resolveShortDomain), igual ao painel — ver
-            // CreateLinkRequest::rules() e CreateLinkDTO::$subdomain_id_provided.
-            'subdomain_id' => [
+            // Contrato público por NOME do endereço ("shop" de
+            // shop.linkcharts.com.br) — o dono conhece o label; id interno não
+            // é exposto. Existência/propriedade/status ativo são resolvidos no
+            // controller (422 INVALID_SUBDOMAIN); aqui só forma. Limites
+            // espelham a regra de claim (SubdomainController: min 3, max 63).
+            'subdomain' => [
                 'nullable',
-                'integer',
+                'string',
+                'min:3',
+                'max:63',
             ],
 
             // UTM Parameters
@@ -116,7 +120,9 @@ class StoreLinkRequest extends FormRequest
             'expires_at.after' => 'A data de expiração deve ser no futuro.',
             'expires_at.before' => 'A data de expiração não pode ser superior a 5 anos.',
 
-            'subdomain_id.integer' => 'O subdomain_id deve ser um número inteiro.',
+            'subdomain.string' => 'O subdomain deve ser o nome do seu endereço personalizado (ex.: "loja"), como texto.',
+            'subdomain.min' => 'O subdomain deve ter pelo menos 3 caracteres.',
+            'subdomain.max' => 'O subdomain não pode ter mais de 63 caracteres.',
         ];
     }
 
@@ -156,6 +162,8 @@ class StoreLinkRequest extends FormRequest
      *
      * Normaliza a URL (trim + https:// default) e o slug (lowercase), como no
      * fluxo do painel, para que as regras declarativas validem o valor final.
+     * O subdomain também vira lowercase — hosts são case-insensitive e um
+     * "Shop" digitado num script nunca deve quebrar a criação.
      */
     protected function prepareForValidation(): void
     {
@@ -171,6 +179,10 @@ class StoreLinkRequest extends FormRequest
 
         if ($this->has('slug')) {
             $this->merge(['slug' => strtolower(trim((string) $this->input('slug')))]);
+        }
+
+        if (is_string($this->input('subdomain'))) {
+            $this->merge(['subdomain' => strtolower(trim($this->input('subdomain')))]);
         }
     }
 }

@@ -9,6 +9,7 @@ use App\DTOs\CreateLinkDTO;
 use App\Http\Requests\Api\V1\StoreLinkRequest;
 use App\Http\Resources\LinkResource;
 use App\Jobs\FetchLinkPreviewJob;
+use App\Models\UserSubdomain;
 use App\Services\Analytics\MetricsService;
 use App\Services\Links\LinkAuditService;
 use Illuminate\Http\JsonResponse;
@@ -63,14 +64,18 @@ class LinkController extends Controller
      * URLs are rejected with 422. When `slug` is omitted a unique slug is
      * generated automatically.
      *
-     * `subdomain_id` follows the panel's tri-state semantics (see
+     * `subdomain` selects which of the user's custom addresses signs the
+     * short link, BY NAME (the "shop" of shop.linkcharts.com.br — no internal
+     * id to discover), with the panel's tri-state semantics (see
      * CreateLinkDTO::$subdomain_id_provided): absent → the user's default
-     * (oldest active) subdomain; explicit null → force the root domain; an id
-     * → that subdomain, which must be active and owned by the token's user
-     * (422 otherwise).
+     * (oldest active) address; explicit null → force the root domain; a name
+     * → that address. A name that does not resolve to one of the user's own
+     * active addresses — unknown, foreign or released — answers a single
+     * indistinguishable 422 INVALID_SUBDOMAIN (names are guessable; the
+     * response must not confirm a foreign address exists).
      *
      * Body: { original_url (required), slug?, title?, expires_at?,
-     *         click_limit?, subdomain_id?, utm_source?, utm_medium?,
+     *         click_limit?, subdomain?, utm_source?, utm_medium?,
      *         utm_campaign?, utm_term?, utm_content? }
      *
      * Middleware: auth:sanctum, throttle:public-api
@@ -88,6 +93,23 @@ class LinkController extends Controller
         try {
             $user = $request->user();
 
+            $subdomainId = null;
+            $subdomainName = $request->validated('subdomain');
+
+            if ($subdomainName !== null) {
+                $subdomainId = $this->resolveOwnedSubdomainId($user->id, $subdomainName);
+
+                if ($subdomainId === null) {
+                    return response()->json([
+                        'error' => [
+                            'code' => 'INVALID_SUBDOMAIN',
+                            'message' => "O endereço \"{$subdomainName}\" não existe ou não está ativo na sua conta. "
+                                .'Liste seus endereços em GET /api/v1/subdomains.',
+                        ],
+                    ], 422);
+                }
+            }
+
             $linkDTO = new CreateLinkDTO(
                 original_url: $request->validated('original_url'),
                 user_id: $user->id,
@@ -97,10 +119,8 @@ class LinkController extends Controller
                 click_limit: $request->validated('click_limit') !== null
                     ? (int) $request->validated('click_limit')
                     : null,
-                subdomain_id: $request->validated('subdomain_id') !== null
-                    ? (int) $request->validated('subdomain_id')
-                    : null,
-                subdomain_id_provided: $request->has('subdomain_id'),
+                subdomain_id: $subdomainId,
+                subdomain_id_provided: $request->has('subdomain'),
                 utm_source: $request->validated('utm_source') ?: null,
                 utm_medium: $request->validated('utm_medium') ?: null,
                 utm_campaign: $request->validated('utm_campaign') ?: null,
@@ -126,6 +146,27 @@ class LinkController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * Resolve o NOME de um endereço personalizado para o id interno usado
+     * pelo {@see CreateLinkDTO}, restrito aos endereços ATIVOS do usuário.
+     *
+     * Devolve null para nome desconhecido, de outro usuário ou liberado
+     * (inactive) — indistintamente, de propósito: o chamador responde o mesmo
+     * 422 para os três casos (anti-enumeração de endereços alheios).
+     *
+     * @param  int  $userId  Dono exigido do endereço.
+     * @param  string  $name  Label já normalizado (lowercase) pelo StoreLinkRequest.
+     * @return int|null Id do UserSubdomain ativo do usuário, ou null.
+     */
+    private function resolveOwnedSubdomainId(int $userId, string $name): ?int
+    {
+        return UserSubdomain::query()
+            ->where('user_id', $userId)
+            ->where('subdomain', $name)
+            ->where('status', 'active')
+            ->value('id');
     }
 
     /**
