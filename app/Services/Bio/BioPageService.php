@@ -518,7 +518,7 @@ class BioPageService implements BioPageServiceInterface
      */
     private function formatPublic(BioPage $page): array
     {
-        $items = $page->items()->where('is_active', true)->with('link')->get();
+        $items = $page->items()->where('is_active', true)->with('link.preview')->get();
 
         return [
             'handle' => $page->handle,
@@ -531,6 +531,9 @@ class BioPageService implements BioPageServiceInterface
                 'id' => $item->id,
                 'label' => $item->label,
                 'url' => $item->link->getShortedUrl(),
+                // Favicon do destino (pipeline de previews): o botão público
+                // mostra para onde o clique leva — sinal de confiança.
+                'favicon_url' => $item->link->preview?->favicon_url,
             ])->values()->all(),
         ];
     }

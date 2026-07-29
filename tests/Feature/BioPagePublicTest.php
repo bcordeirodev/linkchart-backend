@@ -21,6 +21,36 @@ class BioPagePublicTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Cada item público expõe o favicon do destino (ou null) — o botão da
+     * página pública mostra para onde o clique leva, sinal de confiança que
+     * o pipeline de previews já alimenta.
+     */
+    public function test_public_items_expose_favicon_url_or_null(): void
+    {
+        $user = User::factory()->create();
+        $page = BioPage::factory()->create([
+            'user_id' => $user->id, 'handle' => 'comfavicon', 'is_active' => true,
+        ]);
+        $withPreview = Link::factory()->create(['user_id' => $user->id]);
+        $withPreview->preview()->create([
+            'favicon_url' => 'https://example.com/favicon.ico',
+            'fetched_at' => now(),
+        ]);
+        $withoutPreview = Link::factory()->create(['user_id' => $user->id]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id, 'link_id' => $withPreview->id, 'position' => 0,
+        ]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id, 'link_id' => $withoutPreview->id, 'position' => 1,
+        ]);
+
+        $items = $this->getJson('/api/public/bio/comfavicon')->json('data.items');
+
+        $this->assertSame('https://example.com/favicon.ico', $items[0]['favicon_url']);
+        $this->assertNull($items[1]['favicon_url']);
+    }
+
     public function test_returns_active_page_with_active_items_in_order(): void
     {
         $user = User::factory()->create();
