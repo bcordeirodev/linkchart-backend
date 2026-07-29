@@ -118,6 +118,39 @@ class BioPageManagementTest extends TestCase
         $this->assertDatabaseCount('bio_pages', 1);
     }
 
+    /**
+     * PUT parcial (sem o campo bio) preserva a bio salva — um cliente de API
+     * que atualiza só o título não pode apagar a descrição silenciosamente.
+     */
+    public function test_partial_upsert_preserves_absent_bio(): void
+    {
+        $this->putJson('/api/bio', [
+            'title' => 'João', 'bio' => 'Minha descrição.', 'subdomain_id' => $this->subdomainId,
+        ], $this->auth())->assertOk();
+
+        $response = $this->putJson('/api/bio', [
+            'title' => 'João Atualizado',
+        ], $this->auth());
+
+        $response->assertOk();
+        $this->assertSame('Minha descrição.', $response->json('data.bio'));
+    }
+
+    /** bio: null explícito continua limpando o campo (apagar é intencional). */
+    public function test_upsert_with_explicit_null_bio_clears_it(): void
+    {
+        $this->putJson('/api/bio', [
+            'title' => 'João', 'bio' => 'Minha descrição.', 'subdomain_id' => $this->subdomainId,
+        ], $this->auth())->assertOk();
+
+        $response = $this->putJson('/api/bio', [
+            'title' => 'João', 'bio' => null,
+        ], $this->auth());
+
+        $response->assertOk();
+        $this->assertNull($response->json('data.bio'));
+    }
+
     public function test_upsert_rejects_reserved_handle(): void
     {
         $this->putJson('/api/bio', [

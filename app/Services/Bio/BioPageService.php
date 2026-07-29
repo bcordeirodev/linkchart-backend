@@ -103,7 +103,10 @@ class BioPageService implements BioPageServiceInterface
         $page->fill([
             'handle' => $handle,
             'title' => $data['title'],
-            'bio' => $data['bio'] ?? null,
+            // array_key_exists, não ??: PUT parcial (campo ausente) preserva a
+            // bio salva; só `bio: null` explícito limpa — mesma semântica dos
+            // demais campos opcionais abaixo.
+            'bio' => array_key_exists('bio', $data) ? $data['bio'] : ($page->bio ?? null),
             'theme' => $data['theme'] ?? ($page->theme ?? 'dark'),
             'is_active' => array_key_exists('is_active', $data) ? (bool) $data['is_active'] : ($page->is_active ?? true),
         ]);
