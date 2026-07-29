@@ -51,7 +51,10 @@ class BioPageItemsTest extends TestCase
     public function test_management_items_expose_favicon_url_or_null(): void
     {
         $page = BioPage::factory()->create(['user_id' => $this->user->id]);
-        $withPreview = Link::factory()->create(['user_id' => $this->user->id]);
+        $withPreview = Link::factory()->create([
+            'user_id' => $this->user->id,
+            'original_url' => 'https://www.example.com/destino',
+        ]);
         $withoutPreview = Link::factory()->create(['user_id' => $this->user->id]);
         $withPreview->preview()->create([
             'favicon_url' => 'https://example.com/favicon.ico',
@@ -72,6 +75,7 @@ class BioPageItemsTest extends TestCase
 
         $this->assertSame('https://example.com/favicon.ico', $items[0]['favicon_url']);
         $this->assertNull($items[1]['favicon_url']);
+        $this->assertSame('example.com', $items[0]['destination_host']);
     }
 
     public function test_store_item_defaults_label_to_link_title(): void

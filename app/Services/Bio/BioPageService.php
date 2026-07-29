@@ -534,6 +534,9 @@ class BioPageService implements BioPageServiceInterface
                 // Favicon do destino (pipeline de previews): o botão público
                 // mostra para onde o clique leva — sinal de confiança.
                 'favicon_url' => $item->link->preview?->favicon_url,
+                // SÓ o host (sem www) — path/query do original_url seguem
+                // privados; o host se revela de todo jeito ao clicar.
+                'destination_host' => $this->destinationHost($item->link->original_url),
             ])->values()->all(),
         ];
     }
@@ -558,7 +561,28 @@ class BioPageService implements BioPageServiceInterface
             'url' => $item->link->getShortedUrl(),
             'clicks' => $item->link->clicks,
             'favicon_url' => $item->link->preview?->favicon_url,
+            'destination_host' => $this->destinationHost($item->link->original_url),
         ];
+    }
+
+    /**
+     * Host do destino final de um link, sem o prefixo www — a segunda linha
+     * do botão da bio ("esse clique leva a github.com"). Null se a URL for
+     * inparseável (nunca deveria: original_url é validada na criação).
+     *
+     * Decisão de privacidade (2026-07-29): expor o HOST público é aceitável —
+     * qualquer visitante o vê ao clicar; path e query seguem privados. O
+     * teste test_response_never_leaks_user_id_or_original_url guarda isso.
+     */
+    private function destinationHost(string $originalUrl): ?string
+    {
+        $host = parse_url($originalUrl, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return null;
+        }
+
+        return preg_replace('/^www\./i', '', $host);
     }
 
     /**

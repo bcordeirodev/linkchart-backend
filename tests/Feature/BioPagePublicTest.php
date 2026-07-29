@@ -51,6 +51,29 @@ class BioPagePublicTest extends TestCase
         $this->assertNull($items[1]['favicon_url']);
     }
 
+    /**
+     * Cada item público expõe o domínio de DESTINO (original_url, sem www) —
+     * a segunda linha do botão diz para onde o clique leva.
+     */
+    public function test_public_items_expose_destination_host(): void
+    {
+        $user = User::factory()->create();
+        $page = BioPage::factory()->create([
+            'user_id' => $user->id, 'handle' => 'comdestino', 'is_active' => true,
+        ]);
+        $link = Link::factory()->create([
+            'user_id' => $user->id,
+            'original_url' => 'https://www.github.com/bcordeirodev/perfil',
+        ]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id, 'link_id' => $link->id, 'position' => 0,
+        ]);
+
+        $items = $this->getJson('/api/public/bio/comdestino')->json('data.items');
+
+        $this->assertSame('github.com', $items[0]['destination_host']);
+    }
+
     public function test_returns_active_page_with_active_items_in_order(): void
     {
         $user = User::factory()->create();
@@ -121,11 +144,17 @@ class BioPagePublicTest extends TestCase
         $this->assertSame('Active', $items[0]['label']);
     }
 
-    public function test_response_never_leaks_user_id_or_original_url(): void
+    /**
+     * Invariante de privacidade (revisado 2026-07-29): o HOST do destino é
+     * público de propósito (segunda linha do botão; o clique o revela de
+     * todo jeito) — mas path/query do original_url e identidade do dono
+     * continuam nunca vazando.
+     */
+    public function test_response_never_leaks_user_id_or_original_url_path(): void
     {
         $user = User::factory()->create();
         $page = BioPage::factory()->create(['user_id' => $user->id, 'handle' => 'joaosilva']);
-        $link = Link::factory()->create(['user_id' => $user->id, 'original_url' => 'https://secret-destination.example/path']);
+        $link = Link::factory()->create(['user_id' => $user->id, 'original_url' => 'https://destination.example/secret-path?secret=query']);
         BioPageItem::factory()->create(['bio_page_id' => $page->id, 'link_id' => $link->id, 'position' => 0]);
 
         $response = $this->getJson('/api/public/bio/joaosilva');
@@ -134,7 +163,9 @@ class BioPagePublicTest extends TestCase
         $raw = $response->getContent();
         $this->assertStringNotContainsString('user_id', $raw);
         $this->assertStringNotContainsString($user->email, $raw);
-        $this->assertStringNotContainsString('secret-destination.example', $raw);
+        $this->assertStringNotContainsString('secret-path', $raw);
+        $this->assertStringNotContainsString('secret=query', $raw);
+        $this->assertSame('destination.example', $response->json('data.items.0.destination_host'));
         $this->assertArrayNotHasKey('user_id', $response->json('data'));
     }
 
