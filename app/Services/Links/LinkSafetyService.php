@@ -228,6 +228,9 @@ class LinkSafetyService
      * has no objection (the caller then defers to Safe Browsing).
      *
      * Rules (host-only, to keep false positives low):
+     *   - Ephemeral tunnel: host is (or is a subdomain of) a throwaway tunnel
+     *     service (trycloudflare, ngrok, ...) — hostnames minutes old that no
+     *     reputation service can catch, and never a legitimate destination.
      *   - Brand impersonation: host carries a known brand token but is not the
      *     brand's official domain nor a subdomain of it.
      *   - Compound-keyword denylist: host contains a high-signal phishing/scam
@@ -252,6 +255,14 @@ class LinkSafetyService
         }
 
         $reasons = [];
+
+        foreach ((array) config('link_safety.ephemeral_tunnel_suffixes', []) as $suffix) {
+            $suffix = strtolower((string) $suffix);
+
+            if ($suffix !== '' && ($host === $suffix || str_ends_with($host, '.'.$suffix))) {
+                $reasons[] = "ephemeral_tunnel:{$suffix}";
+            }
+        }
 
         foreach ((array) config('link_safety.brands', []) as $token => $officialDomains) {
             if (! $this->hostMentionsBrand($host, (string) $token)) {

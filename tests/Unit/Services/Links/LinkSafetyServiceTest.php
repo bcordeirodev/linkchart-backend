@@ -239,4 +239,74 @@ class LinkSafetyServiceTest extends TestCase
         Http::assertSentCount(1);
         $this->assertTrue($result['safe']);
     }
+
+    // ============================================================
+    // Rule D — ephemeral tunnel hosts (trycloudflare, ngrok, ...)
+    // ============================================================
+
+    /**
+     * A host on an ephemeral tunnel service is blocked locally, without ever
+     * calling Safe Browsing. This is the exact shape of the 2026-07-21 phishing
+     * abuse (login → dam-dicke-northern-them.trycloudflare.com): the host is
+     * minutes old, so neither the brand rule nor Safe Browsing reputation can
+     * catch it — but no legitimate destination for a shortened link lives on a
+     * throwaway tunnel.
+     *
+     * @dataProvider ephemeralTunnelHosts
+     */
+    public function test_ephemeral_tunnel_host_is_blocked_before_reaching_safe_browsing(string $url): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake();
+
+        $result = (new LinkSafetyService)->checkUrl($url);
+
+        Http::assertNothingSent();
+        $this->assertFalse($result['safe']);
+        $this->assertNotEmpty($result['threats']);
+    }
+
+    public static function ephemeralTunnelHosts(): array
+    {
+        return [
+            'trycloudflare' => ['https://dam-dicke-northern-them.trycloudflare.com/login'],
+            'ngrok legacy' => ['https://abc123.ngrok.io/'],
+            'ngrok free, deep subdomain' => ['https://a.b.ngrok-free.app/x'],
+            'localtunnel' => ['https://meu-app.loca.lt'],
+            'serveo' => ['https://xyz.serveo.net/callback'],
+        ];
+    }
+
+    /**
+     * The tunnel rule must not overmatch: a domain that merely *contains* a
+     * tunnel suffix as a substring (without the dot boundary) is not a tunnel.
+     */
+    public function test_domain_containing_tunnel_suffix_substring_is_not_flagged(): void
+    {
+        config(['services.google_safe_browsing.key' => 'test-key']);
+        Http::fake(['*' => Http::response('{}', 200)]);
+
+        $result = (new LinkSafetyService)->checkUrl('https://notserveo.net.example.com.br');
+
+        Http::assertSentCount(1);
+        $this->assertTrue($result['safe']);
+    }
+
+    /**
+     * The tunnel rule sits inside Layer 1, so the master kill switch disables
+     * it too and the URL falls through to Safe Browsing.
+     */
+    public function test_tunnel_block_respects_heuristic_kill_switch(): void
+    {
+        config([
+            'services.google_safe_browsing.key' => 'test-key',
+            'link_safety.heuristic_enabled' => false,
+        ]);
+        Http::fake(['*' => Http::response('{}', 200)]);
+
+        $result = (new LinkSafetyService)->checkUrl('https://abc.trycloudflare.com');
+
+        Http::assertSentCount(1);
+        $this->assertTrue($result['safe']);
+    }
 }

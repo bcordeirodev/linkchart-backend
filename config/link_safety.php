@@ -86,6 +86,31 @@ return [
     ],
 
     /*
+    | Rule D — ephemeral tunnel hosts.
+    |
+    | Serviços de túnel efêmero entregam um hostname novo em segundos, então nem
+    | a regra de marca nem a reputação do Safe Browsing alcançam o abuso — foi
+    | exatamente o vetor do phishing de 21/07/2026 (slug "login" →
+    | *.trycloudflare.com, 40 dos 44 cliques no primeiro dia). Nenhum destino
+    | legítimo de link encurtado vive num túnel descartável; bloquear o sufixo
+    | inteiro custa zero falso positivo relevante. Casa host exato ou subdomínio.
+    */
+    'ephemeral_tunnel_suffixes' => [
+        'trycloudflare.com',
+        'ngrok.io',
+        'ngrok-free.app',
+        'ngrok-free.dev',
+        'ngrok.app',
+        'loca.lt',
+        'serveo.net',
+        'localhost.run',
+        'tunnelmole.net',
+        'bore.pub',
+        'pinggy.link',
+        'pinggy.io',
+    ],
+
+    /*
     | Hosts that bypass the heuristic entirely (exact host or a subdomain of the
     | entry). Escape hatch for false positives found in production.
     */
