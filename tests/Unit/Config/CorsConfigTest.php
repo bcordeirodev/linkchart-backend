@@ -17,6 +17,9 @@ use Tests\TestCase;
  *     'api/*' and 'r/*' (audit finding — '*' made every web route, /health
  *     included, emit permissive CORS headers with credentials support).
  *   - localhost origins/patterns exist only OUTSIDE production.
+ *   - Bio-page subdomains (e.g. https://bruno.linkcharts.com.br) are allowed
+ *     in every environment via a wildcard pattern — the explicit
+ *     allowed_origins list only ever covers the apex + www.
  */
 class CorsConfigTest extends TestCase
 {
@@ -67,13 +70,16 @@ class CorsConfigTest extends TestCase
 
     /**
      * In production, no localhost/127.0.0.1 origin or origin pattern may be
-     * allowed — only the real product domains.
+     * allowed — only the real product domains and the bio-subdomain wildcard.
      */
     public function test_production_cors_has_no_localhost_origins_or_patterns(): void
     {
         $config = $this->loadCorsConfigForEnv('production');
 
-        $this->assertSame([], $config['allowed_origins_patterns']);
+        foreach ($config['allowed_origins_patterns'] as $pattern) {
+            $this->assertStringNotContainsString('localhost', $pattern);
+            $this->assertStringNotContainsString('127.0.0.1', $pattern);
+        }
 
         foreach ($config['allowed_origins'] as $origin) {
             $this->assertStringNotContainsString('localhost', $origin);
@@ -95,5 +101,48 @@ class CorsConfigTest extends TestCase
         $this->assertContains('http://localhost:3000', $config['allowed_origins']);
         $this->assertContains('#^https?://localhost:\d+$#', $config['allowed_origins_patterns']);
         $this->assertContains('#^https?://127\.0\.0\.1:\d+$#', $config['allowed_origins_patterns']);
+    }
+
+    /**
+     * Production must allow bio-page subdomains of the real product domain
+     * (e.g. https://bruno.linkcharts.com.br, the per-creator bio page host)
+     * via a wildcard pattern — the explicit allowed_origins list only ever
+     * covers the apex + www, and enumerating every creator subdomain there
+     * is not viable.
+     */
+    public function test_production_cors_allows_linkcharts_subdomain_wildcard(): void
+    {
+        $config = $this->loadCorsConfigForEnv('production');
+
+        $matches = array_filter(
+            $config['allowed_origins_patterns'],
+            fn (string $pattern) => preg_match($pattern, 'https://bruno.linkcharts.com.br') === 1,
+        );
+        $this->assertNotEmpty($matches, 'expected a pattern matching a linkcharts.com.br subdomain in production');
+
+        foreach ($config['allowed_origins_patterns'] as $pattern) {
+            $this->assertNotSame(1, preg_match($pattern, 'https://evil.com'), "{$pattern} must not match an unrelated origin");
+            $this->assertNotSame(1, preg_match($pattern, 'https://linkcharts.com.br.evil.com'), "{$pattern} must not match a suffix-spoofed origin");
+            $this->assertNotSame(1, preg_match($pattern, 'http://bruno.linkcharts.com.br'), "{$pattern} must not match plain http in production");
+        }
+    }
+
+    /**
+     * Outside production, bio-page subdomains resolve as `{sub}.localhost`
+     * (see middleware.ts's extractBioSubdomain, which accepts `localhost` as
+     * a root domain unconditionally) — with or without the Next dev server's
+     * port, since the dev nginx front door serves the bio host on :80.
+     */
+    public function test_non_production_cors_allows_localhost_subdomain_wildcard(): void
+    {
+        $config = $this->loadCorsConfigForEnv('local');
+
+        foreach (['http://discord.localhost', 'http://bruno.localhost:3000'] as $origin) {
+            $matches = array_filter(
+                $config['allowed_origins_patterns'],
+                fn (string $pattern) => preg_match($pattern, $origin) === 1,
+            );
+            $this->assertNotEmpty($matches, "expected a pattern matching {$origin} outside production");
+        }
     }
 }

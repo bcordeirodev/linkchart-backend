@@ -11,6 +11,11 @@
 | let the Next.js dev server (any port) call the API directly; in production
 | only the real product domains are allowed.
 |
+| Bio-page subdomains (one per creator, e.g. bruno.linkcharts.com.br — see
+| middleware.ts's extractBioSubdomain) are a first-party origin too, but
+| there's no fixed list to enumerate: allowed via a wildcard pattern instead
+| of allowed_origins. Same idea outside production for {sub}.localhost.
+|
 | NOTE: this file is evaluated at config:cache time, so env() here is safe.
 | The env default is 'production' (fail closed): an unset APP_ENV never
 | enables the dev origins.
@@ -38,10 +43,16 @@ return [
         ]
     ),
 
-    'allowed_origins_patterns' => $isProduction ? [] : [
-        '#^https?://localhost:\d+$#',
-        '#^https?://127\.0\.0\.1:\d+$#',
-    ],
+    'allowed_origins_patterns' => array_merge(
+        [
+            '#^https://[a-z0-9-]+\.linkcharts\.com\.br$#',
+        ],
+        $isProduction ? [] : [
+            '#^https?://localhost:\d+$#',
+            '#^https?://127\.0\.0\.1:\d+$#',
+            '#^https?://[a-z0-9-]+\.localhost(:\d+)?$#',
+        ]
+    ),
 
     'allowed_headers' => [
         'Accept',

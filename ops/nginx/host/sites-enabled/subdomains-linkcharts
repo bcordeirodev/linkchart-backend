@@ -50,6 +50,37 @@ server {
         proxy_read_timeout    60s;
     }
 
+    # Assets e rotas do Next que a pagina bio referencia RELATIVOS ao host do
+    # subdominio — sem estes blocos os chunks/fontes 404am no backend e a
+    # pagina nunca hidrata (bug encontrado no dev em 27/07; mesmo padrao do
+    # vhost linkchart-frontend). Slug "auth" puro nao colide: o prefixo exige
+    # a barra e slugs nao contem "/".
+    location ^~ /_next/ {
+        proxy_pass         http://frontend_app;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    location ^~ /auth/ {
+        proxy_pass         http://frontend_app;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    location = /favicon.ico {
+        proxy_pass         http://frontend_app;
+        proxy_set_header   Host $host;
+    }
+
+    location = /icon.svg {
+        proxy_pass         http://frontend_app;
+        proxy_set_header   Host $host;
+    }
+
     location / {
         proxy_pass         http://backend_app;
         proxy_http_version 1.1;
