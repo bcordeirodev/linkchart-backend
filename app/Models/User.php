@@ -69,6 +69,7 @@ class User extends Authenticatable implements JWTSubject
         'email_verification_sent_at',
         'auth0_sub',
         'onboarding',
+        'signup_attribution',
     ];
 
     /**
@@ -143,6 +144,7 @@ class User extends Authenticatable implements JWTSubject
             'email_verified' => 'boolean',
             'password' => 'hashed',
             'onboarding' => 'array',
+            'signup_attribution' => 'array',
         ];
     }
 

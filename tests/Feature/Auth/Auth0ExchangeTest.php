@@ -302,4 +302,107 @@ class Auth0ExchangeTest extends TestCase
         $response->assertJsonPath('error.code', 'auth0_email_unverified');
         $this->assertDatabaseMissing('users', ['auth0_sub' => 'oidc|no-verified-claim']);
     }
+
+    // ============================================================
+    // signup_attribution — first-touch persistido só na criação
+    // ============================================================
+
+    /** A brand-new signup persists the client-supplied first-touch attribution. */
+    public function test_persists_signup_attribution_for_new_user(): void
+    {
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'google-oauth2|attr-1',
+                'email' => 'attr@example.com',
+                'name' => 'Attr User',
+                'email_verified' => true,
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-valid-token',
+            'attribution' => [
+                'gclid' => 'Cj0KCQjw-test',
+                'utm_source' => 'chatgpt.com',
+                'referrer' => 'https://chatgpt.com/',
+                'landing_path' => '/?utm_source=chatgpt.com',
+                'captured_at' => '2026-07-31T12:00:00Z',
+            ],
+        ]);
+
+        $response->assertStatus(200)->assertJsonPath('data.is_new', true);
+
+        $stored = User::where('email', 'attr@example.com')->firstOrFail()->signup_attribution;
+        $this->assertSame('Cj0KCQjw-test', $stored['gclid'] ?? null);
+        $this->assertSame('chatgpt.com', $stored['utm_source'] ?? null);
+    }
+
+    /** Unknown keys inside attribution are dropped, never stored. */
+    public function test_signup_attribution_drops_unknown_keys(): void
+    {
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'google-oauth2|attr-2',
+                'email' => 'attr2@example.com',
+                'name' => 'Attr Two',
+                'email_verified' => true,
+            ], 200),
+        ]);
+
+        $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-valid-token',
+            'attribution' => [
+                'utm_source' => 'google',
+                'evil_payload' => str_repeat('x', 100),
+            ],
+        ])->assertStatus(200);
+
+        $stored = User::where('email', 'attr2@example.com')->firstOrFail()->signup_attribution;
+        $this->assertSame('google', $stored['utm_source'] ?? null);
+        $this->assertArrayNotHasKey('evil_payload', $stored);
+    }
+
+    /** A returning user's stored attribution is never overwritten by a login. */
+    public function test_returning_user_attribution_is_not_overwritten(): void
+    {
+        $user = User::factory()->create([
+            'auth0_sub' => 'google-oauth2|attr-3',
+            'signup_attribution' => ['utm_source' => 'original'],
+        ]);
+
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'google-oauth2|attr-3',
+                'email' => $user->email,
+                'name' => $user->name,
+                'email_verified' => true,
+            ], 200),
+        ]);
+
+        $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-valid-token',
+            'attribution' => ['utm_source' => 'hijacked'],
+        ])->assertStatus(200)->assertJsonPath('data.is_new', false);
+
+        $this->assertSame('original', $user->fresh()->signup_attribution['utm_source'] ?? null);
+    }
+
+    /** Attribution stays null when the client sends none (older frontends). */
+    public function test_signup_attribution_is_optional(): void
+    {
+        Http::fake([
+            $this->userinfoUrl => Http::response([
+                'sub' => 'google-oauth2|attr-4',
+                'email' => 'attr4@example.com',
+                'name' => 'Attr Four',
+                'email_verified' => true,
+            ], 200),
+        ]);
+
+        $this->postJson('/api/auth/auth0-exchange', [
+            'access_token' => 'any-valid-token',
+        ])->assertStatus(200);
+
+        $this->assertNull(User::where('email', 'attr4@example.com')->firstOrFail()->signup_attribution);
+    }
 }

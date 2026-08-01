@@ -758,7 +758,26 @@ class AuthController extends Controller
         $validated = $request->validate([
             'access_token' => 'required|string',
             'name_hint' => 'nullable|string|max:255',
+            // First-touch capturado pelo frontend na primeira visita (cookie
+            // lc_first_touch). Só as chaves listadas sobrevivem à validação —
+            // qualquer chave extra é descartada antes de tocar o banco.
+            'attribution' => 'nullable|array',
+            'attribution.gclid' => 'nullable|string|max:500',
+            'attribution.gbraid' => 'nullable|string|max:500',
+            'attribution.utm_source' => 'nullable|string|max:255',
+            'attribution.utm_medium' => 'nullable|string|max:255',
+            'attribution.utm_campaign' => 'nullable|string|max:255',
+            'attribution.referrer' => 'nullable|string|max:1000',
+            'attribution.landing_path' => 'nullable|string|max:500',
+            'attribution.captured_at' => 'nullable|string|max:40',
         ]);
+
+        // Normaliza: remove valores vazios e vira null quando nada sobra, para a
+        // coluna não acumular objetos vazios.
+        $attribution = array_filter(
+            (array) ($validated['attribution'] ?? []),
+            fn ($value) => $value !== null && $value !== ''
+        ) ?: null;
 
         try {
             $domain = config('services.auth0.domain');
@@ -848,8 +867,16 @@ class AuthController extends Controller
                             'auth0_sub' => $sub,
                             'email_verified' => $emailVerified,
                             'email_verified_at' => $emailVerified ? now() : null,
+                            // First-touch só na criação: logins futuros nunca
+                            // sobrescrevem a origem original do cadastro.
+                            'signup_attribution' => $attribution,
                         ]);
                         $isNew = true;
+
+                        AppLogger::event('auth', 'info', 'auth.signup_attribution', [
+                            'user_id' => $user->id,
+                            'attribution' => $attribution,
+                        ]);
                     } catch (\Illuminate\Database\QueryException $e) {
                         // Lost the race — another request created the user first.
                         // The winning request already counts as the signup, so
