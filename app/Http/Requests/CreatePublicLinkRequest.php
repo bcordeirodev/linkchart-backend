@@ -60,7 +60,7 @@ class CreatePublicLinkRequest extends FormRequest
                 'max:100',
                 'alpha_dash',
                 'unique:links,slug',
-                'not_in:api,admin,www,mail,ftp,app,web,public,short,link,url,r,health', // Mais slugs reservados
+                'not_in:api,admin,www,mail,ftp,app,web,public,short,link,url,r,health,login,signin,sign-in,logon,senha,password,verify,verificar,auth,secure', // Reservados: infra + slugs com cara de phishing (caso de 21/07/2026)
             ],
         ];
     }

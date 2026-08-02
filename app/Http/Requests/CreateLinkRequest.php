@@ -78,7 +78,7 @@ class CreateLinkRequest extends FormRequest
                 'max:100',
                 'alpha_dash',
                 'unique:links,slug',
-                'not_in:api,admin,www,mail,ftp', // Slugs reservados
+                'not_in:api,admin,www,mail,ftp,login,signin,sign-in,logon,senha,password,verify,verificar,auth,secure', // Reservados: infra + slugs com cara de phishing
             ],
             'is_active' => 'boolean',
 

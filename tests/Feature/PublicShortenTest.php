@@ -76,6 +76,36 @@ class PublicShortenTest extends TestCase
         $this->assertDatabaseHas('links', ['slug' => 'my-test-slug']);
     }
 
+    /**
+     * Slugs com cara de página de credencial ("login", "senha", ...) são
+     * reservados: o phishing de 21/07/2026 usou exatamente o slug "login"
+     * apontando para um túnel efêmero. Bloquear o slug tira a credibilidade
+     * do link mesmo quando o destino ainda não está em nenhuma blocklist.
+     *
+     * @dataProvider phishingShapedSlugs
+     */
+    public function test_phishing_shaped_slug_is_reserved(string $slug): void
+    {
+        $response = $this->postJson('/api/public/shorten', [
+            'original_url' => 'https://example.com/page',
+            'custom_slug' => $slug,
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['custom_slug'], 'error.details.errors');
+    }
+
+    public static function phishingShapedSlugs(): array
+    {
+        return [
+            'login' => ['login'],
+            'sign-in' => ['sign-in'],
+            'senha' => ['senha'],
+            'password' => ['password'],
+            'verify' => ['verify'],
+        ];
+    }
+
     public function test_duplicate_custom_slug_returns_422(): void
     {
         Link::factory()->create(['slug' => 'already-taken']);

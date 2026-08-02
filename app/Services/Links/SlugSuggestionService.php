@@ -33,6 +33,10 @@ class SlugSuggestionService
     private const RESERVED = [
         'api', 'admin', 'www', 'mail', 'ftp', 'app', 'web',
         'public', 'short', 'link', 'url', 'r', 'health',
+        // Slugs com cara de página de credencial — mesmo racional do not_in
+        // nos FormRequests (phishing de 21/07/2026 usou o slug "login").
+        'login', 'signin', 'sign-in', 'logon', 'senha', 'password',
+        'verify', 'verificar', 'auth', 'secure',
     ];
 
     private const MIN_LENGTH = 3;
