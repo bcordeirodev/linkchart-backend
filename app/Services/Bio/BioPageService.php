@@ -379,7 +379,7 @@ class BioPageService implements BioPageServiceInterface
     /**
      * {@inheritDoc}
      */
-    public function uploadAvatar(int $userId, UploadedFile $file): array
+    public function uploadAvatar(int $userId, UploadedFile $file, ?UploadedFile $thumb = null): array
     {
         $page = BioPage::where('user_id', $userId)->first();
         if (! $page) {
@@ -397,6 +397,24 @@ class BioPageService implements BioPageServiceInterface
 
         $page->avatar_path = $path;
         $page->avatar_url = Storage::disk($disk)->url($path);
+
+        // Miniatura (quando o cliente mandou): mesmo prefixo aleatório com
+        // sufixo _thumb — original vira o Open Graph, thumb vira o círculo
+        // da página. Upload antigo sem thumb zera os campos (o replace acima
+        // já apagou o arquivo anterior via deleteAvatarFile).
+        if ($thumb !== null) {
+            $thumbPath = $thumb->storeAs(
+                'bio-avatars',
+                Str::beforeLast($filename, '.').'_thumb.'.$thumb->extension(),
+                $disk,
+            );
+            $page->avatar_thumb_path = $thumbPath;
+            $page->avatar_thumb_url = Storage::disk($disk)->url($thumbPath);
+        } else {
+            $page->avatar_thumb_path = null;
+            $page->avatar_thumb_url = null;
+        }
+
         $page->save();
 
         AppLogger::event('app', 'info', 'bio.avatar_uploaded', [
@@ -422,6 +440,8 @@ class BioPageService implements BioPageServiceInterface
 
         $page->avatar_path = null;
         $page->avatar_url = null;
+        $page->avatar_thumb_path = null;
+        $page->avatar_thumb_url = null;
         $page->save();
 
         if ($hadAvatar) {
@@ -450,6 +470,12 @@ class BioPageService implements BioPageServiceInterface
      */
     private function deleteAvatarFile(BioPage $page, string $disk): bool
     {
+        // A thumb acompanha o ciclo de vida do original: replace/remove do
+        // avatar sempre apaga as duas cópias.
+        if ($page->avatar_thumb_path !== null) {
+            Storage::disk($disk)->delete($page->avatar_thumb_path);
+        }
+
         if ($page->avatar_path === null) {
             return false;
         }
@@ -514,7 +540,7 @@ class BioPageService implements BioPageServiceInterface
      * Only active items are included. Never exposes `user_id`,
      * `subdomain_id`, `link_id`, or `original_url` — see PublicBioController.
      *
-     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, avatar_thumb_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}
      */
     private function formatPublic(BioPage $page): array
     {
@@ -526,6 +552,7 @@ class BioPageService implements BioPageServiceInterface
             'bio' => $page->bio,
             'theme' => $page->theme,
             'avatar_url' => $page->avatar_url,
+            'avatar_thumb_url' => $page->avatar_thumb_url,
             'url' => $this->computeUrl($page),
             'items' => $items->map(fn ($item) => [
                 'id' => $item->id,
@@ -592,7 +619,7 @@ class BioPageService implements BioPageServiceInterface
      * `link_id`/`position`/`is_active`/`clicks` — everything the editor UI
      * needs, none of which is exposed on the public endpoint.
      *
-     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, is_active: bool, items: array<int, array<string, mixed>>}
+     * @return array{id: int, handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, avatar_thumb_url: ?string, is_active: bool, items: array<int, array<string, mixed>>}
      */
     private function formatManagement(BioPage $page): array
     {
@@ -605,6 +632,7 @@ class BioPageService implements BioPageServiceInterface
             'bio' => $page->bio,
             'theme' => $page->theme,
             'avatar_url' => $page->avatar_url,
+            'avatar_thumb_url' => $page->avatar_thumb_url,
             'is_active' => $page->is_active,
             'subdomain_id' => $page->subdomain_id,
             'url' => $this->computeUrl($page),

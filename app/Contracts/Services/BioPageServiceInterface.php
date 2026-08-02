@@ -176,7 +176,7 @@ interface BioPageServiceInterface
      *
      * @throws \InvalidArgumentException When `$userId` has no bio page yet.
      */
-    public function uploadAvatar(int $userId, \Illuminate\Http\UploadedFile $file): array;
+    public function uploadAvatar(int $userId, \Illuminate\Http\UploadedFile $file, ?\Illuminate\Http\UploadedFile $thumb = null): array;
 
     /**
      * Remove the avatar of `$userId`'s bio page, deleting the stored file (if

@@ -217,4 +217,109 @@ class BioPageAvatarTest extends TestCase
         $file = UploadedFile::fake()->image('avatar-over.jpg', 200, 200);
         $this->post('/api/bio/avatar', ['avatar' => $file], $this->auth())->assertStatus(429);
     }
+
+    // ============================================================
+    // Miniatura (avatar_thumb): original p/ Open Graph, thumb p/ a página
+    // ============================================================
+
+    public function test_upload_with_thumb_stores_both_files_and_urls(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id, 'handle' => 'joaosilva']);
+
+        $response = $this->post('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg', 1200, 1600),
+            'avatar_thumb' => UploadedFile::fake()->image('thumb.jpg', 512, 512),
+        ], $this->auth());
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('data.avatar_url'));
+        $thumbUrl = $response->json('data.avatar_thumb_url');
+        $this->assertNotNull($thumbUrl);
+        $this->assertStringContainsString('bio-avatars/', $thumbUrl);
+
+        $page = BioPage::where('user_id', $this->user->id)->first();
+        Storage::disk('public')->assertExists($page->avatar_path);
+        Storage::disk('public')->assertExists($page->avatar_thumb_path);
+        $this->assertNotSame($page->avatar_path, $page->avatar_thumb_path);
+    }
+
+    public function test_upload_without_thumb_leaves_thumb_fields_null(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id, 'handle' => 'joaosilva']);
+
+        $this->post('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg', 200, 200),
+        ], $this->auth())->assertOk();
+
+        $page = BioPage::where('user_id', $this->user->id)->first();
+        $this->assertNull($page->avatar_thumb_path);
+        $this->assertNull($page->avatar_thumb_url);
+    }
+
+    public function test_replacing_avatar_deletes_previous_thumb_file(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id, 'handle' => 'joaosilva']);
+
+        $this->post('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('first.jpg', 800, 800),
+            'avatar_thumb' => UploadedFile::fake()->image('first-thumb.jpg', 512, 512),
+        ], $this->auth())->assertOk();
+        $firstThumbPath = BioPage::where('user_id', $this->user->id)->first()->avatar_thumb_path;
+
+        $this->post('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('second.jpg', 800, 800),
+        ], $this->auth())->assertOk();
+
+        Storage::disk('public')->assertMissing($firstThumbPath);
+        $this->assertNull(BioPage::where('user_id', $this->user->id)->first()->avatar_thumb_path);
+    }
+
+    public function test_delete_removes_thumb_file_and_nulls_thumb_url(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id, 'handle' => 'joaosilva']);
+
+        $this->post('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg', 800, 800),
+            'avatar_thumb' => UploadedFile::fake()->image('thumb.jpg', 512, 512),
+        ], $this->auth())->assertOk();
+        $thumbPath = BioPage::where('user_id', $this->user->id)->first()->avatar_thumb_path;
+
+        $this->delete('/api/bio/avatar', [], $this->auth())->assertOk();
+
+        Storage::disk('public')->assertMissing($thumbPath);
+        $page = BioPage::where('user_id', $this->user->id)->first();
+        $this->assertNull($page->avatar_thumb_path);
+        $this->assertNull($page->avatar_thumb_url);
+    }
+
+    public function test_public_payload_exposes_thumb_url(): void
+    {
+        BioPage::factory()->create([
+            'user_id' => $this->user->id,
+            'handle' => 'joaosilva',
+            'is_active' => true,
+        ]);
+
+        $this->post('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg', 800, 800),
+            'avatar_thumb' => UploadedFile::fake()->image('thumb.jpg', 512, 512),
+        ], $this->auth())->assertOk();
+
+        $public = $this->getJson('/api/public/bio/joaosilva');
+
+        $public->assertOk();
+        $this->assertNotNull($public->json('data.avatar_thumb_url'));
+    }
+
+    public function test_upload_rejects_thumb_larger_than_1mb(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id, 'handle' => 'joaosilva']);
+
+        $response = $this->postJson('/api/bio/avatar', [
+            'avatar' => UploadedFile::fake()->image('avatar.jpg', 200, 200),
+            'avatar_thumb' => UploadedFile::fake()->image('thumb.jpg', 512, 512)->size(1500),
+        ], $this->auth());
+
+        $response->assertStatus(422);
+    }
 }

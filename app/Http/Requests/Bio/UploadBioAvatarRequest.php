@@ -51,6 +51,16 @@ class UploadBioAvatarRequest extends FormRequest
                 'max:2048',
                 (new Dimensions)->minWidth(100)->minHeight(100),
             ],
+            // Miniatura quadrada gerada no NAVEGADOR (canvas) no momento do
+            // upload — opcional para clientes antigos. Menor por natureza
+            // (512px), então o teto é mais apertado que o do original.
+            'avatar_thumb' => [
+                'sometimes',
+                'file',
+                'image',
+                'mimes:jpeg,png,webp',
+                'max:1024',
+            ],
         ];
     }
 

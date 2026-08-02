@@ -261,7 +261,11 @@ class BioPageController extends Controller
     public function uploadAvatar(UploadBioAvatarRequest $request): JsonResponse
     {
         try {
-            $page = $this->bioPageService->uploadAvatar($request->user()->id, $request->file('avatar'));
+            $page = $this->bioPageService->uploadAvatar(
+                $request->user()->id,
+                $request->file('avatar'),
+                $request->file('avatar_thumb'),
+            );
 
             return response()->json(['data' => $page]);
         } catch (\InvalidArgumentException $e) {
