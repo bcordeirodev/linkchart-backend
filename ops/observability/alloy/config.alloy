@@ -57,7 +57,7 @@ otelcol.receiver.filelog "logs" {
 		"service.name" = "linkcharts-infra",
 	}
 	output {
-		logs = [otelcol.exporter.otlphttp.gcloud.input]
+		logs = [otelcol.processor.transform.redact_pii.input]
 	}
 }
 
@@ -115,6 +115,28 @@ otelcol.processor.batch "app" {
 	output {
 		metrics = [otelcol.exporter.otlphttp.gcloud.input]
 		traces  = [otelcol.exporter.otlphttp.gcloud.input]
-		logs    = [otelcol.exporter.otlphttp.gcloud.input]
+		logs    = [otelcol.processor.transform.redact_pii.input]
+	}
+}
+
+// PII redaction (LGPD): mask client IPs and emails in EVERY log path before it
+// leaves the box for Grafana Cloud — covers nginx access logs, container stdout
+// (filelog) and the app's OTLP logs, regardless of whether a Laravel-side
+// processor ran. The local log FILES keep full email/ip for incident response;
+// only the shipped copy is masked. `error_mode = "ignore"` skips a statement
+// when `body` isn't a string (structured OTLP logs) instead of failing the pipe.
+otelcol.processor.transform "redact_pii" {
+	error_mode = "ignore"
+	log_statements {
+		context = "log"
+		statements = [
+			`replace_pattern(log.body, "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}", "[email-redacted]")`,
+			`replace_pattern(log.body, "\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b", "[ip-redacted]")`,
+			`replace_all_patterns(log.attributes, "value", "[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}", "[email-redacted]")`,
+			`replace_all_patterns(log.attributes, "value", "\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b", "[ip-redacted]")`,
+		]
+	}
+	output {
+		logs = [otelcol.exporter.otlphttp.gcloud.input]
 	}
 }
