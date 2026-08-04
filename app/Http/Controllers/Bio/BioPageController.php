@@ -12,6 +12,7 @@ use App\Logging\AppLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\Rule;
 
 /**
  * Authenticated management controller for the "link-in-bio" module.
@@ -124,6 +125,43 @@ class BioPageController extends Controller
             return response()->json(['data' => ['available' => $available]]);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao verificar identificador.', $e);
+        }
+    }
+
+    /**
+     * GET /api/bio/performance?period=30d
+     *
+     * Click performance panel for the authenticated user's bio page: total
+     * clicks in the period plus a per-item ranking, aggregated from the
+     * EXISTING `clicks` table through each item's `link_id` — no page-view
+     * tracking, no new tables (product decision 2026-08-04).
+     *
+     * Middleware: api.auth:api, verified
+     * Auth: required
+     *
+     * Query: `period` — one of `7d`, `30d`, `90d`, `all` (default `30d`);
+     * any other value is rejected as 422 rather than silently falling back.
+     * Response shape: NormalizeApiResponse envelope:
+     *   { data: { total_clicks: int, items: [{ item_id, title, display, social_platform, clicks }] } }
+     * `items` includes every item on the page (active and inactive),
+     * ordered by `clicks` descending. Empty/zeroed payload (never a 404 or
+     * 422) when the user has no bio page yet, or it has no items.
+     *
+     * @throws \Illuminate\Validation\ValidationException When `period` is present but not one of the whitelisted values.
+     */
+    public function performance(Request $request): JsonResponse
+    {
+        $request->validate([
+            'period' => ['sometimes', 'string', Rule::in(['7d', '30d', '90d', 'all'])],
+        ]);
+
+        try {
+            $period = (string) $request->query('period', '30d');
+            $data = $this->bioPageService->getPerformance($request->user()->id, $period);
+
+            return response()->json(['data' => $data]);
+        } catch (\Exception $e) {
+            return $this->serverError('Erro ao buscar desempenho da página bio.', $e);
         }
     }
 

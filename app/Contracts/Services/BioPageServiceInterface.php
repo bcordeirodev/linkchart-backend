@@ -214,4 +214,28 @@ interface BioPageServiceInterface
      * @throws \InvalidArgumentException When `$userId` has no bio page yet.
      */
     public function removeAvatar(int $userId): array;
+
+    /**
+     * Click performance panel for `$userId`'s bio page: total clicks in the
+     * period plus a per-item ranking, aggregated from the EXISTING `clicks`
+     * table through each item's `link_id` (no page-view tracking, no new
+     * tables — product decision 2026-08-04).
+     *
+     * Scope: ALL items on the page (active and inactive — an owner deciding
+     * whether to reactivate a button needs its numbers too), restricted to
+     * `$userId`'s own bio page and, defensively, to non-demo links
+     * (`links.is_demo = false`) — mirrors {@see \App\Services\Analytics\ReportsAnalyticsService}'s
+     * "aggregate my own clicks across my own links" scope, so a demo link a
+     * new user might add to their bio never inflates their real numbers.
+     * Items are sorted by `clicks` descending (the "ranking").
+     *
+     * When `$userId` has no bio page yet, or the page has zero items,
+     * returns a zeroed/empty payload rather than throwing — this is a
+     * read-only report, not a mutation that presupposes the page exists.
+     *
+     * @param  int  $userId  Owner's user ID.
+     * @param  string  $period  One of '7d', '30d', '90d', 'all' (unrecognised values fall back to '30d' — the controller validates the whitelist before this is ever called).
+     * @return array{total_clicks: int, items: array<int, array{item_id: int, title: string, display: string, social_platform: ?string, clicks: int}>}
+     */
+    public function getPerformance(int $userId, string $period): array;
 }

@@ -197,6 +197,7 @@ Route::middleware(['api.auth:api', 'verified'])->group(function () {
         Route::get('/', 'show');
         Route::put('/', 'upsert');
         Route::get('/handle-available', 'handleAvailable')->middleware('throttle:bio-handle-check');
+        Route::get('/performance', 'performance');
         Route::post('/avatar', 'uploadAvatar')->middleware('throttle:bio-avatar');
         Route::delete('/avatar', 'removeAvatar');
         Route::post('/items', 'storeItem');

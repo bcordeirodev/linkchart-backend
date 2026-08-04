@@ -8,7 +8,9 @@ use App\Models\BioPage;
 use App\Models\BioPageItem;
 use App\Models\Link;
 use App\Models\UserSubdomain;
+use Carbon\Carbon;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -482,6 +484,75 @@ class BioPageService implements BioPageServiceInterface
         }
 
         return $this->formatManagement($page->fresh());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getPerformance(int $userId, string $period): array
+    {
+        $page = BioPage::where('user_id', $userId)->first();
+        if (! $page) {
+            return ['total_clicks' => 0, 'items' => []];
+        }
+
+        $items = $page->items()->get();
+        if ($items->isEmpty()) {
+            return ['total_clicks' => 0, 'items' => []];
+        }
+
+        $linkIds = $items->pluck('link_id')->all();
+        $since = $this->periodStart($period);
+
+        // Single aggregate join+groupBy — one query for every item's click
+        // count in the period, never one query per item. Same "clicks JOIN
+        // links, scope by user, exclude demo" shape as
+        // ReportsAnalyticsService::baseQuery() — a demo link a new user
+        // might have added to their bio must never inflate this panel.
+        $clicksByLink = DB::table('clicks')
+            ->join('links', 'links.id', '=', 'clicks.link_id')
+            ->where('links.user_id', $userId)
+            ->where('links.is_demo', false)
+            ->whereIn('clicks.link_id', $linkIds)
+            ->when($since !== null, fn ($q) => $q->where('clicks.created_at', '>=', $since))
+            ->selectRaw('clicks.link_id, COUNT(*) as clicks')
+            ->groupBy('clicks.link_id')
+            ->pluck('clicks', 'link_id');
+
+        $rows = $items->map(fn (BioPageItem $item) => [
+            'item_id' => $item->id,
+            'title' => $item->label,
+            'display' => $item->display,
+            'social_platform' => $item->social_platform,
+            'clicks' => (int) ($clicksByLink[$item->link_id] ?? 0),
+        ])->sortByDesc('clicks')->values()->all();
+
+        return [
+            'total_clicks' => array_sum(array_column($rows, 'clicks')),
+            'items' => $rows,
+        ];
+    }
+
+    /**
+     * Resolve a `period` query value to the start instant of the window, or
+     * null for an unbounded ('all') window.
+     *
+     * Unrecognised values fall back to the 30-day window rather than
+     * throwing — {@see \App\Http\Controllers\Bio\BioPageController::performance()}
+     * already validates `period` against the same whitelist before calling
+     * {@see self::getPerformance()}, so this is a defensive default, not the
+     * primary validation path.
+     *
+     * @param  string  $period  One of '7d', '30d', '90d', 'all'.
+     */
+    private function periodStart(string $period): ?Carbon
+    {
+        return match ($period) {
+            '7d' => Carbon::now()->subDays(7),
+            '90d' => Carbon::now()->subDays(90),
+            'all' => null,
+            default => Carbon::now()->subDays(30),
+        };
     }
 
     /**
