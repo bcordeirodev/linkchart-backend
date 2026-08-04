@@ -74,6 +74,53 @@ class BioPagePublicTest extends TestCase
         $this->assertSame('github.com', $items[0]['destination_host']);
     }
 
+    /**
+     * O payload público expõe `display`/`social_platform` por item — é o
+     * que permite o frontend renderizar a linha de ícones sociais acima dos
+     * botões (ver proposta de enriquecimento da bio, §2 #1).
+     */
+    public function test_public_items_expose_display_and_social_platform_for_icon_variant(): void
+    {
+        $user = User::factory()->create();
+        $page = BioPage::factory()->create([
+            'user_id' => $user->id, 'handle' => 'comicone', 'is_active' => true,
+        ]);
+        $link = Link::factory()->create(['user_id' => $user->id]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id,
+            'link_id' => $link->id,
+            'position' => 0,
+            'display' => 'icon',
+            'social_platform' => 'whatsapp',
+        ]);
+
+        $items = $this->getJson('/api/public/bio/comicone')->json('data.items');
+
+        $this->assertSame('icon', $items[0]['display']);
+        $this->assertSame('whatsapp', $items[0]['social_platform']);
+    }
+
+    /**
+     * Item regular (sem variante escolhida) expõe display='item' e
+     * social_platform nulo — o default cobre também o payload público.
+     */
+    public function test_public_items_default_display_to_item(): void
+    {
+        $user = User::factory()->create();
+        $page = BioPage::factory()->create([
+            'user_id' => $user->id, 'handle' => 'comitemdefault', 'is_active' => true,
+        ]);
+        $link = Link::factory()->create(['user_id' => $user->id]);
+        BioPageItem::factory()->create([
+            'bio_page_id' => $page->id, 'link_id' => $link->id, 'position' => 0,
+        ]);
+
+        $items = $this->getJson('/api/public/bio/comitemdefault')->json('data.items');
+
+        $this->assertSame('item', $items[0]['display']);
+        $this->assertNull($items[0]['social_platform']);
+    }
+
     public function test_returns_active_page_with_active_items_in_order(): void
     {
         $user = User::factory()->create();

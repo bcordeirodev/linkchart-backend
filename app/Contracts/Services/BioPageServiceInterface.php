@@ -28,9 +28,12 @@ interface BioPageServiceInterface
      * associated subdomain's root when one is set
      * (`https://{subdomain}.{app.domain}`), otherwise a path-based fallback
      * (`/@{handle}`) — see BioPageService's `computeUrl()`. `avatar_url` is
-     * null when no avatar has been uploaded.
+     * null when no avatar has been uploaded. Each item also carries
+     * `display` ('item'|'icon') and `social_platform` (whitelisted slug or
+     * null) so the frontend can render the social icon row above the
+     * regular buttons.
      *
-     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}|null
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string, display: string, social_platform: ?string}>}|null
      */
     public function getPublicByHandle(string $handle): ?array;
 
@@ -46,7 +49,7 @@ interface BioPageServiceInterface
      * label instead of by the bio page's own handle. See PublicBioController.
      *
      * @param  string  $subdomain  Subdomain label (case-insensitive), e.g. "bruno".
-     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}|null
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string, display: string, social_platform: ?string}>}|null
      */
     public function getPublicBySubdomain(string $subdomain): ?array;
 
@@ -108,8 +111,18 @@ interface BioPageServiceInterface
      * the list (0-based). Enforces a maximum of
      * {@see \App\Services\Bio\BioPageService::MAX_ITEMS_PER_PAGE} items.
      *
-     * @param  array{link_id: int, label?: ?string}  $data  Validated input (see CreateBioPageItemRequest).
-     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, url: string, clicks: int}
+     * `display` defaults to {@see \App\Models\BioPageItem::DISPLAY_ITEM} when
+     * absent from `$data`. `link_id` is required regardless of `display` —
+     * an icon item is still a link item (tracking preserved). When
+     * `display` is {@see \App\Models\BioPageItem::DISPLAY_ICON}, `$data`
+     * MUST already carry a whitelisted `social_platform` (enforced by
+     * CreateBioPageItemRequest's `required_if`, not re-checked here);
+     * otherwise `social_platform` is stored as null regardless of what
+     * `$data` contains, preserving the invariant that it is only ever
+     * non-null alongside `display = 'icon'`.
+     *
+     * @param  array{link_id: int, label?: ?string, display?: ?string, social_platform?: ?string}  $data  Validated input (see CreateBioPageItemRequest).
+     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, display: string, social_platform: ?string, url: string, clicks: int}
      *
      * @throws \InvalidArgumentException When the user has no bio page yet, `link_id`
      *                                   does not belong to `$userId`, or the page
@@ -120,9 +133,20 @@ interface BioPageServiceInterface
     /**
      * Update a button owned (via its bio page) by `$userId`.
      *
-     * @param  array{label?: string, is_active?: bool}  $data  Fields to update.
-     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, url: string, clicks: int}|null
-     *                                                                                                                    Null when the item does not exist or its bio page does not belong to `$userId`.
+     * `display` is editable like every other field here (product decision —
+     * see UpdateBioPageItemRequest's docblock for the "simplest coherent
+     * rule" reasoning). Whenever the item's EFFECTIVE display (after
+     * applying `$data`) is {@see \App\Models\BioPageItem::DISPLAY_ITEM}, this
+     * always forces `social_platform` to null server-side — regardless of
+     * what `$data['social_platform']` contains — to preserve the invariant
+     * that it is only ever non-null alongside `display = 'icon'`. When the
+     * effective display is `'icon'` and `$data` does not touch
+     * `social_platform`, the item's existing value is left untouched (e.g. a
+     * label-only edit of an already-icon item never needs to resend it).
+     *
+     * @param  array{label?: string, is_active?: bool, display?: string, social_platform?: ?string}  $data  Fields to update.
+     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, display: string, social_platform: ?string, url: string, clicks: int}|null
+     *                                                                                                                                                               Null when the item does not exist or its bio page does not belong to `$userId`.
      */
     public function updateItem(int $userId, int $itemId, array $data): ?array;
 

@@ -7,6 +7,7 @@ use App\Models\BioPageItem;
 use App\Models\Link;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -78,6 +79,34 @@ class BioPageItemsTest extends TestCase
         $this->assertSame('example.com', $items[0]['destination_host']);
     }
 
+    /**
+     * Uma linha escrita ANTES desta migration (bypassando fillable/Eloquent
+     * por completo, tocando só o conjunto original de colunas) prova o
+     * default a nível de banco — não só o default aplicado em código — para
+     * `display`: volta 'item' e `social_platform` nulo mesmo sem o app dizer
+     * nada a respeito.
+     */
+    public function test_legacy_item_without_display_value_defaults_to_item(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        DB::table('bio_page_items')->insert([
+            'bio_page_id' => $page->id,
+            'link_id' => $link->id,
+            'label' => 'Legacy Item',
+            'position' => 0,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $items = $this->getJson('/api/bio', $this->auth())->json('data.items');
+
+        $this->assertSame('item', $items[0]['display']);
+        $this->assertNull($items[0]['social_platform']);
+    }
+
     public function test_store_item_defaults_label_to_link_title(): void
     {
         $page = BioPage::factory()->create(['user_id' => $this->user->id]);
@@ -121,6 +150,78 @@ class BioPageItemsTest extends TestCase
 
         $response->assertStatus(201);
         $this->assertSame('Custom Label', $response->json('data.label'));
+    }
+
+    public function test_store_item_defaults_display_to_item(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        $response = $this->postJson('/api/bio/items', ['link_id' => $link->id], $this->auth());
+
+        $response->assertStatus(201);
+        $this->assertSame('item', $response->json('data.display'));
+        $this->assertNull($response->json('data.social_platform'));
+    }
+
+    public function test_store_item_creates_icon_variant_with_valid_platform(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        $response = $this->postJson('/api/bio/items', [
+            'link_id' => $link->id,
+            'display' => 'icon',
+            'social_platform' => 'instagram',
+        ], $this->auth());
+
+        $response->assertStatus(201);
+        $this->assertSame('icon', $response->json('data.display'));
+        $this->assertSame('instagram', $response->json('data.social_platform'));
+        $this->assertDatabaseHas('bio_page_items', [
+            'link_id' => $link->id,
+            'display' => 'icon',
+            'social_platform' => 'instagram',
+        ]);
+    }
+
+    /**
+     * `link_id` continua obrigatório mesmo para um ícone — o ponto da
+     * variante é justamente NÃO perder tracking (ver proposta/contrato).
+     */
+    public function test_store_item_requires_link_id_even_for_icon_variant(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id]);
+
+        $this->postJson('/api/bio/items', [
+            'display' => 'icon',
+            'social_platform' => 'instagram',
+        ], $this->auth())->assertStatus(422);
+    }
+
+    public function test_store_item_rejects_icon_without_social_platform(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        $this->postJson('/api/bio/items', [
+            'link_id' => $link->id,
+            'display' => 'icon',
+        ], $this->auth())->assertStatus(422);
+
+        $this->assertDatabaseMissing('bio_page_items', ['link_id' => $link->id]);
+    }
+
+    public function test_store_item_rejects_invalid_social_platform(): void
+    {
+        BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+
+        $this->postJson('/api/bio/items', [
+            'link_id' => $link->id,
+            'display' => 'icon',
+            'social_platform' => 'not-a-real-platform',
+        ], $this->auth())->assertStatus(422);
     }
 
     public function test_store_item_appends_at_the_end_position(): void
@@ -205,6 +306,93 @@ class BioPageItemsTest extends TestCase
             ->assertStatus(404);
 
         $this->assertDatabaseHas('bio_page_items', ['id' => $item->id, 'label' => 'Theirs']);
+    }
+
+    public function test_update_item_switches_to_icon_variant(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+        $item = BioPageItem::factory()->create(['bio_page_id' => $page->id, 'link_id' => $link->id]);
+
+        $response = $this->putJson("/api/bio/items/{$item->id}", [
+            'display' => 'icon',
+            'social_platform' => 'github',
+        ], $this->auth());
+
+        $response->assertOk();
+        $this->assertSame('icon', $response->json('data.display'));
+        $this->assertSame('github', $response->json('data.social_platform'));
+        $this->assertDatabaseHas('bio_page_items', ['id' => $item->id, 'display' => 'icon', 'social_platform' => 'github']);
+    }
+
+    public function test_update_item_rejects_icon_without_social_platform(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+        $item = BioPageItem::factory()->create(['bio_page_id' => $page->id, 'link_id' => $link->id]);
+
+        $this->putJson("/api/bio/items/{$item->id}", ['display' => 'icon'], $this->auth())
+            ->assertStatus(422);
+    }
+
+    public function test_update_item_rejects_invalid_social_platform(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+        $item = BioPageItem::factory()->create(['bio_page_id' => $page->id, 'link_id' => $link->id]);
+
+        $this->putJson("/api/bio/items/{$item->id}", [
+            'display' => 'icon',
+            'social_platform' => 'myspace',
+        ], $this->auth())->assertStatus(422);
+    }
+
+    /**
+     * Decisão "display editável" (ver UpdateBioPageItemRequest): voltar para
+     * 'item' sempre limpa social_platform no servidor, mesmo sem o payload
+     * mencionar o campo — o invariante "social_platform só com icon" vale
+     * inclusive quando o caller nem sabe que ele existia.
+     */
+    public function test_update_item_switching_back_to_item_clears_social_platform(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+        $item = BioPageItem::factory()->create([
+            'bio_page_id' => $page->id,
+            'link_id' => $link->id,
+            'display' => 'icon',
+            'social_platform' => 'tiktok',
+        ]);
+
+        $response = $this->putJson("/api/bio/items/{$item->id}", ['display' => 'item'], $this->auth());
+
+        $response->assertOk();
+        $this->assertSame('item', $response->json('data.display'));
+        $this->assertNull($response->json('data.social_platform'));
+        $this->assertDatabaseHas('bio_page_items', ['id' => $item->id, 'display' => 'item', 'social_platform' => null]);
+    }
+
+    /**
+     * Editar só o label de um item já-ícone não exige reenviar
+     * social_platform — o valor existente é preservado.
+     */
+    public function test_update_item_label_only_preserves_existing_icon_variant(): void
+    {
+        $page = BioPage::factory()->create(['user_id' => $this->user->id]);
+        $link = Link::factory()->create(['user_id' => $this->user->id]);
+        $item = BioPageItem::factory()->create([
+            'bio_page_id' => $page->id,
+            'link_id' => $link->id,
+            'display' => 'icon',
+            'social_platform' => 'youtube',
+        ]);
+
+        $response = $this->putJson("/api/bio/items/{$item->id}", ['label' => 'New Label'], $this->auth());
+
+        $response->assertOk();
+        $this->assertSame('New Label', $response->json('data.label'));
+        $this->assertSame('icon', $response->json('data.display'));
+        $this->assertSame('youtube', $response->json('data.social_platform'));
     }
 
     public function test_destroy_item_deletes_owned_item(): void

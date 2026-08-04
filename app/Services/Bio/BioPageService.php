@@ -304,12 +304,23 @@ class BioPageService implements BioPageServiceInterface
         $maxPosition = $page->items()->max('position');
         $nextPosition = $maxPosition === null ? 0 : $maxPosition + 1;
 
+        // display defaults to 'item' when absent. social_platform is only
+        // ever persisted alongside 'icon' — CreateBioPageItemRequest's
+        // required_if already guarantees $data has a whitelisted value in
+        // that case; any value submitted alongside 'item' is dropped here to
+        // keep the "non-null only when icon" invariant true from the moment
+        // the row is created, not just at the validation layer.
+        $display = $data['display'] ?? BioPageItem::DISPLAY_ITEM;
+        $socialPlatform = $display === BioPageItem::DISPLAY_ICON ? ($data['social_platform'] ?? null) : null;
+
         $item = BioPageItem::create([
             'bio_page_id' => $page->id,
             'link_id' => $link->id,
             'label' => $label,
             'position' => $nextPosition,
             'is_active' => true,
+            'display' => $display,
+            'social_platform' => $socialPlatform,
         ]);
 
         return $this->formatItem($item->fresh('link'));
@@ -325,7 +336,26 @@ class BioPageService implements BioPageServiceInterface
             return null;
         }
 
-        $item->fill(array_intersect_key($data, array_flip(['label', 'is_active'])));
+        $item->fill(array_intersect_key($data, array_flip(['label', 'is_active', 'display'])));
+
+        // Invariant enforcement, evaluated on the EFFECTIVE display (already
+        // applied by fill() above, whether this request touched it or not):
+        //   - still/now 'icon' + $data explicitly sends social_platform →
+        //     take the new value.
+        //   - still/now 'icon' + $data doesn't mention social_platform →
+        //     leave the item's existing value untouched (e.g. a label-only
+        //     edit of an already-icon item).
+        //   - effective display is 'item' → always null, regardless of what
+        //     $data contains — an item-displayed row never carries a
+        //     dangling platform.
+        if ($item->display === BioPageItem::DISPLAY_ICON) {
+            if (array_key_exists('social_platform', $data)) {
+                $item->social_platform = $data['social_platform'];
+            }
+        } else {
+            $item->social_platform = null;
+        }
+
         $item->save();
 
         return $this->formatItem($item->fresh('link'));
@@ -540,7 +570,7 @@ class BioPageService implements BioPageServiceInterface
      * Only active items are included. Never exposes `user_id`,
      * `subdomain_id`, `link_id`, or `original_url` — see PublicBioController.
      *
-     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, avatar_thumb_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string}>}
+     * @return array{handle: string, title: string, bio: ?string, theme: string, avatar_url: ?string, avatar_thumb_url: ?string, url: string, items: array<int, array{id: int, label: string, url: string, display: string, social_platform: ?string}>}
      */
     private function formatPublic(BioPage $page): array
     {
@@ -564,6 +594,11 @@ class BioPageService implements BioPageServiceInterface
                 // SÓ o host (sem www) — path/query do original_url seguem
                 // privados; o host se revela de todo jeito ao clicar.
                 'destination_host' => $this->destinationHost($item->link->original_url),
+                // Variante de renderização: 'icon' compõe a linha de ícones
+                // sociais acima dos botões; 'item' é o botão full-width de
+                // sempre. social_platform só é não-nulo junto de 'icon'.
+                'display' => $item->display,
+                'social_platform' => $item->social_platform,
             ])->values()->all(),
         ];
     }
@@ -575,7 +610,7 @@ class BioPageService implements BioPageServiceInterface
      * (link_previews) — the editor list's visual anchor; null until the
      * FetchLinkPreviewJob has run for that link.
      *
-     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, url: string, clicks: int, favicon_url: ?string}
+     * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, display: string, social_platform: ?string, url: string, clicks: int, favicon_url: ?string}
      */
     private function formatItem(BioPageItem $item): array
     {
@@ -585,6 +620,8 @@ class BioPageService implements BioPageServiceInterface
             'label' => $item->label,
             'position' => $item->position,
             'is_active' => $item->is_active,
+            'display' => $item->display,
+            'social_platform' => $item->social_platform,
             'url' => $item->link->getShortedUrl(),
             'clicks' => $item->link->clicks,
             'favicon_url' => $item->link->preview?->favicon_url,

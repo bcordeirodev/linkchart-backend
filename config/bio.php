@@ -39,4 +39,20 @@ return [
     */
     'avatar_disk' => env('BIO_AVATAR_DISK', 'public'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Social icon platforms
+    |--------------------------------------------------------------------------
+    |
+    | Whitelist of `bio_page_items.social_platform` values accepted when an
+    | item's `display` is 'icon' (see {@see \App\Models\BioPageItem::DISPLAY_ICON}).
+    | Enforced by CreateBioPageItemRequest/UpdateBioPageItemRequest via
+    | `Rule::in(config('bio.social_platforms'))`. Initial set fixed by product
+    | decision (2026-08-04) — extend here as new platforms are supported, no
+    | migration required (the column is a plain nullable varchar(30)).
+    */
+    'social_platforms' => [
+        'instagram', 'tiktok', 'youtube', 'x', 'whatsapp', 'linkedin', 'github', 'website',
+    ],
+
 ];

@@ -18,6 +18,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $label Button text shown to visitors.
  * @property int $position 0-based display order within the page.
  * @property bool $is_active Soft on/off switch; false hides the button from the public page.
+ * @property string $display Render variant: {@see self::DISPLAY_ITEM} (full-width button, default)
+ *                           or {@see self::DISPLAY_ICON} (compact social icon). `link_id` stays
+ *                           mandatory either way — an icon IS a link item with a different display,
+ *                           so click tracking is never lost by switching variants.
+ * @property string|null $social_platform Whitelisted platform slug (`config('bio.social_platforms')`),
+ *                                        e.g. "instagram", "github". Only meaningful when
+ *                                        `display = 'icon'` — {@see \App\Services\Bio\BioPageService}
+ *                                        enforces this is null whenever `display = 'item'`.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\BioPage $bioPage Owning bio page.
@@ -26,6 +34,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class BioPageItem extends Model
 {
     use HasFactory;
+
+    /**
+     * `display` value for a regular full-width button (the original, and
+     * still default, item shape).
+     */
+    public const DISPLAY_ITEM = 'item';
+
+    /**
+     * `display` value for a compact social icon — rendered in the icon row
+     * above the button list (frontend concern), but still backed by a
+     * mandatory `link_id` so tracking/analytics is never lost.
+     */
+    public const DISPLAY_ICON = 'icon';
 
     /**
      * Mass-assignable attributes.
@@ -38,6 +59,8 @@ class BioPageItem extends Model
         'label',
         'position',
         'is_active',
+        'display',
+        'social_platform',
     ];
 
     protected $casts = [
