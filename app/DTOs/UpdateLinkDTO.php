@@ -23,6 +23,11 @@ class UpdateLinkDTO
      * Fields that {@see self::toArray()} may emit, in DB-column order.
      * Used to intersect against the request keys so that "field present but
      * null/empty" (clear the value) is distinguished from "field absent" (keep).
+     *
+     * `slug` is listed here because it is the DB column {@see self::toArray()}
+     * emits, but it never matches through this generic intersect — the wire
+     * field is `custom_slug` — so {@see self::fromRequest()} tracks its
+     * presence explicitly instead.
      */
     private const UPDATABLE_FIELDS = [
         'original_url', 'title', 'slug', 'description', 'expires_at',
@@ -51,7 +56,12 @@ class UpdateLinkDTO
 
     /**
      * New slug for the short URL; null means keep the existing slug.
-     * Uniqueness is enforced by the service layer before persistence.
+     * Read from the request's `custom_slug` field — not `slug` — to match
+     * {@see \App\Http\Requests\CreateLinkRequest} and the frontend form field
+     * of the same name; `slug` here is only the DB column name. Uniqueness
+     * (ignoring this link's own id) is enforced by
+     * {@see \App\Http\Requests\UpdateLinkRequest} via a `unique:links,slug`
+     * rule before this DTO is ever built.
      */
     public readonly ?string $slug;
 
@@ -220,10 +230,19 @@ class UpdateLinkDTO
         // "leave it alone" (absent) in toArray().
         $presentFields = array_values(array_intersect(self::UPDATABLE_FIELDS, $request->keys()));
 
+        // `slug` is a special case: the wire field is `custom_slug` (see the
+        // $slug property doc), so it can never appear in $request->keys() and
+        // the generic intersect above can't detect it. Tracked explicitly so
+        // toArray() still emits `slug` — under the `slug` DB-column key it
+        // already uses — whenever `custom_slug` was sent.
+        if ($request->has('custom_slug') && ! in_array('slug', $presentFields, true)) {
+            $presentFields[] = 'slug';
+        }
+
         return new self(
             original_url: $request->input('original_url'),
             title: $request->input('title'),
-            slug: $request->input('slug'),
+            slug: $request->input('custom_slug'),
             description: $request->input('description'),
             expires_at: $request->input('expires_at'),
             is_active: $request->has('is_active') ? $request->boolean('is_active') : null,
@@ -285,7 +304,7 @@ class UpdateLinkDTO
         // columns can be cleared by sending an explicit null/empty value. Only
         // the nullable columns (expires_at, starts_in, click_limit, utm_*) can
         // legitimately arrive as null here — UpdateLinkRequest validates the
-        // NOT NULL columns (slug, original_url, title, description) with
+        // NOT NULL columns (custom_slug, original_url, title, description) with
         // `sometimes|string|url` (no `nullable`), so a present-but-null value
         // for those fails validation upstream and never reaches this DTO.
         return array_intersect_key($all, array_flip($this->presentFields));

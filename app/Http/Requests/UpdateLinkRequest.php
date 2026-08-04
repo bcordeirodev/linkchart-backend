@@ -6,6 +6,7 @@ use App\Services\Links\LinkSafetyService;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Validation\Rule;
 
 /**
  * Form Request para atualização de links
@@ -36,11 +37,19 @@ class UpdateLinkRequest extends FormRequest
                 'regex:/^https?:\/\//',
             ],
             'title' => 'sometimes|string|max:100',
-            'slug' => [
+            // Wire field is `custom_slug` (matches CreateLinkRequest and the
+            // frontend form field) — the DB column it maps to is `slug`
+            // (see UpdateLinkDTO). `unique` ignores this link's own id so
+            // saving the link unchanged, or re-picking its current slug,
+            // never collides with itself; the DB index is a single global
+            // unique constraint on `slug` (no per-domain/subdomain scoping
+            // exists today), so no extra `where` is needed here.
+            'custom_slug' => [
                 'sometimes',
                 'string',
                 'max:100',
                 'regex:/^[a-zA-Z0-9\-_]+$/',
+                Rule::unique('links', 'slug')->ignore($this->route('id')),
             ],
             'description' => 'sometimes|string|max:500',
             'expires_at' => [
@@ -121,6 +130,10 @@ class UpdateLinkRequest extends FormRequest
 
             'password.min' => 'A senha do link deve ter pelo menos 4 caracteres.',
             'password.max' => 'A senha do link não pode ter mais de 72 caracteres.',
+
+            'custom_slug.max' => 'O slug personalizado não pode ter mais de 100 caracteres.',
+            'custom_slug.regex' => 'O slug pode conter apenas letras, números, hífens e underscores.',
+            'custom_slug.unique' => 'Este slug já está em uso.',
         ];
     }
 
@@ -134,6 +147,7 @@ class UpdateLinkRequest extends FormRequest
             'expires_at' => 'data de expiração',
             'starts_in' => 'data de início',
             'is_active' => 'status ativo',
+            'custom_slug' => 'slug personalizado',
         ];
     }
 
@@ -191,6 +205,14 @@ class UpdateLinkRequest extends FormRequest
 
             $this->merge(['original_url' => $url]);
         }
+
+        // Normaliza o slug personalizado — mesma regra do CreateLinkRequest,
+        // para que a comparação de unicidade e o valor persistido sejam
+        // sempre lowercase/trim independentemente de como o cliente enviou.
+        if ($this->has('custom_slug')) {
+            $slug = strtolower(trim((string) $this->input('custom_slug')));
+            $this->merge(['custom_slug' => $slug]);
+        }
     }
 
     /**
@@ -208,7 +230,7 @@ class UpdateLinkRequest extends FormRequest
     public function hasDataToUpdate(): bool
     {
         $updateableFields = [
-            'original_url', 'title', 'slug', 'description', 'expires_at',
+            'original_url', 'title', 'custom_slug', 'description', 'expires_at',
             'starts_in', 'is_active', 'utm_source', 'utm_medium',
             'utm_campaign', 'utm_term', 'utm_content', 'tag_ids', 'password',
         ];
