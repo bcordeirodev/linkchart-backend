@@ -86,6 +86,49 @@ class User extends Authenticatable implements JWTSubject
     ];
 
     /**
+     * Contas de demonstração do produto — excluídas de TODA métrica de cliques
+     * e de todo e-mail de retenção (o volume demo já inverteu geografia e
+     * tendência em jul/2026). Fonte de verdade única da lista.
+     *
+     * @var list<int>
+     */
+    public const DEMO_ACCOUNT_IDS = [40, 41, 45];
+
+    /**
+     * Restringe a query aos usuários que podem receber e-mails de retenção
+     * (digest semanal, marco de cliques, winback, dicas de onboarding).
+     *
+     * Elegível = verificado + inscrito (weekly_digest_enabled, que por decisão
+     * de produto vale para TODOS os e-mails de retenção, não só o digest) +
+     * fora das contas demo. O predicado de verificação é o equivalente SQL de
+     * {@see self::hasVerifiedEmail()}: auth0_sub preenchido OU (email_verified
+     * E email_verified_at).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
+     */
+    public function scopeEligibleForRetentionEmails(\Illuminate\Database\Eloquent\Builder $query): void
+    {
+        $query->where('weekly_digest_enabled', true)
+            ->whereNotIn('id', self::DEMO_ACCOUNT_IDS)
+            ->where(function ($inner) {
+                $inner->whereNotNull('auth0_sub')
+                    ->orWhere(fn ($q) => $q->where('email_verified', true)->whereNotNull('email_verified_at'));
+            });
+    }
+
+    /**
+     * Versão em memória de {@see self::scopeEligibleForRetentionEmails()}, para
+     * o guard dos jobs de envio — o estado pode ter mudado entre o disparo e a
+     * execução (opt-out clicado no meio do caminho, por exemplo).
+     */
+    public function isEligibleForRetentionEmails(): bool
+    {
+        return $this->weekly_digest_enabled
+            && ! in_array($this->id, self::DEMO_ACCOUNT_IDS, true)
+            && $this->hasVerifiedEmail();
+    }
+
+    /**
      * Obtenha o identificador que será armazenado no claim "sub" do JWT.
      *
      * @return mixed

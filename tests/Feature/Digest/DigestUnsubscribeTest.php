@@ -8,9 +8,13 @@ use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 /**
- * Rota pública de opt-out do digest (GET assinado, sem auth): a assinatura é
- * a autenticação — válida desliga a flag, inválida/ausente é 403, e o link é
+ * Rota pública de opt-out (GET assinado, sem auth): a assinatura é a
+ * autenticação — válida desliga a flag, inválida/ausente é 403, e o link é
  * idempotente (revisitar mantém o opt-out).
+ *
+ * `weekly_digest_enabled` governa TODOS os e-mails de retenção (resumo
+ * semanal, marcos, winback, dicas) — daí o copy da página falar em e-mails de
+ * novidades, não só no digest.
  */
 class DigestUnsubscribeTest extends TestCase
 {
@@ -26,7 +30,8 @@ class DigestUnsubscribeTest extends TestCase
         $response = $this->get(URL::signedRoute('digest.unsubscribe', ['user' => $user->id]));
 
         $response->assertOk();
-        $response->assertSee('Resumo semanal desativado');
+        $response->assertSee('E-mails de novidades desativados');
+        $response->assertSee('marcos e dicas dos seus links');
         $this->assertFalse($user->fresh()->weekly_digest_enabled);
     }
 

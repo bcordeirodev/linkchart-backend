@@ -41,8 +41,11 @@ class DispatchWeeklyDigestsJob implements ShouldQueue
      * Contas de demonstração do produto — excluídas de TODA métrica de cliques
      * (o volume demo já inverteu geografia/tendência em jul/2026). Mesma regra
      * aplicada nas queries de analytics.
+     *
+     * Alias de {@see User::DEMO_ACCOUNT_IDS}, a fonte de verdade única desde
+     * que os demais e-mails de retenção passaram a usar a mesma lista.
      */
-    public const DEMO_ACCOUNT_IDS = [40, 41, 45];
+    public const DEMO_ACCOUNT_IDS = User::DEMO_ACCOUNT_IDS;
 
     public int $tries = 2;
 

@@ -17,6 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
             ->weeklyOn(1, '09:00')
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping();
+
+        // Marco de 100 cliques: varredura diária às 10:00 de São Paulo. Mesmo
+        // racional do digest (worker de instância única), só que por link — o
+        // claim vive em links.milestone_100_notified_at.
+        $schedule->job(new \App\Jobs\DispatchMilestoneEmailsJob)
+            ->dailyAt('10:00')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping();
     })
     ->withRouting(
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
