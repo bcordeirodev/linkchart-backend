@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\Bio\BioPageController;
 use App\Http\Controllers\Bio\PublicBioController;
+use App\Http\Controllers\Email\BrevoWebhookController;
 use App\Http\Controllers\Links\LinkController;
 use App\Http\Controllers\Links\PublicLinkController;
 use App\Http\Controllers\Links\TagController;
@@ -39,6 +40,17 @@ use Illuminate\Support\Facades\Route;
  */
 // Route::middleware(['metrics.redirect'])
 //     ->get('/r/{slug}', [RedirectController::class, 'handle']);
+
+/**
+ * ==============================
+ * WEBHOOK DE EVENTOS DE E-MAIL
+ * ==============================
+ * Callback do Brevo — PÚBLICO de propósito: o provedor não faz login nem manda
+ * JWT. A autenticação é o `?token=` da query, comparado com hash_equals no
+ * controller (config vazia fecha o endpoint). Nunca colocar sob api.auth ou
+ * verified: qualquer 4xx faz o Brevo re-tentar em loop.
+ */
+Route::post('/webhooks/brevo', BrevoWebhookController::class);
 
 /**
  * ==============================

@@ -42,6 +42,12 @@ return [
             'email' => env('MAIL_FROM_ADDRESS', 'noreply@linkcharts.com.br'),
             'name' => env('MAIL_FROM_NAME', 'Link Charts'),
         ],
+
+        // Segredo compartilhado do webhook de eventos (POST /api/webhooks/brevo,
+        // rota pública). Vai na query string do endpoint cadastrado no painel do
+        // Brevo. Vazio fecha o endpoint — sem token configurado, nenhuma
+        // requisição passa.
+        'webhook_token' => env('BREVO_WEBHOOK_TOKEN'),
     ],
 
     // Roteia EmailService::sendTransactionalEmail(). 'brevo' (default) ou
