@@ -9,6 +9,14 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->job(new \App\Jobs\LinkHealthCheckJob)->hourly()->withoutOverlapping();
         $schedule->command('clicks:anonymize-ips')->dailyAt('04:10')->withoutOverlapping();
+
+        // Digest semanal de cliques: toda segunda 09:00 de São Paulo, com a
+        // semana anterior fechada. Roda no worker (instância única) — o
+        // blue/green da web nunca duplica o disparo.
+        $schedule->job(new \App\Jobs\DispatchWeeklyDigestsJob)
+            ->weeklyOn(1, '09:00')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping();
     })
     ->withRouting(
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Bio\PublicBioController;
+use App\Http\Controllers\Email\DigestUnsubscribeController;
 use App\Http\Controllers\Links\RedirectController;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,16 @@ Route::get('/health', function () {
         ], 503);
     }
 });
+
+/**
+ * Opt-out do digest semanal (link assinado no rodapé do e-mail — LGPD).
+ * `signed` valida a assinatura gerada por URL::signedRoute; sem auth, um
+ * clique na caixa de entrada tem que funcionar. Caminho multi-segmento, então
+ * o catch-all /{slug} (um segmento) lá embaixo nunca o sombreia.
+ */
+Route::get('/email/digest/unsubscribe/{user}', DigestUnsubscribeController::class)
+    ->middleware('signed')
+    ->name('digest.unsubscribe');
 
 /**
  * 🌐 ROTA DE REDIRECIONAMENTO PÚBLICO COM METADADOS
