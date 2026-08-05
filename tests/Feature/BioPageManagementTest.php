@@ -240,4 +240,49 @@ class BioPageManagementTest extends TestCase
         $response->assertOk();
         $this->assertFalse($response->json('data.available'));
     }
+
+    /**
+     * Regressão: o `clicks` de cada item do payload de gestão sai da tabela
+     * `clicks` (mesma fonte do /api/bio/performance), NUNCA do contador
+     * denormalizado `links.clicks` — os dois divergem (job assíncrono
+     * falho, seeds) e foi assim que o editor mostrou "0 cliques" ao lado de
+     * um painel de desempenho com centenas.
+     */
+    public function test_item_clicks_count_from_clicks_table_not_denormalized_counter(): void
+    {
+        $page = \App\Models\BioPage::factory()->create(['user_id' => $this->user->id]);
+        // Contador denormalizado deliberadamente mentiroso (0) com 4 cliques reais.
+        $link = \App\Models\Link::factory()->create(['user_id' => $this->user->id, 'clicks' => 0]);
+        \App\Models\BioPageItem::factory()->create([
+            'bio_page_id' => $page->id, 'link_id' => $link->id, 'position' => 0,
+        ]);
+        \App\Models\Click::factory()->count(4)->create(['link_id' => $link->id, 'created_at' => now()->subDay()]);
+
+        $response = $this->getJson('/api/bio', $this->auth());
+
+        $response->assertOk();
+        $this->assertSame(4, $response->json('data.items.0.clicks'));
+    }
+
+    /**
+     * Regra do produto (feedback_exclude_demo_clicks): cliques de link
+     * is_demo nunca contam — nem no chip da lista do editor, ainda que o
+     * contador denormalizado do link demo esteja inflado.
+     */
+    public function test_item_clicks_exclude_demo_links(): void
+    {
+        $page = \App\Models\BioPage::factory()->create(['user_id' => $this->user->id]);
+        $demoLink = \App\Models\Link::factory()->create([
+            'user_id' => $this->user->id, 'is_demo' => true, 'clicks' => 1251,
+        ]);
+        \App\Models\BioPageItem::factory()->create([
+            'bio_page_id' => $page->id, 'link_id' => $demoLink->id, 'position' => 0,
+        ]);
+        \App\Models\Click::factory()->count(5)->create(['link_id' => $demoLink->id, 'created_at' => now()->subDay()]);
+
+        $response = $this->getJson('/api/bio', $this->auth());
+
+        $response->assertOk();
+        $this->assertSame(0, $response->json('data.items.0.clicks'));
+    }
 }

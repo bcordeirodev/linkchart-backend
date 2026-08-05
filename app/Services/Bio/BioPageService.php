@@ -325,7 +325,12 @@ class BioPageService implements BioPageServiceInterface
             'social_platform' => $socialPlatform,
         ]);
 
-        return $this->formatItem($item->fresh('link'));
+        $item = $item->fresh('link');
+
+        return $this->formatItem(
+            $item,
+            (int) ($this->clickCountsForLinks($userId, [$item->link_id])[$item->link_id] ?? 0),
+        );
     }
 
     /**
@@ -360,7 +365,12 @@ class BioPageService implements BioPageServiceInterface
 
         $item->save();
 
-        return $this->formatItem($item->fresh('link'));
+        $item = $item->fresh('link');
+
+        return $this->formatItem(
+            $item,
+            (int) ($this->clickCountsForLinks($userId, [$item->link_id])[$item->link_id] ?? 0),
+        );
     }
 
     /**
@@ -504,20 +514,7 @@ class BioPageService implements BioPageServiceInterface
         $linkIds = $items->pluck('link_id')->all();
         $since = $this->periodStart($period);
 
-        // Single aggregate join+groupBy — one query for every item's click
-        // count in the period, never one query per item. Same "clicks JOIN
-        // links, scope by user, exclude demo" shape as
-        // ReportsAnalyticsService::baseQuery() — a demo link a new user
-        // might have added to their bio must never inflate this panel.
-        $clicksByLink = DB::table('clicks')
-            ->join('links', 'links.id', '=', 'clicks.link_id')
-            ->where('links.user_id', $userId)
-            ->where('links.is_demo', false)
-            ->whereIn('clicks.link_id', $linkIds)
-            ->when($since !== null, fn ($q) => $q->where('clicks.created_at', '>=', $since))
-            ->selectRaw('clicks.link_id, COUNT(*) as clicks')
-            ->groupBy('clicks.link_id')
-            ->pluck('clicks', 'link_id');
+        $clicksByLink = $this->clickCountsForLinks($userId, $linkIds, $since);
 
         $rows = $items->map(fn (BioPageItem $item) => [
             'item_id' => $item->id,
@@ -675,15 +672,56 @@ class BioPageService implements BioPageServiceInterface
     }
 
     /**
+     * Count clicks per link straight from the `clicks` table — the single
+     * source of truth every click number in this module comes from.
+     *
+     * One aggregate join+groupBy — one query for every link's click count,
+     * never one query per link. Same "clicks JOIN links, scope by user,
+     * exclude demo" shape as ReportsAnalyticsService::baseQuery() — a demo
+     * link a new user might have added to their bio must never inflate any
+     * bio number. Deliberately NOT the denormalized `links.clicks` counter:
+     * that fast counter can drift from the `clicks` table (async job
+     * failures, seeded data) and never learned the demo exclusion, which is
+     * exactly how the editor list once showed 0 next to a performance panel
+     * showing hundreds.
+     *
+     * @param  int  $userId  Owner of the links — guards against counting rows of foreign links.
+     * @param  array<int, int>  $linkIds  Links to aggregate; empty array short-circuits to no query.
+     * @param  ?Carbon  $since  Window start, or null for all-time.
+     * @return \Illuminate\Support\Collection<int, int> link_id => click count; absent key = zero clicks.
+     */
+    private function clickCountsForLinks(int $userId, array $linkIds, ?Carbon $since = null): \Illuminate\Support\Collection
+    {
+        if ($linkIds === []) {
+            return collect();
+        }
+
+        return DB::table('clicks')
+            ->join('links', 'links.id', '=', 'clicks.link_id')
+            ->where('links.user_id', $userId)
+            ->where('links.is_demo', false)
+            ->whereIn('clicks.link_id', $linkIds)
+            ->when($since !== null, fn ($q) => $q->where('clicks.created_at', '>=', $since))
+            ->selectRaw('clicks.link_id, COUNT(*) as clicks')
+            ->groupBy('clicks.link_id')
+            ->pluck('clicks', 'link_id');
+    }
+
+    /**
      * Build the management-shape array for a single bio page item.
      *
      * `favicon_url` comes from the link's async-fetched preview
      * (link_previews) — the editor list's visual anchor; null until the
      * FetchLinkPreviewJob has run for that link.
      *
+     * @param  int  $clicks  All-time click count for the item's link, from
+     *                       {@see self::clickCountsForLinks()} — callers
+     *                       resolve it (batched in formatManagement, single
+     *                       lookup in addItem/updateItem) so this stays a
+     *                       pure formatter with no query of its own.
      * @return array{id: int, link_id: int, label: string, position: int, is_active: bool, display: string, social_platform: ?string, url: string, clicks: int, favicon_url: ?string}
      */
-    private function formatItem(BioPageItem $item): array
+    private function formatItem(BioPageItem $item, int $clicks): array
     {
         return [
             'id' => $item->id,
@@ -694,7 +732,7 @@ class BioPageService implements BioPageServiceInterface
             'display' => $item->display,
             'social_platform' => $item->social_platform,
             'url' => $item->link->getShortedUrl(),
-            'clicks' => $item->link->clicks,
+            'clicks' => $clicks,
             'favicon_url' => $item->link->preview?->favicon_url,
             'destination_host' => $this->destinationHost($item->link->original_url),
         ];
@@ -732,6 +770,7 @@ class BioPageService implements BioPageServiceInterface
     private function formatManagement(BioPage $page): array
     {
         $items = $page->items()->with('link.preview')->get();
+        $clicksByLink = $this->clickCountsForLinks($page->user_id, $items->pluck('link_id')->all());
 
         return [
             'id' => $page->id,
@@ -744,7 +783,10 @@ class BioPageService implements BioPageServiceInterface
             'is_active' => $page->is_active,
             'subdomain_id' => $page->subdomain_id,
             'url' => $this->computeUrl($page),
-            'items' => $items->map(fn (BioPageItem $item) => $this->formatItem($item))->values()->all(),
+            'items' => $items->map(fn (BioPageItem $item) => $this->formatItem(
+                $item,
+                (int) ($clicksByLink[$item->link_id] ?? 0),
+            ))->values()->all(),
         ];
     }
 }
