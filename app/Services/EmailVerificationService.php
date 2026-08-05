@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 /**
  * Handles transactional email flows for account verification and password reset.
  *
- * Delegates delivery to EmailService::sendEmailViaSendGridAPI (SendGrid HTTP API).
+ * Delegates delivery to EmailService::sendTransactionalEmail (provedor configurável — Brevo default, SendGrid como rollback).
  * Token persistence is handled by EmailVerificationToken model:
  *   - Email verification tokens expire after 24 hours.
  *   - Password reset tokens expire after 1 hour.
@@ -42,7 +42,7 @@ class EmailVerificationService
      * Enforces a 2-minute resend cooldown via User::canResendVerificationEmail().
      * Creates an EmailVerificationToken (TYPE_EMAIL_VERIFICATION, 24h TTL),
      * renders the verification template (resources/views/emails/verification.blade.php),
-     * and delivers via SendGrid API.
+     * and delivers via the configured transactional provider.
      *
      * Side effects: writes to email_verification_tokens; calls
      * User::markVerificationEmailSent(); logs via AppLogger::authEmailVerificationSent.
@@ -87,8 +87,8 @@ class EmailVerificationService
                 'timestamp' => now()->format('d/m/Y H:i:s'),
             ];
 
-            // Enviar email usando SendGrid API
-            $result = $this->emailService->sendEmailViaSendGridAPI(
+            // Enviar email usando o provedor transacional configurado
+            $result = $this->emailService->sendTransactionalEmail(
                 $user->email,
                 'Verificação de Email - '.config('app.name'),
                 $this->getVerificationEmailTemplate($emailData),
@@ -217,7 +217,7 @@ class EmailVerificationService
      *
      * Always returns a success-shaped response even when the email is not found
      * (security: prevents user enumeration). Creates an EmailVerificationToken
-     * (TYPE_PASSWORD_RESET, 1h TTL) and delivers via SendGrid API.
+     * (TYPE_PASSWORD_RESET, 1h TTL) and delivers via the configured transactional provider.
      *
      * Side effects: may write to email_verification_tokens; logs via
      * AppLogger::authPasswordResetRequested on successful delivery.
@@ -265,8 +265,8 @@ class EmailVerificationService
                 'timestamp' => now()->format('d/m/Y H:i:s'),
             ];
 
-            // Enviar email usando SendGrid API
-            $result = $this->emailService->sendEmailViaSendGridAPI(
+            // Enviar email usando o provedor transacional configurado
+            $result = $this->emailService->sendTransactionalEmail(
                 $user->email,
                 'Recuperação de Senha - '.config('app.name'),
                 $this->getPasswordResetEmailTemplate($emailData),

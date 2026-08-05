@@ -42,7 +42,7 @@ class SendWelcomeEmailJobTest extends TestCase
         $user->update(['auth0_sub' => 'google-oauth2|123']);
 
         $emailService = Mockery::mock(EmailService::class);
-        $emailService->shouldReceive('sendEmailViaSendGridAPI')
+        $emailService->shouldReceive('sendTransactionalEmail')
             ->once()
             ->withArgs(function (string $to, string $subject, string $html, ?string $text, ?string $name) {
                 return $to === 'ana@example.com'
@@ -66,7 +66,7 @@ class SendWelcomeEmailJobTest extends TestCase
         $user = User::factory()->unverified()->create(['auth0_sub' => null]);
 
         $emailService = Mockery::mock(EmailService::class);
-        $emailService->shouldNotReceive('sendEmailViaSendGridAPI');
+        $emailService->shouldNotReceive('sendTransactionalEmail');
 
         (new SendWelcomeEmailJob($user->id))->handle($emailService);
 
@@ -83,7 +83,7 @@ class SendWelcomeEmailJobTest extends TestCase
         $user->update(['auth0_sub' => 'google-oauth2|456']);
 
         $emailService = Mockery::mock(EmailService::class);
-        $emailService->shouldReceive('sendEmailViaSendGridAPI')
+        $emailService->shouldReceive('sendTransactionalEmail')
             ->once()
             ->andReturn(['success' => true, 'message' => 'ok']);
 
@@ -97,7 +97,7 @@ class SendWelcomeEmailJobTest extends TestCase
     public function test_missing_user_is_a_noop(): void
     {
         $emailService = Mockery::mock(EmailService::class);
-        $emailService->shouldNotReceive('sendEmailViaSendGridAPI');
+        $emailService->shouldNotReceive('sendTransactionalEmail');
 
         (new SendWelcomeEmailJob(999999))->handle($emailService);
 
@@ -105,7 +105,7 @@ class SendWelcomeEmailJobTest extends TestCase
     }
 
     /**
-     * Quando o SendGrid recusa o envio (`sendEmailViaSendGridAPI` retorna
+     * Quando o SendGrid recusa o envio (`sendTransactionalEmail` retorna
      * `success => false` em vez de lançar), o job não pode reportar sucesso: ele precisa
      * se marcar como falho e NÃO ser reenfileirado (at-most-once — a claim já foi feita).
      *
@@ -126,7 +126,7 @@ class SendWelcomeEmailJobTest extends TestCase
         $user->update(['auth0_sub' => 'google-oauth2|789']);
 
         $emailService = Mockery::mock(EmailService::class);
-        $emailService->shouldReceive('sendEmailViaSendGridAPI')
+        $emailService->shouldReceive('sendTransactionalEmail')
             ->once()
             ->andReturn(['success' => false, 'error' => 'chave de API inválida']);
         $this->app->instance(EmailService::class, $emailService);

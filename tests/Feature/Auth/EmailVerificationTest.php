@@ -34,7 +34,7 @@ class EmailVerificationTest extends TestCase
     private function fakeEmailDelivery(): void
     {
         $this->mock(EmailService::class, function (MockInterface $mock) {
-            $mock->shouldReceive('sendEmailViaSendGridAPI')->andReturn([
+            $mock->shouldReceive('sendTransactionalEmail')->andReturn([
                 'success' => true,
                 'message' => 'Email enviado (fake)',
             ]);

@@ -31,7 +31,7 @@ class RegisterTest extends TestCase
     private function fakeEmailDelivery(bool $success = true): void
     {
         $this->mock(EmailService::class, function (MockInterface $mock) use ($success) {
-            $mock->shouldReceive('sendEmailViaSendGridAPI')->andReturn([
+            $mock->shouldReceive('sendTransactionalEmail')->andReturn([
                 'success' => $success,
                 'message' => $success ? 'Email enviado (fake)' : 'Erro de entrega (fake)',
                 'error' => $success ? null : 'delivery-failed',

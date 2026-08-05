@@ -36,6 +36,21 @@ return [
         ],
     ],
 
+    'brevo' => [
+        'api_key' => env('BREVO_API_KEY'),
+        'from' => [
+            'email' => env('MAIL_FROM_ADDRESS', 'noreply@linkcharts.com.br'),
+            'name' => env('MAIL_FROM_NAME', 'Link Charts'),
+        ],
+    ],
+
+    // Roteia EmailService::sendTransactionalEmail(). 'brevo' (default) ou
+    // 'sendgrid' — kill switch de rollback sem deploy (editar env do droplet +
+    // restart do container + config:cache).
+    'transactional_email' => [
+        'provider' => env('TRANSACTIONAL_EMAIL_PROVIDER', 'brevo'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Logging\AppLogger;
 use Illuminate\Mail\Message;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use SendGrid;
 use SendGrid\Mail\Mail as SendGridMail;
 
@@ -24,6 +26,120 @@ use SendGrid\Mail\Mail as SendGridMail;
  */
 class EmailService
 {
+    /**
+     * Sends a transactional email through the provider configured in
+     * `services.transactional_email.provider`.
+     *
+     * This is the method every caller should use (EmailVerificationService,
+     * SendWelcomeEmailJob, SendWeeklyDigestEmailJob, TestEmailCommand). The
+     * provider switch is the rollback kill switch: `brevo` (default) or
+     * `sendgrid` via TRANSACTIONAL_EMAIL_PROVIDER — flipping it requires no
+     * deploy, only an env edit + container restart + config:cache.
+     *
+     * Same contract as the concrete senders: returns an error payload instead
+     * of throwing, so callers MUST inspect `success` (see SendWelcomeEmailJob
+     * for why silently ignoring it loses emails).
+     *
+     * @param  string  $toEmail  Recipient email address.
+     * @param  string  $subject  Email subject line.
+     * @param  string  $htmlContent  HTML body.
+     * @param  string|null  $textContent  Optional plain-text fallback body.
+     * @param  string|null  $toName  Optional recipient display name.
+     * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
+     */
+    public function sendTransactionalEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
+    {
+        return match (config('services.transactional_email.provider', 'brevo')) {
+            'sendgrid' => $this->sendEmailViaSendGridAPI($toEmail, $subject, $htmlContent, $textContent, $toName),
+            default => $this->sendEmailViaBrevoAPI($toEmail, $subject, $htmlContent, $textContent, $toName),
+        };
+    }
+
+    /**
+     * Sends an email via the Brevo v3 HTTP API (POST /v3/smtp/email).
+     *
+     * Uses Laravel's Http client directly — the API surface needed here is a
+     * single JSON POST, not worth another SDK in composer. Mirrors the
+     * SendGrid method's contract: never throws, returns an error payload on
+     * any failure (missing/placeholder key, non-2xx response, network error).
+     *
+     * Side effects: logs via AppLogger::emailSent on success and
+     * AppLogger::emailFailed on failure (channel: app).
+     *
+     * @param  string  $toEmail  Recipient email address.
+     * @param  string  $subject  Email subject line.
+     * @param  string  $htmlContent  HTML body.
+     * @param  string|null  $textContent  Optional plain-text fallback body (omitted from the payload when empty — the API rejects empty strings).
+     * @param  string|null  $toName  Optional recipient display name.
+     * @return array{success: bool, message: string, to?: string, method: string, status_code?: int, message_id?: string|null, error?: string}
+     */
+    public function sendEmailViaBrevoAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
+    {
+        try {
+            $apiKey = config('services.brevo.api_key');
+
+            if (empty($apiKey) || $apiKey === 'BREVO_API_KEY_PLACEHOLDER') {
+                throw new RuntimeException('Brevo API Key não configurada');
+            }
+
+            $payload = [
+                'sender' => [
+                    'name' => config('services.brevo.from.name', config('mail.from.name')),
+                    'email' => config('services.brevo.from.email', config('mail.from.address')),
+                ],
+                'to' => [['email' => $toEmail, 'name' => $toName ?? $toEmail]],
+                'subject' => $subject,
+                'htmlContent' => $htmlContent,
+            ];
+
+            if ($textContent !== null && $textContent !== '') {
+                $payload['textContent'] = $textContent;
+            }
+
+            $response = Http::withHeaders(['api-key' => $apiKey])
+                ->timeout(15)
+                ->post('https://api.brevo.com/v3/smtp/email', $payload);
+
+            if (! $response->successful()) {
+                $error = sprintf(
+                    'Brevo API recusou o envio (HTTP %d): %s',
+                    $response->status(),
+                    $response->json('message') ?? $response->body(),
+                );
+
+                AppLogger::emailFailed($toEmail, 'unknown', new RuntimeException($error));
+
+                return [
+                    'success' => false,
+                    'message' => $error,
+                    'error' => $error,
+                    'method' => 'Brevo API',
+                    'status_code' => $response->status(),
+                ];
+            }
+
+            AppLogger::emailSent($toEmail, 'unknown', 'brevo');
+
+            return [
+                'success' => true,
+                'message' => 'Email enviado com sucesso via Brevo API',
+                'to' => $toEmail,
+                'method' => 'Brevo API',
+                'status_code' => $response->status(),
+                'message_id' => $response->json('messageId'),
+            ];
+        } catch (\Throwable $e) {
+            AppLogger::emailFailed($toEmail, 'unknown', $e);
+
+            return [
+                'success' => false,
+                'message' => 'Erro ao enviar email via Brevo API: '.$e->getMessage(),
+                'error' => $e->getMessage(),
+                'method' => 'Brevo API',
+            ];
+        }
+    }
+
     /**
      * Sends an email via the SendGrid v3 HTTP API.
      *

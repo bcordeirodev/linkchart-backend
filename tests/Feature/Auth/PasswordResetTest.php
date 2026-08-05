@@ -42,7 +42,7 @@ class PasswordResetTest extends TestCase
     private function fakeEmailDelivery(): void
     {
         $this->mock(EmailService::class, function (MockInterface $mock) {
-            $mock->shouldReceive('sendEmailViaSendGridAPI')->andReturnUsing(function (...$args) {
+            $mock->shouldReceive('sendTransactionalEmail')->andReturnUsing(function (...$args) {
                 if (preg_match('/token=([0-9a-f]{64})/', (string) ($args[2] ?? ''), $matches)) {
                     $this->emailedTokens[] = $matches[1];
                 }
