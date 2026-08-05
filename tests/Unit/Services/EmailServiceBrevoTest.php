@@ -130,6 +130,25 @@ class EmailServiceBrevoTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    /** O type do e-mail viaja até o log email.sent (observabilidade por tipo). */
+    public function test_email_type_reaches_the_sent_log(): void
+    {
+        Http::fake([
+            'api.brevo.com/*' => Http::response(['messageId' => 'x'], 201),
+        ]);
+
+        $channelSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
+        \Illuminate\Support\Facades\Log::shouldReceive('channel')->andReturn($channelSpy);
+
+        $this->service->sendTransactionalEmail(
+            'ana@example.com', 'Assunto', '<p>Olá</p>', null, null, 'weekly_digest',
+        );
+
+        $channelSpy->shouldHaveReceived('info')
+            ->withArgs(fn (string $message, array $context = []) => $message === 'email.sent'
+                && ($context['type'] ?? null) === 'weekly_digest');
+    }
+
     /**
      * Kill switch: com TRANSACTIONAL_EMAIL_PROVIDER=sendgrid o roteador volta pro
      * caminho antigo. Sem SENDGRID_API_KEY no ambiente de teste o método curto-circuita

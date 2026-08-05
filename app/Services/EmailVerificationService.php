@@ -93,7 +93,8 @@ class EmailVerificationService
                 'Verificação de Email - '.config('app.name'),
                 $this->getVerificationEmailTemplate($emailData),
                 $this->getVerificationEmailTextContent($emailData),
-                $user->name
+                $user->name,
+                'verification'
             );
 
             if ($result['success']) {
@@ -271,7 +272,8 @@ class EmailVerificationService
                 'Recuperação de Senha - '.config('app.name'),
                 $this->getPasswordResetEmailTemplate($emailData),
                 $this->getPasswordResetEmailTextContent($emailData),
-                $user->name
+                $user->name,
+                'password_reset'
             );
 
             if ($result['success']) {

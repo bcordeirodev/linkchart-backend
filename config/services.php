@@ -49,6 +49,10 @@ return [
     // restart do container + config:cache).
     'transactional_email' => [
         'provider' => env('TRANSACTIONAL_EMAIL_PROVIDER', 'brevo'),
+
+        // Warning quando a leva do digest semanal se aproxima do cap free do
+        // Brevo (300 e-mails/dia, transacional + marketing somados).
+        'volume_warn_threshold' => (int) env('DIGEST_VOLUME_WARN_THRESHOLD', 250),
     ],
 
     'slack' => [

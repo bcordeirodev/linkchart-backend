@@ -45,13 +45,14 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body.
      * @param  string|null  $toName  Optional recipient display name.
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest).
      * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
      */
-    public function sendTransactionalEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
+    public function sendTransactionalEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
     {
         return match (config('services.transactional_email.provider', 'brevo')) {
-            'sendgrid' => $this->sendEmailViaSendGridAPI($toEmail, $subject, $htmlContent, $textContent, $toName),
-            default => $this->sendEmailViaBrevoAPI($toEmail, $subject, $htmlContent, $textContent, $toName),
+            'sendgrid' => $this->sendEmailViaSendGridAPI($toEmail, $subject, $htmlContent, $textContent, $toName, $type),
+            default => $this->sendEmailViaBrevoAPI($toEmail, $subject, $htmlContent, $textContent, $toName, $type),
         };
     }
 
@@ -71,9 +72,10 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body (omitted from the payload when empty — the API rejects empty strings).
      * @param  string|null  $toName  Optional recipient display name.
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest).
      * @return array{success: bool, message: string, to?: string, method: string, status_code?: int, message_id?: string|null, error?: string}
      */
-    public function sendEmailViaBrevoAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
+    public function sendEmailViaBrevoAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
     {
         try {
             $apiKey = config('services.brevo.api_key');
@@ -107,7 +109,7 @@ class EmailService
                     $response->json('message') ?? $response->body(),
                 );
 
-                AppLogger::emailFailed($toEmail, 'unknown', new RuntimeException($error));
+                AppLogger::emailFailed($toEmail, $type, new RuntimeException($error));
 
                 return [
                     'success' => false,
@@ -118,7 +120,7 @@ class EmailService
                 ];
             }
 
-            AppLogger::emailSent($toEmail, 'unknown', 'brevo');
+            AppLogger::emailSent($toEmail, $type, 'brevo');
 
             return [
                 'success' => true,
@@ -129,7 +131,7 @@ class EmailService
                 'message_id' => $response->json('messageId'),
             ];
         } catch (\Throwable $e) {
-            AppLogger::emailFailed($toEmail, 'unknown', $e);
+            AppLogger::emailFailed($toEmail, $type, $e);
 
             return [
                 'success' => false,
@@ -154,9 +156,10 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body.
      * @param  string|null  $toName  Optional recipient display name.
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest).
      * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
      */
-    public function sendEmailViaSendGridAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null): array
+    public function sendEmailViaSendGridAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
     {
         try {
             $apiKey = config('services.sendgrid.api_key');
@@ -188,7 +191,7 @@ class EmailService
             // Enviar email
             $response = $sendgrid->send($email);
 
-            AppLogger::emailSent($toEmail, 'unknown', 'sendgrid');
+            AppLogger::emailSent($toEmail, $type, 'sendgrid');
 
             return [
                 'success' => true,
@@ -199,7 +202,7 @@ class EmailService
             ];
 
         } catch (\Exception $e) {
-            AppLogger::emailFailed($toEmail, 'unknown', $e);
+            AppLogger::emailFailed($toEmail, $type, $e);
 
             return [
                 'success' => false,

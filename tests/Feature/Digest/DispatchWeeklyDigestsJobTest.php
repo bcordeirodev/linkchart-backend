@@ -154,6 +154,40 @@ class DispatchWeeklyDigestsJobTest extends TestCase
         Queue::assertNotPushed(SendWeeklyDigestEmailJob::class);
     }
 
+    /**
+     * Perto do cap diário do Brevo (300/dia, threshold configurável) o
+     * dispatcher loga warning — sinal antecipado para migrar de provedor
+     * antes de digest começar a ser dropado.
+     */
+    public function test_warns_when_recipients_approach_daily_cap(): void
+    {
+        config(['services.transactional_email.volume_warn_threshold' => 1]);
+        $this->userWithClicks();
+        $this->userWithClicks();
+
+        $channelSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
+        \Illuminate\Support\Facades\Log::shouldReceive('channel')->andReturn($channelSpy);
+
+        (new DispatchWeeklyDigestsJob)->handle();
+
+        $channelSpy->shouldHaveReceived('warning')
+            ->withArgs(fn (string $message, array $context = []) => $message === 'digest.volume_near_daily_cap'
+                && ($context['recipients'] ?? 0) === 2);
+    }
+
+    /** Abaixo do threshold, nenhum warning de volume. */
+    public function test_no_volume_warning_below_threshold(): void
+    {
+        $this->userWithClicks();
+
+        $channelSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
+        \Illuminate\Support\Facades\Log::shouldReceive('channel')->andReturn($channelSpy);
+
+        (new DispatchWeeklyDigestsJob)->handle();
+
+        $channelSpy->shouldNotHaveReceived('warning');
+    }
+
     /** Claim já feito nesta semana (re-run do scheduler) não redispara. */
     public function test_skips_user_already_claimed_this_week(): void
     {

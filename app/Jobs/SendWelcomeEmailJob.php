@@ -128,6 +128,7 @@ class SendWelcomeEmailJob implements ShouldQueue
                 view('emails.welcome', $data)->render(),
                 view('emails.welcome-text', $data)->render(),
                 $user->name,
+                'welcome',
             );
 
             // sendTransactionalEmail() catches its own exceptions and returns

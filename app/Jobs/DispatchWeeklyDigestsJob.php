@@ -94,6 +94,18 @@ class DispatchWeeklyDigestsJob implements ShouldQueue
                 ->orderBy('id')
                 ->pluck('id');
 
+            // Sinal antecipado: a leva de segunda somada aos transacionais do
+            // dia não pode encostar nos 300/dia do Brevo free — quando este
+            // warning começar a aparecer, é hora de migrar de plano/provedor.
+            $threshold = (int) config('services.transactional_email.volume_warn_threshold', 250);
+            if ($userIds->count() >= $threshold) {
+                AppLogger::event('jobs', 'warning', 'digest.volume_near_daily_cap', [
+                    'recipients' => $userIds->count(),
+                    'daily_cap' => 300,
+                    'threshold' => $threshold,
+                ]);
+            }
+
             foreach ($userIds as $userId) {
                 SendWeeklyDigestEmailJob::dispatch(
                     $userId,

@@ -363,7 +363,9 @@ class AuthController extends Controller
     /**
      * PUT /api/profile
      *
-     * Update the authenticated user's name and email address.
+     * Update the authenticated user's name, email address and weekly digest
+     * opt-in (weekly_digest_enabled — the profile toggle; the signed
+     * unsubscribe link in the digest email flips the same flag).
      *
      * Middleware: api.auth:api, verified
      * Auth: required (JWT + verified email)
@@ -381,6 +383,7 @@ class AuthController extends Controller
             $validator = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
                 'email' => 'required|string|email|max:255|unique:users,email,'.auth()->id(),
+                'weekly_digest_enabled' => 'sometimes|boolean',
             ]);
 
             if ($validator->fails()) {
@@ -392,7 +395,15 @@ class AuthController extends Controller
             }
 
             $user = auth()->user();
-            $user->update($request->only(['name', 'email']));
+
+            // Fora do $fillable de propósito (não entra no update em massa
+            // abaixo): atribuição explícita, só quando o campo veio no payload.
+            if ($request->has('weekly_digest_enabled')) {
+                $user->weekly_digest_enabled = $request->boolean('weekly_digest_enabled');
+            }
+
+            $user->fill($request->only(['name', 'email']));
+            $user->save();
 
             return response()->json([
                 'success' => true,

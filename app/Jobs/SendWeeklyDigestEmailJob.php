@@ -148,6 +148,7 @@ class SendWeeklyDigestEmailJob implements ShouldQueue
                 view('emails.weekly-digest', $data)->render(),
                 view('emails.weekly-digest-text', $data)->render(),
                 $user->name,
+                'weekly_digest',
             );
 
             // sendTransactionalEmail() nunca lança — devolve ['success' => false, ...].
