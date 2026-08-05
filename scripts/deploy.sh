@@ -165,7 +165,10 @@ if docker ps -a --format '{{.Names}}' | grep -qx 'linkchartapi'; then
     docker rm -f linkchartapi || true
 fi
 
-docker image prune -f >/dev/null 2>&1 || true
+# Sem `-a`, o prune so remove imagens dangling — as imagens tagueadas do GHCR
+# de releases antigas ficam para sempre (10GB+ acumulados). O filtro preserva
+# as imagens dos ultimos 7 dias para rollback rapido sem re-pull.
+docker image prune -af --filter "until=168h" >/dev/null 2>&1 || true
 
 echo ""
 echo "Deploy concluido — $TARGET_COLOR ativa na :$TARGET_PORT (tag: $IMAGE_TAG)"
