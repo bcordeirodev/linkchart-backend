@@ -80,11 +80,16 @@ COPY docker/supervisor/supervisord-worker.conf /etc/supervisor/conf.d/supervisor
 # e do owner de /var/www/storage). A imagem base usa `www-data` por padrão
 # e isso causa Permission denied quando o queue worker (www) cria o
 # laravel-YYYY-MM-DD.log e o PHP-FPM (www-data) tenta dar append.
+# pm.max_children default (5) limita a API inteira a 5 requests simultaneas —
+# redirect e dashboard compartilham o pool, e a cauda lenta (preview de bot,
+# cache miss) segura um slot por 100-900ms. 10 dobra o teto de pico sem custo
+# em idle: os spare caps (start 2 / max_spare 3) continuam os default.
 RUN sed -i \
     -e 's/^user = www-data/user = www/' \
     -e 's/^group = www-data/group = www/' \
     -e 's/^listen.owner = www-data/listen.owner = www/' \
     -e 's/^listen.group = www-data/listen.group = www/' \
+    -e 's/^pm.max_children = .*/pm.max_children = 10/' \
     /usr/local/etc/php-fpm.d/www.conf
 
 # Criar usuário para aplicação e diretórios necessários
