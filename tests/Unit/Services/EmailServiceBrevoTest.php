@@ -9,11 +9,12 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * Cobre o caminho Brevo do EmailService e o roteador sendTransactionalEmail().
+ * Cobre o caminho Brevo do EmailService — hoje o único transporte de e-mail
+ * transacional — e a fachada sendTransactionalEmail().
  *
- * Contrato sob teste (o mesmo do caminho SendGrid): os métodos NUNCA lançam —
- * devolvem ['success' => bool, ...] e o caller decide. Ver
- * SendWelcomeEmailJob para o porquê de inspecionar `success` ser obrigatório.
+ * Contrato sob teste: os métodos NUNCA lançam — devolvem
+ * ['success' => bool, ...] e o caller decide. Ver SendWelcomeEmailJob para o
+ * porquê de inspecionar `success` ser obrigatório.
  */
 class EmailServiceBrevoTest extends TestCase
 {
@@ -116,8 +117,8 @@ class EmailServiceBrevoTest extends TestCase
         Http::assertNothingSent();
     }
 
-    /** O roteador usa Brevo por default (TRANSACTIONAL_EMAIL_PROVIDER ausente). */
-    public function test_transactional_router_defaults_to_brevo(): void
+    /** sendTransactionalEmail() entrega pela API do Brevo. */
+    public function test_transactional_email_goes_through_brevo(): void
     {
         Http::fake([
             'api.brevo.com/*' => Http::response(['messageId' => 'x'], 201),
@@ -147,25 +148,5 @@ class EmailServiceBrevoTest extends TestCase
         $channelSpy->shouldHaveReceived('info')
             ->withArgs(fn (string $message, array $context = []) => $message === 'email.sent'
                 && ($context['type'] ?? null) === 'weekly_digest');
-    }
-
-    /**
-     * Kill switch: com TRANSACTIONAL_EMAIL_PROVIDER=sendgrid o roteador volta pro
-     * caminho antigo. Sem SENDGRID_API_KEY no ambiente de teste o método curto-circuita
-     * (success=false, sem rede) — o que basta para provar o roteamento.
-     */
-    public function test_transactional_router_falls_back_to_sendgrid_when_configured(): void
-    {
-        Http::fake();
-        config([
-            'services.transactional_email.provider' => 'sendgrid',
-            'services.sendgrid.api_key' => null,
-        ]);
-
-        $result = $this->service->sendTransactionalEmail('ana@example.com', 'Assunto', '<p>Olá</p>');
-
-        $this->assertSame('SendGrid API', $result['method']);
-        $this->assertFalse($result['success']);
-        Http::assertNothingSent();
     }
 }

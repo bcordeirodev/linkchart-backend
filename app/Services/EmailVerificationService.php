@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 /**
  * Handles transactional email flows for account verification and password reset.
  *
- * Delegates delivery to EmailService::sendTransactionalEmail (provedor configurável — Brevo default, SendGrid como rollback).
+ * Delegates delivery to EmailService::sendTransactionalEmail (transporte único: API do Brevo).
  * Token persistence is handled by EmailVerificationToken model:
  *   - Email verification tokens expire after 24 hours.
  *   - Password reset tokens expire after 1 hour.

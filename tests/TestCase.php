@@ -18,7 +18,7 @@ abstract class TestCase extends BaseTestCase
      * `UserFactory::definition()` creates users already verified. Without this,
      * every factory-created user makes `SendWelcomeEmailJob` execute synchronously,
      * claim `welcome_email_sent_at`, and call the real `EmailService` — which fails
-     * because `.env.testing` has no `SENDGRID_API_KEY`. That wrote real ERROR-level
+     * because `.env.testing` has no `BREVO_API_KEY`. That wrote real ERROR-level
      * log lines (`AppLogger::jobFailed` x2 + `AppLogger::emailFailed`) into
      * `storage/logs/errors-*.log` on every single test that creates a user, drowning
      * out genuine failures.

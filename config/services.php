@@ -28,14 +28,6 @@ return [
         'key' => env('RESEND_KEY'),
     ],
 
-    'sendgrid' => [
-        'api_key' => env('SENDGRID_API_KEY'),
-        'from' => [
-            'email' => env('MAIL_FROM_ADDRESS', 'noreply@linkcharts.com.br'),
-            'name' => env('MAIL_FROM_NAME', 'Link Charts'),
-        ],
-    ],
-
     'brevo' => [
         'api_key' => env('BREVO_API_KEY'),
         'from' => [
@@ -50,12 +42,9 @@ return [
         'webhook_token' => env('BREVO_WEBHOOK_TOKEN'),
     ],
 
-    // Roteia EmailService::sendTransactionalEmail(). 'brevo' (default) ou
-    // 'sendgrid' — kill switch de rollback sem deploy (editar env do droplet +
-    // restart do container + config:cache).
+    // Guarda-corpo de volume do transacional. O antigo seletor de provedor foi
+    // removido em 2026-08-05: Brevo é o único transporte de e-mail transacional.
     'transactional_email' => [
-        'provider' => env('TRANSACTIONAL_EMAIL_PROVIDER', 'brevo'),
-
         // Warning quando a leva do digest semanal se aproxima do cap free do
         // Brevo (300 e-mails/dia, transacional + marketing somados).
         'volume_warn_threshold' => (int) env('DIGEST_VOLUME_WARN_THRESHOLD', 250),

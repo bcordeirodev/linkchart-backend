@@ -12,9 +12,8 @@ use Tests\TestCase;
 /**
  * Characterization tests for POST /api/auth/register.
  *
- * EmailService is mocked in the container so no real SendGrid call happens
- * (the SDK bypasses Laravel's Http facade, so Http::fake() would not catch it;
- * in the testing env the missing API key would fail the send and pollute
+ * EmailService is mocked in the container so no real provider call happens
+ * (in the testing env the missing API key would fail the send and pollute
  * errors.log). All responses are wrapped by NormalizeApiResponse:
  * success => { data: {...} }, error => { error: { code, message, details? } }.
  */

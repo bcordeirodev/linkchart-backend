@@ -21,7 +21,7 @@ use Tests\TestCase;
  * column holds sha256(raw), so tests read the raw token from the transient
  * $plainTextToken on the instance returned at creation — never from the
  * database. EmailService is mocked for the resend tests so nothing tries to
- * reach SendGrid.
+ * reach the email provider.
  */
 class EmailVerificationTest extends TestCase
 {

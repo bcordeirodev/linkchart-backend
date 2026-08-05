@@ -7,19 +7,16 @@ use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
-use SendGrid;
-use SendGrid\Mail\Mail as SendGridMail;
 
 /**
- * Low-level email transport service supporting two delivery paths: the SendGrid HTTP API
+ * Low-level email transport service supporting two delivery paths: the Brevo HTTP API
  * (bypasses SMTP port 587, uses HTTPS port 443) and Laravel's native Mail facade (SMTP).
  *
- * The SendGrid API path is the preferred production method and is used by
- * EmailVerificationService for all transactional emails. The Laravel Mail path is kept
- * as a fallback and for local/dev testing.
+ * The Brevo API path is the production method and is used by EmailVerificationService
+ * for all transactional emails. The Laravel Mail path is kept for local/dev diagnostics.
  *
  * Transport configuration lives in config/mail.php and config/services.php
- * (key: services.sendgrid.api_key / services.sendgrid.from.*).
+ * (key: services.brevo.api_key / services.brevo.from.*).
  *
  * Side effects: logs every send attempt and failure via AppLogger::emailSent /
  * AppLogger::emailFailed / AppLogger::emailTestFailed (channel: app).
@@ -27,16 +24,16 @@ use SendGrid\Mail\Mail as SendGridMail;
 class EmailService
 {
     /**
-     * Sends a transactional email through the provider configured in
-     * `services.transactional_email.provider`.
+     * Sends a transactional email via the Brevo HTTP API.
      *
      * This is the method every caller should use (EmailVerificationService,
-     * SendWelcomeEmailJob, SendWeeklyDigestEmailJob, TestEmailCommand). The
-     * provider switch is the rollback kill switch: `brevo` (default) or
-     * `sendgrid` via TRANSACTIONAL_EMAIL_PROVIDER — flipping it requires no
-     * deploy, only an env edit + container restart + config:cache.
+     * SendWelcomeEmailJob, SendWeeklyDigestEmailJob and the retention jobs,
+     * TestEmailCommand). It used to route between two providers; the second
+     * path was retired by the product owner on 2026-08-05, leaving Brevo as
+     * the single transport. The signature is unchanged so callers did not have
+     * to move.
      *
-     * Same contract as the concrete senders: returns an error payload instead
+     * Same contract as the concrete sender: returns an error payload instead
      * of throwing, so callers MUST inspect `success` (see SendWelcomeEmailJob
      * for why silently ignoring it loses emails).
      *
@@ -45,24 +42,21 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body.
      * @param  string|null  $toName  Optional recipient display name.
-     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest).
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips).
      * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
      */
     public function sendTransactionalEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
     {
-        return match (config('services.transactional_email.provider', 'brevo')) {
-            'sendgrid' => $this->sendEmailViaSendGridAPI($toEmail, $subject, $htmlContent, $textContent, $toName, $type),
-            default => $this->sendEmailViaBrevoAPI($toEmail, $subject, $htmlContent, $textContent, $toName, $type),
-        };
+        return $this->sendEmailViaBrevoAPI($toEmail, $subject, $htmlContent, $textContent, $toName, $type);
     }
 
     /**
      * Sends an email via the Brevo v3 HTTP API (POST /v3/smtp/email).
      *
      * Uses Laravel's Http client directly — the API surface needed here is a
-     * single JSON POST, not worth another SDK in composer. Mirrors the
-     * SendGrid method's contract: never throws, returns an error payload on
-     * any failure (missing/placeholder key, non-2xx response, network error).
+     * single JSON POST, not worth another SDK in composer. Never throws:
+     * returns an error payload on any failure (missing/placeholder key,
+     * non-2xx response, network error).
      *
      * Side effects: logs via AppLogger::emailSent on success and
      * AppLogger::emailFailed on failure (channel: app).
@@ -72,7 +66,7 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body (omitted from the payload when empty — the API rejects empty strings).
      * @param  string|null  $toName  Optional recipient display name.
-     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest).
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips).
      * @return array{success: bool, message: string, to?: string, method: string, status_code?: int, message_id?: string|null, error?: string}
      */
     public function sendEmailViaBrevoAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
@@ -138,77 +132,6 @@ class EmailService
                 'message' => 'Erro ao enviar email via Brevo API: '.$e->getMessage(),
                 'error' => $e->getMessage(),
                 'method' => 'Brevo API',
-            ];
-        }
-    }
-
-    /**
-     * Sends an email via the SendGrid v3 HTTP API.
-     *
-     * Uses the sendgrid/sendgrid PHP SDK. Does not fall back to SMTP on failure —
-     * returns an error payload instead so the caller can decide.
-     *
-     * Side effects: logs via AppLogger::emailSent on success, AppLogger::emailFailed
-     * on exception (channel: app).
-     *
-     * @param  string  $toEmail  Recipient email address.
-     * @param  string  $subject  Email subject line.
-     * @param  string  $htmlContent  HTML body.
-     * @param  string|null  $textContent  Optional plain-text fallback body.
-     * @param  string|null  $toName  Optional recipient display name.
-     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest).
-     * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
-     */
-    public function sendEmailViaSendGridAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
-    {
-        try {
-            $apiKey = config('services.sendgrid.api_key');
-
-            if (empty($apiKey) || $apiKey === 'SENDGRID_API_KEY_PLACEHOLDER') {
-                throw new \Exception('SendGrid API Key não configurada');
-            }
-
-            $sendgrid = new SendGrid($apiKey);
-            $email = new SendGridMail;
-
-            // Configurar remetente
-            $email->setFrom(
-                config('services.sendgrid.from.email', config('mail.from.address')),
-                config('services.sendgrid.from.name', config('mail.from.name'))
-            );
-
-            // Configurar destinatário
-            $email->addTo($toEmail, $toName ?? $toEmail);
-
-            // Configurar assunto e conteúdo
-            $email->setSubject($subject);
-            $email->addContent('text/html', $htmlContent);
-
-            if ($textContent) {
-                $email->addContent('text/plain', $textContent);
-            }
-
-            // Enviar email
-            $response = $sendgrid->send($email);
-
-            AppLogger::emailSent($toEmail, $type, 'sendgrid');
-
-            return [
-                'success' => true,
-                'message' => 'Email enviado com sucesso via SendGrid API',
-                'to' => $toEmail,
-                'method' => 'SendGrid API',
-                'status_code' => $response->statusCode(),
-            ];
-
-        } catch (\Exception $e) {
-            AppLogger::emailFailed($toEmail, $type, $e);
-
-            return [
-                'success' => false,
-                'message' => 'Erro ao enviar email via SendGrid API: '.$e->getMessage(),
-                'error' => $e->getMessage(),
-                'method' => 'SendGrid API',
             ];
         }
     }
@@ -364,7 +287,7 @@ class EmailService
                 <div class='header'>
                     <h1>🚀 Link Charts</h1>
                     <p>Sistema de Encurtamento de URLs</p>
-                    <span class='badge'>Laravel Mail Nativo + SendGrid</span>
+                    <span class='badge'>Laravel Mail Nativo (SMTP)</span>
                 </div>
                 <div class='content'>
                     <h2>✅ Email Laravel Mail Funcionando!</h2>
@@ -373,7 +296,7 @@ class EmailService
 
                     <div class='success'>
                         <strong>🎉 SUCESSO!</strong><br>
-                        Laravel Mail + SendGrid configurado e funcionando perfeitamente!
+                        Laravel Mail + SMTP configurado e funcionando perfeitamente!
                     </div>
 
                     <div class='info'>
@@ -385,7 +308,6 @@ class EmailService
                             <tr><th>Encryption</th><td>{$data['encryption']}</td></tr>
                             <tr><th>Ambiente</th><td>{$data['environment']}</td></tr>
                             <tr><th>Mailer</th><td>Laravel Mail (nativo)</td></tr>
-                            <tr><th>Provider</th><td>SendGrid SMTP</td></tr>
                         </table>
                     </div>
 
@@ -393,7 +315,6 @@ class EmailService
                     <ul>
                         <li>✅ Removido PHPMailer (conflito resolvido)</li>
                         <li>✅ Usando Laravel Mail nativo</li>
-                        <li>✅ Configuração SendGrid otimizada</li>
                         <li>✅ Timeout e verificação SSL configurados</li>
                         <li>✅ Logs detalhados para debug</li>
                     </ul>
@@ -404,7 +325,7 @@ class EmailService
                 </div>
                 <div class='footer'>
                     <p><strong>Link Charts</strong> - Sistema de Encurtamento de URLs<br>
-                    <small>Desenvolvido com ❤️ usando Laravel + SendGrid</small></p>
+                    <small>Desenvolvido com ❤️ usando Laravel</small></p>
                 </div>
             </div>
         </body>

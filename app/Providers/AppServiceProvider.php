@@ -131,7 +131,7 @@ class AppServiceProvider extends ServiceProvider
 
         // Reenvio de email de verificação. Há um cooldown de 2 min no model
         // (User::canResendVerificationEmail), mas sem limite de rota um atacante
-        // autenticado poderia abusar da cota/reputação do SendGrid. Chaveado por
+        // autenticado poderia abusar da cota/reputação do provedor. Chaveado por
         // usuário (com fallback para IP) como defesa em profundidade.
         RateLimiter::for('resend-verification', function (Request $request) {
             return Limit::perMinute(5)->by($request->user()?->id ?: $request->ip());

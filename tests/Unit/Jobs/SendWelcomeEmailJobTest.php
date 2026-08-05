@@ -105,7 +105,7 @@ class SendWelcomeEmailJobTest extends TestCase
     }
 
     /**
-     * Quando o SendGrid recusa o envio (`sendTransactionalEmail` retorna
+     * Quando o provedor de e-mail recusa o envio (`sendTransactionalEmail` retorna
      * `success => false` em vez de lançar), o job não pode reportar sucesso: ele precisa
      * se marcar como falho e NÃO ser reenfileirado (at-most-once — a claim já foi feita).
      *
@@ -116,7 +116,7 @@ class SendWelcomeEmailJobTest extends TestCase
      * mas ainda popula um `SyncJob` real — o mesmo caminho de um worker de produção —
      * permitindo observar o evento `JobFailed` real disparado por `Job::fail()`.
      */
-    public function test_marks_job_as_failed_without_retry_when_sendgrid_rejects(): void
+    public function test_marks_job_as_failed_without_retry_when_provider_rejects(): void
     {
         // Ver comentário em test_sends_email_to_verified_user: criar já-verificado
         // deixaria o dispatch automático do UserObserver reivindicar
@@ -140,7 +140,7 @@ class SendWelcomeEmailJobTest extends TestCase
 
         $this->assertNotNull(
             $failedEvent,
-            'O job deveria se marcar como falho (evento JobFailed) quando o SendGrid recusa o envio.'
+            'O job deveria se marcar como falho (evento JobFailed) quando o provedor recusa o envio.'
         );
         $this->assertSame(SendWelcomeEmailJob::class, $failedEvent->job->resolveName());
         $this->assertStringContainsString('chave de API inválida', $failedEvent->exception->getMessage());

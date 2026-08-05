@@ -34,8 +34,8 @@ para todo o resto da aplicação, pois todos os outros domínios exigem um token
 ## Services e Repositories
 
 - `EmailVerificationService` — emite e valida tokens de verificação de e-mail (TTL 24 h)
-  e tokens de reset de senha (TTL 1 h); entrega via API SendGrid.
-- `EmailService` — wrapper de baixo nível ao redor do SDK `sendgrid/sendgrid`; chamado
+  e tokens de reset de senha (TTL 1 h); entrega via API do Brevo.
+- `EmailService` — wrapper de baixo nível sobre a API HTTP do Brevo; chamado
   internamente pelo `EmailVerificationService`.
 - `tymon/jwt-auth` (via `JWTAuth` facade) — emite, valida e invalida tokens JWT.
 
@@ -72,9 +72,10 @@ tabela `email_verification_tokens` (modelo `EmailVerificationToken`).
   senha — definidas em `EmailVerificationService` e armazenadas em `expires_at` na tabela
   `email_verification_tokens`.
 
-- **Transporte de e-mail**: SendGrid via pacote `sendgrid/sendgrid` (v8). Configuração em
-  `config/services.php` (`sendgrid.key`). Se o e-mail não chegar, verificar `LOG_CHANNEL=app`
-  e o canal `auth` em `storage/logs/auth-YYYY-MM-DD.log`.
+- **Transporte de e-mail**: API HTTP do Brevo (`POST /v3/smtp/email`), chamada direto pelo
+  Http client do Laravel. Configuração em `config/services.php` (`brevo.api_key`). Se o
+  e-mail não chegar, verificar `LOG_CHANNEL=app` e o canal `auth` em
+  `storage/logs/auth-YYYY-MM-DD.log`.
 
 - **Respostas não passam pelo `NormalizeApiResponse`**: o middleware `NormalizeApiResponse`
   é aplicado apenas ao grupo `api` (links e analytics). As respostas de autenticação têm

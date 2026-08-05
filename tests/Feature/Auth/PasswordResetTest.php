@@ -19,7 +19,7 @@ use Tests\TestCase;
  * capture it where a real user would — from the email — by spying on the
  * mocked EmailService (see fakeEmailDelivery), or from the transient
  * $plainTextToken on the instance returned at creation. EmailService is
- * mocked so no real SendGrid delivery is attempted.
+ * mocked so no real provider delivery is attempted.
  */
 class PasswordResetTest extends TestCase
 {

@@ -25,7 +25,6 @@
         "open-telemetry/sdk": "^1.14",
         "php-http/guzzle7-adapter": "^1.1",
         "predis/predis": "^2.3",
-        "sendgrid/sendgrid": "^8.1",
         "torann/geoip": "^3.0",
         "tymon/jwt-auth": "dev-chore/laravel-12"
     },

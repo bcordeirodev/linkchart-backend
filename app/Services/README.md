@@ -52,7 +52,7 @@ Domínio principal do produto.
 
 | Arquivo | Papel |
 |---|---|
-| `EmailService.php` | Envio de e-mails transacionais via SendGrid. |
+| `EmailService.php` | Envio de e-mails transacionais via API do Brevo. |
 | `EmailVerificationService.php` | Geração e validação de tokens de verificação de e-mail. |
 
 ---
