@@ -44,6 +44,7 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property array<string, string>|null $onboarding Dismissed onboarding flags, keyed by flag name (see self::ONBOARDING_KEYS) and mapped to the ISO-8601 instant of dismissal; null until the user dismisses their first.
  * @property bool $weekly_digest_enabled Opt-in do digest semanal de cliques (default true); desligado pelo link assinado de unsubscribe.
  * @property \Illuminate\Support\Carbon|null $weekly_digest_sent_at At-most-once claim of SendWeeklyDigestEmailJob — timestamp of the last digest send (see that class's docblock).
+ * @property \Illuminate\Support\Carbon|null $onboarding_tips_sent_at At-most-once claim of SendOnboardingTipsEmailJob — timestamp of the third-day tips email (see that class's docblock); null until it goes out.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Link>                        $links
@@ -173,6 +174,8 @@ class User extends Authenticatable implements JWTSubject
         // (weekly_digest_enabled stays visible — it's the opt-out state the
         // profile UI will need.)
         'weekly_digest_sent_at',
+        // Same reasoning: at-most-once claim of SendOnboardingTipsEmailJob.
+        'onboarding_tips_sent_at',
         // Internal anchor for JWT invalidation (pwd_ts claim) — bookkeeping,
         // not API surface; keep it out of serialized user responses.
         'password_changed_at',
@@ -191,6 +194,7 @@ class User extends Authenticatable implements JWTSubject
             'welcome_email_sent_at' => 'datetime',
             'weekly_digest_enabled' => 'boolean',
             'weekly_digest_sent_at' => 'datetime',
+            'onboarding_tips_sent_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'email_verified' => 'boolean',
             'password' => 'hashed',

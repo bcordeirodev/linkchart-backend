@@ -33,6 +33,13 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('10:20')
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping();
+
+        // Dicas do terceiro dia de conta. 10:40 fecha o trio de varreduras de
+        // retenção da manhã, cada uma com sua janela de 24h.
+        $schedule->job(new \App\Jobs\DispatchOnboardingTipsJob)
+            ->dailyAt('10:40')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping();
     })
     ->withRouting(
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
