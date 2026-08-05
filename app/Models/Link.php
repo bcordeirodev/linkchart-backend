@@ -54,6 +54,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string|null $short_domain Full hostname, e.g. "acme.linkcharts.com.br"; null uses the default redirect URL.
  * @property string|null $password_hash Bcrypt hash of the link password; null = no password. NOT fillable (set explicitly by LinkService) and hidden from serialization — clients only see the derived `has_password` boolean.
  * @property \Illuminate\Support\Carbon|null $milestone_100_notified_at At-most-once claim of SendMilestoneEmailJob — carimbado quando o e-mail de marco de 100 cliques é reivindicado (ver docblock daquele job); null enquanto o marco não foi comemorado.
+ * @property \Illuminate\Support\Carbon|null $winback_email_sent_at At-most-once claim of SendWinbackEmailJob — carimbado quando o link entra num e-mail de winback (ver docblock daquele job); null enquanto o link nunca foi cobrado.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\User|null        $user    Owning user; null for anonymous links.

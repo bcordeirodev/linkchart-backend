@@ -25,6 +25,14 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('10:00')
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping();
+
+        // Winback dos links que fizeram duas semanas sem clique. 10:20 para
+        // não colidir com a varredura de marcos — a janela do job é de 24h
+        // exatas, então o horário fixo é o que garante cobertura sem lacuna.
+        $schedule->job(new \App\Jobs\DispatchWinbackEmailsJob)
+            ->dailyAt('10:20')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping();
     })
     ->withRouting(
         web: __DIR__.'/../routes/web.php', // Adicionado rotas web para redirecionamento
