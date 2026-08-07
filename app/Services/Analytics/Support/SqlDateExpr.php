@@ -93,4 +93,25 @@ class SqlDateExpr
             ? "strftime('%Y-%m', {$timestampColumn})"
             : "TO_CHAR({$timestampColumn}, 'YYYY-MM')";
     }
+
+    /**
+     * Data-calendário (Y-M-D) no fuso do produto (America/Sao_Paulo).
+     *
+     * Os timestamps são gravados em UTC (`timestamp without time zone`);
+     * bucketing sem o shift reportaria dias UTC e moveria ~80% do tráfego
+     * (brasileiro) de madrugada para o dia "errado". Postgres: shift via
+     * AT TIME ZONE. SQLite (testes): offset fixo de -3h — exato, o Brasil
+     * aboliu o horário de verão em 2019.
+     *
+     * ⚠️ Usar SÓ em SELECT/GROUP BY — nunca em WHERE (mataria o índice).
+     *
+     * @param  string  $timestampColumn  Source timestamp column. Defaults to `created_at`.
+     * @return string Raw SQL fragment (no alias).
+     */
+    public static function dateSaoPaulo(string $timestampColumn = 'created_at'): string
+    {
+        return self::isSqlite()
+            ? "strftime('%Y-%m-%d', {$timestampColumn}, '-3 hours')"
+            : "TO_CHAR({$timestampColumn} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD')";
+    }
 }

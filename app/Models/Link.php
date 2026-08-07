@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -195,6 +196,22 @@ class Link extends Model
     public function hasPassword(): bool
     {
         return $this->password_hash !== null && $this->password_hash !== '';
+    }
+
+    /**
+     * Scope canônico de exclusão de dados demo — a regra de negócio "nenhuma
+     * métrica conta demo" num único lugar: exclui links semeados
+     * (`is_demo = true`) E qualquer link das contas de teste/QA
+     * ({@see User::DEMO_ACCOUNT_IDS}). Colunas qualificadas com `links.`
+     * para o scope sobreviver a JOINs (clicks, users).
+     *
+     * Uso: `Link::nonDemo()->...`. Todo o módulo admin passa por aqui.
+     */
+    public function scopeNonDemo(Builder $query): Builder
+    {
+        return $query
+            ->where('links.is_demo', false)
+            ->whereNotIn('links.user_id', User::DEMO_ACCOUNT_IDS);
     }
 
     /**
