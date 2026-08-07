@@ -155,12 +155,61 @@ class AdminStatsService implements AdminStatsServiceInterface
         ];
     }
 
+    /** Mapa sort público → expressão de ordenação (whitelist; o controller já validou). */
+    private const USER_SORTS = [
+        'created_at' => 'users.created_at',
+        'last_login_at' => 'users.last_login_at',
+        'name' => 'users.name',
+        'links' => 'links_count',
+        'clicks' => 'total_clicks',
+    ];
+
     /** {@inheritDoc} */
     public function getUsers(int $page, int $perPage, ?string $q, string $sort, string $order): array
     {
+        $query = User::query()
+            ->whereNotIn('users.id', User::DEMO_ACCOUNT_IDS)
+            // LEFT JOIN condicionado: usuários sem link contam 0, links demo
+            // nunca contam. SUM(links.clicks) = contador denormalizado (fonte
+            // única desta listagem — nunca misturar com COUNT(clicks)).
+            ->leftJoin('links', function ($join) {
+                $join->on('links.user_id', '=', 'users.id')
+                    ->where('links.is_demo', false);
+            })
+            ->groupBy('users.id', 'users.name', 'users.email', 'users.created_at', 'users.last_login_at')
+            ->select('users.id', 'users.name', 'users.email', 'users.created_at', 'users.last_login_at')
+            ->selectRaw('COUNT(links.id) as links_count, COALESCE(SUM(links.clicks), 0) as total_clicks');
+
+        if (filled($q)) {
+            $needle = '%'.mb_strtolower($q).'%';
+            // LOWER + LIKE: case-insensitive nos dois drivers (ILIKE é só pgsql).
+            $query->where(function ($w) use ($needle) {
+                $w->whereRaw('LOWER(users.name) LIKE ?', [$needle])
+                    ->orWhereRaw('LOWER(users.email) LIKE ?', [$needle]);
+            });
+        }
+
+        $paginator = $query
+            ->orderBy(self::USER_SORTS[$sort], $order)
+            ->orderBy('users.id') // desempate estável entre páginas
+            ->paginate($perPage, ['*'], 'page', $page);
+
         return [
-            'items' => [],
-            'meta' => ['current_page' => $page, 'per_page' => $perPage, 'total' => 0, 'last_page' => 1],
+            'items' => collect($paginator->items())->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'created_at' => $u->created_at?->toISOString(),
+                'last_login_at' => $u->last_login_at?->toISOString(),
+                'links_count' => (int) $u->links_count,
+                'total_clicks' => (int) $u->total_clicks,
+            ])->all(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
         ];
     }
 
