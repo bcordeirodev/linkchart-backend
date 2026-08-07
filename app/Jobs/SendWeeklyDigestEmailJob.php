@@ -186,11 +186,29 @@ class SendWeeklyDigestEmailJob implements ShouldQueue
     }
 
     /**
-     * Conta os cliques do usuário na janela e na janela anterior, e resolve o
-     * link mais clicado da semana. Só links não-demo entram — regra global de
+     * Piso de cliques na janela para os "fatos" (estados, mobile, pico) irem
+     * ao e-mail. Abaixo disso a moda de `day_of_week`/`hour_of_day` é acaso
+     * apresentado como insight — o digest volta ao formato enxuto (número +
+     * variação + top link).
+     */
+    private const FACTS_MIN_CLICKS = 5;
+
+    /**
+     * Conta os cliques do usuário na janela e na janela anterior, resolve o
+     * link mais clicado da semana e — quando há volume suficiente — os três
+     * fatos de contexto do e-mail. Só links não-demo entram, regra global de
      * métricas de cliques do produto.
      *
-     * @return array{total: int, previous: int, top: object|null} `top` tem title, slug e clicks_count.
+     * `states`, `top_state` e `peak` saem de colunas pré-computadas de
+     * `clicks`. Vale notar que `hour_of_day`/`day_of_week` são gravados no
+     * fuso do VISITANTE (ver `LinkTrackingService::enrichTemporal`), não em
+     * UTC nem no fuso do dono do link — é o que dá sentido ao "pico terça
+     * 14h": 14h para quem clicou.
+     *
+     * @return array{total: int, previous: int, top: object|null, states: int,
+     *     top_state: string|null, mobile_pct: int|null, peak: object|null}
+     *     `top` tem id, title, slug, lifetime_clicks e clicks_count;
+     *     `peak` tem day_of_week (ISO 1-7) e hour_of_day.
      */
     private function computeStats(int $userId, CarbonImmutable $windowStart, CarbonImmutable $windowEnd): array
     {
@@ -201,24 +219,89 @@ class SendWeeklyDigestEmailJob implements ShouldQueue
             ->where('clicks.created_at', '>=', $from)
             ->where('clicks.created_at', '<', $to);
 
-        return [
-            'total' => $clicksBetween($windowStart, $windowEnd)->count(),
+        $total = $clicksBetween($windowStart, $windowEnd)->count();
+
+        $stats = [
+            'total' => $total,
             'previous' => $clicksBetween($windowStart->subWeek(), $windowStart)->count(),
             'top' => $clicksBetween($windowStart, $windowEnd)
-                ->select('links.title', 'links.slug', DB::raw('COUNT(*) as clicks_count'))
-                ->groupBy('links.id', 'links.title', 'links.slug')
+                ->select(
+                    'links.id',
+                    'links.title',
+                    'links.slug',
+                    'links.clicks as lifetime_clicks',
+                    DB::raw('COUNT(*) as clicks_count')
+                )
+                ->groupBy('links.id', 'links.title', 'links.slug', 'links.clicks')
                 ->orderByDesc('clicks_count')
                 ->first(),
+            'states' => 0,
+            'top_state' => null,
+            'mobile_pct' => null,
+            'peak' => null,
         ];
+
+        if ($total < self::FACTS_MIN_CLICKS) {
+            return $stats;
+        }
+
+        // Um único round-trip para os dois agregados escalares. COUNT(DISTINCT)
+        // ignora NULL, então cliques sem geo simplesmente não contam estado.
+        $breakdown = $clicksBetween($windowStart, $windowEnd)
+            ->selectRaw('COUNT(DISTINCT clicks.state) as states_count')
+            ->selectRaw('SUM(CASE WHEN clicks.is_mobile THEN 1 ELSE 0 END) as mobile_count')
+            ->first();
+
+        $stats['states'] = (int) ($breakdown->states_count ?? 0);
+        $stats['mobile_pct'] = (int) round(((int) ($breakdown->mobile_count ?? 0)) / $total * 100);
+
+        if ($stats['states'] === 1) {
+            $stats['top_state'] = $clicksBetween($windowStart, $windowEnd)
+                ->whereNotNull('clicks.state_name')
+                ->value('clicks.state_name');
+        }
+
+        $stats['peak'] = $clicksBetween($windowStart, $windowEnd)
+            ->whereNotNull('clicks.day_of_week')
+            ->whereNotNull('clicks.hour_of_day')
+            ->select('clicks.day_of_week', 'clicks.hour_of_day', DB::raw('COUNT(*) as peak_count'))
+            ->groupBy('clicks.day_of_week', 'clicks.hour_of_day')
+            ->orderByDesc('peak_count')
+            ->orderBy('clicks.day_of_week')
+            ->orderBy('clicks.hour_of_day')
+            ->first();
+
+        return $stats;
     }
+
+    /** Nomes dos dias da semana indexados por ISO-8601 (1 = segunda). */
+    private const WEEKDAY_NAMES = [
+        1 => 'segunda',
+        2 => 'terça',
+        3 => 'quarta',
+        4 => 'quinta',
+        5 => 'sexta',
+        6 => 'sábado',
+        7 => 'domingo',
+    ];
 
     /**
      * Monta o payload dos templates emails.weekly-digest{,-text}: assunto com
-     * o número-âncora, variação (ou primeira semana), top link, CTA com UTM
-     * (`weekly-digest`/`email` — é o que fecha o loop de retenção nos logs) e
-     * o link assinado de unsubscribe (LGPD).
+     * o número-âncora, variação (ou primeira semana), top link, faixa de fatos
+     * de contexto, os dois CTAs com UTM (`weekly-digest`/`email` — é o que
+     * fecha o loop de retenção nos logs) e o link assinado de unsubscribe
+     * (LGPD).
      *
-     * @param  array{total: int, previous: int, top: object|null}  $stats
+     * Os dois CTAs são deliberadamente diferentes em destino e promessa. O
+     * primário aponta para a página PÚBLICA do top link, que abre sem login —
+     * é o caminho de quem sumiu há semanas e cuja sessão expirou. Ele mostra o
+     * histórico completo, não a semana, e por isso a copy promete "histórico":
+     * um botão dizendo "ver estatísticas" faria o número maior parecer erro. O
+     * secundário leva ao painel autenticado com `period=7d`, onde os números
+     * casam exatamente com os do e-mail.
+     *
+     * @param  array{total: int, previous: int, top: object|null, states: int,
+     *     top_state: string|null, mobile_pct: int|null, peak: object|null}  $stats
      * @return array<string, mixed>
      */
     private function buildViewData(User $user, array $stats, CarbonImmutable $windowStart, CarbonImmutable $windowEnd): array
@@ -232,6 +315,9 @@ class SendWeeklyDigestEmailJob implements ShouldQueue
         }
 
         $saoPaulo = 'America/Sao_Paulo';
+        $frontend = rtrim(config('app.frontend_url', config('app.url')), '/');
+        $utm = 'utm_source=weekly-digest&utm_medium=email';
+        $top = $stats['top'];
 
         return [
             'subject' => "Seus links tiveram {$clicksLabel} na última semana 📈",
@@ -240,14 +326,64 @@ class SendWeeklyDigestEmailJob implements ShouldQueue
             'clicks_label' => $clicksLabel,
             'first_week' => $stats['previous'] === 0,
             'variation_label' => $variationLabel,
-            'top_link_label' => $stats['top'] ? ($stats['top']->title ?: $stats['top']->slug) : null,
-            'top_link_clicks' => $stats['top']->clicks_count ?? 0,
+            'top_link_label' => $top ? ($top->title ?: $top->slug) : null,
+            'top_link_clicks' => $top->clicks_count ?? 0,
+            'top_link_lifetime' => (int) ($top->lifetime_clicks ?? 0),
+            'facts' => $this->buildFacts($stats),
             'period_label' => $windowStart->setTimezone($saoPaulo)->format('d/m')
                 .' – '.$windowEnd->setTimezone($saoPaulo)->subDay()->format('d/m'),
-            'stats_url' => rtrim(config('app.frontend_url', config('app.url')), '/')
-                .'/links?utm_source=weekly-digest&utm_medium=email',
+            'public_url' => $top
+                ? $frontend.'/public-analytics/'.rawurlencode($top->slug).'?'.$utm
+                : null,
+            'dashboard_url' => $top
+                ? $frontend.'/links/analytics/'.$top->id.'?period=7d&'.$utm
+                : $frontend.'/links?'.$utm,
             'unsubscribe_url' => URL::signedRoute('digest.unsubscribe', ['user' => $user->id]),
         ];
+    }
+
+    /**
+     * Traduz os agregados de contexto na faixa de fatos curtos do e-mail.
+     *
+     * Devolve lista vazia quando o volume não atingiu {@see self::FACTS_MIN_CLICKS}
+     * (os agregados nem chegam a ser calculados nesse caso) — o template usa
+     * isso para omitir a faixa inteira. Cada fato é omitido individualmente se
+     * o dado que o sustenta não existir: cliques sem geo não viram "estados",
+     * cliques sem enriquecimento temporal não viram "pico".
+     *
+     * @param  array{total: int, states: int, top_state: string|null,
+     *     mobile_pct: int|null, peak: object|null}  $stats
+     * @return list<array{icon: string, label: string}>
+     */
+    private function buildFacts(array $stats): array
+    {
+        if ($stats['total'] < self::FACTS_MIN_CLICKS) {
+            return [];
+        }
+
+        $facts = [];
+
+        if ($stats['states'] > 1) {
+            $facts[] = ['icon' => '📍', 'label' => $stats['states'].' estados'];
+        } elseif ($stats['top_state'] !== null) {
+            $facts[] = ['icon' => '📍', 'label' => $stats['top_state']];
+        }
+
+        if ($stats['mobile_pct'] !== null) {
+            $facts[] = ['icon' => '📱', 'label' => $stats['mobile_pct'].'% no celular'];
+        }
+
+        if ($stats['peak'] !== null) {
+            $weekday = self::WEEKDAY_NAMES[(int) $stats['peak']->day_of_week] ?? null;
+            if ($weekday !== null) {
+                $facts[] = [
+                    'icon' => '🕐',
+                    'label' => 'pico '.$weekday.' '.((int) $stats['peak']->hour_of_day).'h',
+                ];
+            }
+        }
+
+        return $facts;
     }
 
     /**

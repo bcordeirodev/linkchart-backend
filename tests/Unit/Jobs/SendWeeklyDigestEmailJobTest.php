@@ -48,12 +48,55 @@ class SendWeeklyDigestEmailJobTest extends TestCase
     }
 
     /** Atalho: n cliques num link, num instante UTC dado. */
-    private function clicks(Link $link, int $count, string $instantUtc): void
+    private function clicks(Link $link, int $count, string $instantUtc, array $attributes = []): void
     {
-        Click::factory()->count($count)->create([
+        Click::factory()->count($count)->create(array_merge([
             'link_id' => $link->id,
             'created_at' => Carbon::parse($instantUtc, 'UTC'),
+        ], $attributes));
+    }
+
+    /**
+     * Cliques com o enriquecimento que sustenta a faixa de fatos. A factory
+     * padrão deixa `state`, `hour_of_day` nulos e `is_mobile` falso, então sem
+     * isto nenhum fato tem dado para renderizar.
+     */
+    private function enrichedClicks(
+        Link $link,
+        int $count,
+        string $instantUtc,
+        ?string $state = 'SP',
+        ?string $stateName = 'São Paulo',
+        bool $isMobile = true,
+        int $dayOfWeek = 2,
+        int $hourOfDay = 14,
+    ): void {
+        $this->clicks($link, $count, $instantUtc, [
+            'state' => $state,
+            'state_name' => $stateName,
+            'is_mobile' => $isMobile,
+            'day_of_week' => $dayOfWeek,
+            'hour_of_day' => $hourOfDay,
         ]);
+    }
+
+    /** Captura o HTML do único e-mail enviado pelo job. */
+    private function captureHtml(int $userId): string
+    {
+        $html = '';
+        $emailService = Mockery::mock(EmailService::class);
+        $emailService->shouldReceive('sendTransactionalEmail')
+            ->once()
+            ->withArgs(function (string $to, string $subject, string $body) use (&$html) {
+                $html = $body;
+
+                return true;
+            })
+            ->andReturn(['success' => true, 'message' => 'ok']);
+
+        $this->newJob($userId)->handle($emailService);
+
+        return $html;
     }
 
     private function newJob(int $userId): SendWeeklyDigestEmailJob
@@ -224,5 +267,120 @@ class SendWeeklyDigestEmailJobTest extends TestCase
         // Claim feito antes do envio permanece — trade-off at-most-once deliberado:
         // este digest se perde, o da próxima semana chega normalmente.
         $this->assertNotNull($user->fresh()->weekly_digest_sent_at);
+    }
+
+    /** Acima do piso de volume, a faixa de fatos entra com os três dados. */
+    public function test_includes_context_facts_above_volume_floor(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id, 'is_demo' => false]);
+
+        $this->enrichedClicks($link, 4, '2026-08-05 15:00:00', 'SP', 'São Paulo');
+        $this->enrichedClicks($link, 2, '2026-08-06 15:00:00', 'PR', 'Paraná', false);
+
+        $html = $this->captureHtml($user->id);
+
+        $this->assertStringContainsString('2 estados', $html);
+        // 4 de 6 cliques são mobile → 67%.
+        $this->assertStringContainsString('67% no celular', $html);
+        $this->assertStringContainsString('pico terça 14h', $html);
+    }
+
+    /**
+     * Abaixo do piso, a moda de dia/hora é acaso — a faixa inteira some e o
+     * e-mail volta ao formato enxuto.
+     */
+    public function test_omits_context_facts_below_volume_floor(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id, 'is_demo' => false]);
+
+        // 4 cliques: um a menos que FACTS_MIN_CLICKS, com todo o enriquecimento.
+        $this->enrichedClicks($link, 4, '2026-08-05 15:00:00');
+
+        $html = $this->captureHtml($user->id);
+
+        $this->assertStringNotContainsString('pico ', $html);
+        $this->assertStringNotContainsString('no celular', $html);
+        // O corpo essencial permanece.
+        $this->assertStringContainsString('4', $html);
+    }
+
+    /** Com um único estado, o fato mostra o NOME dele — nunca "1 estados". */
+    public function test_uses_state_name_when_all_clicks_share_one_state(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id, 'is_demo' => false]);
+
+        $this->enrichedClicks($link, 6, '2026-08-05 15:00:00', 'BA', 'Bahia');
+
+        $html = $this->captureHtml($user->id);
+
+        $this->assertStringContainsString('Bahia', $html);
+        $this->assertStringNotContainsString('1 estados', $html);
+    }
+
+    /** Sem geo, o fato de estados some e os outros dois permanecem. */
+    public function test_omits_state_fact_when_geo_is_missing(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create(['user_id' => $user->id, 'is_demo' => false]);
+
+        $this->enrichedClicks($link, 6, '2026-08-05 15:00:00', null, null);
+
+        $html = $this->captureHtml($user->id);
+
+        $this->assertStringNotContainsString('estados', $html);
+        $this->assertStringContainsString('100% no celular', $html);
+        $this->assertStringContainsString('pico terça 14h', $html);
+    }
+
+    /**
+     * Os dois CTAs: o primário na página PÚBLICA do top link (sem login), o
+     * secundário no painel autenticado com a semana já filtrada.
+     */
+    public function test_links_to_public_page_of_top_link_and_to_dashboard(): void
+    {
+        $user = User::factory()->create();
+        $topLink = Link::factory()->create([
+            'user_id' => $user->id,
+            'is_demo' => false,
+            'slug' => 'meu-portfolio',
+        ]);
+        $otherLink = Link::factory()->create(['user_id' => $user->id, 'is_demo' => false]);
+
+        $this->clicks($topLink, 5, '2026-08-05 15:00:00');
+        $this->clicks($otherLink, 1, '2026-08-06 15:00:00');
+
+        $html = $this->captureHtml($user->id);
+
+        $this->assertStringContainsString('/public-analytics/meu-portfolio?utm_source=weekly-digest', $html);
+        $this->assertStringContainsString('/links/analytics/'.$topLink->id.'?period=7d', $html);
+        $this->assertStringContainsString('histórico completo', $html);
+    }
+
+    /** O total histórico do top link ancora a semana — e só aparece se for maior. */
+    public function test_shows_lifetime_total_only_when_above_week_count(): void
+    {
+        $user = User::factory()->create();
+        $link = Link::factory()->create([
+            'user_id' => $user->id,
+            'is_demo' => false,
+            'clicks' => 141,
+        ]);
+        $this->clicks($link, 5, '2026-08-05 15:00:00');
+
+        $this->assertStringContainsString('141 no total', $this->captureHtml($user->id));
+
+        // Mesmo cenário com o contador igual à semana: a âncora some.
+        $other = User::factory()->create();
+        $otherLink = Link::factory()->create([
+            'user_id' => $other->id,
+            'is_demo' => false,
+            'clicks' => 5,
+        ]);
+        $this->clicks($otherLink, 5, '2026-08-05 15:00:00');
+
+        $this->assertStringNotContainsString('no total', $this->captureHtml($other->id));
     }
 }
