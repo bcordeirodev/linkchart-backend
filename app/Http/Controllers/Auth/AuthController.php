@@ -164,6 +164,11 @@ class AuthController extends Controller
             }
 
             $user = auth()->user();
+
+            // Registro de último login (base de WAU/MAU do admin). saveQuietly: não
+            // dispara UserObserver nem touch de updated_at em cascata por evento.
+            $user->forceFill(['last_login_at' => now()])->saveQuietly();
+
             AppLogger::authLoginSuccess($user->id, $request->ip());
 
             return response()->json([
@@ -896,6 +901,9 @@ class AuthController extends Controller
                     }
                 }
             }
+
+            // Mesmo registro de último login do fluxo por senha (login()).
+            $user->forceFill(['last_login_at' => now()])->saveQuietly();
 
             $token = JWTAuth::fromUser($user);
 
