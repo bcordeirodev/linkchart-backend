@@ -216,7 +216,65 @@ class AdminStatsService implements AdminStatsServiceInterface
     /** {@inheritDoc} */
     public function getEngagement(int $days): array
     {
-        return [];
+        $nonDemoUsers = User::whereNotIn('id', User::DEMO_ACCOUNT_IDS);
+
+        $totalUsers = (clone $nonDemoUsers)->count();
+
+        // Links não-demo por usuário — base da ativação e da distribuição.
+        // Volume baixo (users é tabela pequena): agregar em PHP é mais simples
+        // e cross-driver que CASE em SQL.
+        $linksPerUser = Link::nonDemo()
+            ->selectRaw('links.user_id, COUNT(*) as total')
+            ->groupBy('links.user_id')
+            ->pluck('total', 'user_id')
+            ->map(fn ($c) => (int) $c);
+
+        $activated = $linksPerUser->count();
+
+        // Retorno na 1ª semana (proxy por criação de link): entre os usuários
+        // cadastrados na janela, % que criou o primeiro link não-demo em até
+        // 7 dias após o cadastro. Datas comparadas em PHP (cross-driver).
+        $cohort = (clone $nonDemoUsers)
+            ->where('created_at', '>=', CarbonImmutable::now()->subDays($days))
+            ->get(['id', 'created_at']);
+
+        $firstLinkAt = Link::nonDemo()
+            ->whereIn('links.user_id', $cohort->pluck('id'))
+            ->selectRaw('links.user_id, MIN(links.created_at) as first_link_at')
+            ->groupBy('links.user_id')
+            ->pluck('first_link_at', 'user_id');
+
+        $returned = $cohort->filter(function ($user) use ($firstLinkAt) {
+            $first = $firstLinkAt[$user->id] ?? null;
+
+            return $first !== null
+                && CarbonImmutable::parse($first)->lessThanOrEqualTo($user->created_at->addDays(7));
+        })->count();
+
+        // Distribuição de links por usuário (0 / 1 / 2–5 / 6+).
+        $distribution = ['0' => 0, '1' => 0, '2-5' => 0, '6+' => 0];
+        $distribution['0'] = max(0, $totalUsers - $linksPerUser->count());
+        foreach ($linksPerUser as $count) {
+            $bucket = match (true) {
+                $count === 1 => '1',
+                $count <= 5 => '2-5',
+                default => '6+',
+            };
+            $distribution[$bucket]++;
+        }
+
+        return [
+            'activation_pct' => $totalUsers === 0 ? null : round($activated * 100 / $totalUsers, 1),
+            'week1_return_pct' => $cohort->isEmpty() ? null : round($returned * 100 / $cohort->count(), 1),
+            'links_distribution' => collect($distribution)
+                ->map(fn ($users, $bucket) => ['bucket' => (string) $bucket, 'users' => $users])
+                ->values()
+                ->all(),
+            'wau' => (clone $nonDemoUsers)->where('last_login_at', '>=', CarbonImmutable::now()->subDays(7))->count(),
+            'mau' => (clone $nonDemoUsers)->where('last_login_at', '>=', CarbonImmutable::now()->subDays(30))->count(),
+            // Disclaimer do frontend: WAU/MAU só contam desde este instante.
+            'login_tracking_since' => User::whereNotNull('last_login_at')->min('last_login_at'),
+        ];
     }
 
     /** {@inheritDoc} */
