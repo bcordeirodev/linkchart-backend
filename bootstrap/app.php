@@ -109,6 +109,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
             'metrics.redirect' => \App\Http\Middleware\RedirectMetricsCollector::class,
             'resolve.subdomain' => \App\Http\Middleware\ResolveSubdomainContext::class,
+            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
         ]);
 
         // Este backend não tem página de login (SPA separado): o default do

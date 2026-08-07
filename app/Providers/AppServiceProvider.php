@@ -46,6 +46,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(\App\Contracts\Analytics\LinkAnalyticsOrchestratorInterface::class, \App\Services\Analytics\LinkAnalyticsOrchestrator::class);
         $this->app->bind(\App\Contracts\Analytics\ReportsAnalyticsServiceInterface::class, \App\Services\Analytics\ReportsAnalyticsService::class);
 
+        $this->app->bind(
+            \App\Contracts\Admin\AdminStatsServiceInterface::class,
+            \App\Services\Admin\AdminStatsService::class
+        );
+
         // Singleton so the same profiler instance spans the PyroscopeSampling
         // middleware's handle() (start) and terminate() (flush/push).
         $this->app->singleton(\App\Profiling\PyroscopeProfiler::class);
@@ -179,5 +184,21 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('bio-avatar', function (Request $request) {
             return Limit::perMinute(10)->by('bio-avatar:'.($request->user('api')?->id ?: $request->ip()));
         });
+
+        // 60 req/min por admin no painel /api/admin/* — read-only, navegação
+        // normal fica muito abaixo; contém runaway de refetch do frontend.
+        RateLimiter::for('admin', function (Request $request) {
+            return Limit::perMinute(60)->by('admin:'.($request->user('api')?->id ?: $request->ip()));
+        });
+
+        // Docs OpenAPI (Scramble): a superfície admin fica fora da doc pública —
+        // a estratégia de auth-doc do Scramble nem conhece o alias 'admin'.
+        // Scramble é require-dev (ausente em produção com --no-dev); guardar
+        // com class_exists evita um fatal no boot em produção.
+        if (class_exists(\Dedoc\Scramble\Scramble::class)) {
+            \Dedoc\Scramble\Scramble::routes(
+                fn (\Illuminate\Routing\Route $route) => str_starts_with($route->uri, 'api/') && ! str_starts_with($route->uri, 'api/admin')
+            );
+        }
     }
 }

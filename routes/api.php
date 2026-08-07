@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Api\ApiKeyController;
 use App\Http\Controllers\Api\V1\LinkController as V1LinkController;
@@ -234,6 +235,25 @@ Route::middleware(['api.auth:api', 'verified', 'throttle:api-keys'])->controller
     Route::post('/api-keys', 'store');
     Route::delete('/api-keys/{id}', 'destroy')->whereNumber('id');
 });
+
+/**
+ * ==============================
+ * MÓDULO ADMIN (read-only)
+ * ==============================
+ * Agregados globais para o dono do produto. Gate: users.is_admin, checado
+ * do banco a cada request pelo middleware 'admin'. QUALQUER rota nova deste
+ * prefixo TEM que nascer dentro deste grupo — AdminRouteProtectionTest
+ * reprova rota api/admin/* sem o middleware.
+ */
+Route::prefix('admin')
+    ->middleware(['api.auth:api', 'verified', 'admin', 'throttle:admin'])
+    ->controller(AdminDashboardController::class)
+    ->group(function () {
+        Route::get('/overview', 'overview');
+        Route::get('/users', 'users');
+        Route::get('/engagement', 'engagement');
+        Route::get('/health', 'health');
+    });
 
 /**
  * ==============================

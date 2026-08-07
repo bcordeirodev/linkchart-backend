@@ -528,6 +528,25 @@ final class AppLogger
     }
 
     // ============================================================
+    // ADMIN (channel: audit)
+    // ============================================================
+
+    /**
+     * Registra uma ação do módulo admin no canal de auditoria.
+     *
+     * Convenção de contexto: SÓ identificadores (admin_id, page, sort...) —
+     * nunca payloads: o canal audit grava sem redação de PII, e logar a
+     * listagem persistiria emails de terceiros em plaintext.
+     *
+     * @param  string  $event  Nome do evento (ex.: 'admin.users_viewed').
+     * @param  array<string, mixed>  $context  Identificadores da ação.
+     */
+    public static function adminAction(string $event, array $context = []): void
+    {
+        self::event('audit', 'info', $event, $context);
+    }
+
+    // ============================================================
     // ESCAPE HATCH
     // ============================================================
 
