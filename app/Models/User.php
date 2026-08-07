@@ -45,6 +45,8 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property bool $weekly_digest_enabled Opt-in do digest semanal de cliques (default true); desligado pelo link assinado de unsubscribe.
  * @property \Illuminate\Support\Carbon|null $weekly_digest_sent_at At-most-once claim of SendWeeklyDigestEmailJob — timestamp of the last digest send (see that class's docblock).
  * @property \Illuminate\Support\Carbon|null $onboarding_tips_sent_at At-most-once claim of SendOnboardingTipsEmailJob — timestamp of the third-day tips email (see that class's docblock); null until it goes out.
+ * @property bool $is_admin Gate do painel /admin (default false). Fora do $fillable de propósito — promoção só via escrita explícita (tinker). Checado do banco a cada request pelo middleware EnsureUserIsAdmin.
+ * @property \Illuminate\Support\Carbon|null $last_login_at Último login (email/senha ou Auth0 exchange); null até o primeiro login pós-deploy. Base de WAU/MAU do admin.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\Link>                        $links
@@ -200,6 +202,8 @@ class User extends Authenticatable implements JWTSubject
             'password' => 'hashed',
             'onboarding' => 'array',
             'signup_attribution' => 'array',
+            'is_admin' => 'boolean',
+            'last_login_at' => 'datetime',
         ];
     }
 
