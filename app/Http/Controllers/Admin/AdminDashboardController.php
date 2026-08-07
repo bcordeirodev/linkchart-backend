@@ -29,6 +29,9 @@ class AdminDashboardController extends BaseController
     /** Seconds an admin payload stays cached. */
     private const CACHE_TTL_SECONDS = 300;
 
+    /** TTL curto para endpoints com dado mais mutável (users, health). */
+    private const CACHE_TTL_SHORT_SECONDS = 60;
+
     /** Mapa range → dias; a chave é validada nos endpoints. */
     private const RANGES = ['7d' => 7, '30d' => 30, '90d' => 90];
 
@@ -88,9 +91,9 @@ class AdminDashboardController extends BaseController
             'has_query' => filled($q),
         ]);
 
-        $key = 'users:'.md5(json_encode([$page, $perPage, $q, $sort, $order]));
+        $key = 'users:'.md5(serialize([$page, $perPage, $q, $sort, $order]));
 
-        return $this->cached($key, fn () => $this->stats->getUsers($page, $perPage, $q, $sort, $order), 60);
+        return $this->cached($key, fn () => $this->stats->getUsers($page, $perPage, $q, $sort, $order), self::CACHE_TTL_SHORT_SECONDS);
     }
 
     /**
@@ -119,7 +122,7 @@ class AdminDashboardController extends BaseController
      */
     public function health(Request $request): JsonResponse
     {
-        return $this->cached('health', fn () => $this->stats->getHealth(), 60);
+        return $this->cached('health', fn () => $this->stats->getHealth(), self::CACHE_TTL_SHORT_SECONDS);
     }
 
     /**

@@ -15,6 +15,16 @@ use Symfony\Component\HttpFoundation\Response;
  * revogação para contas Auth0, uma claim deixaria um admin demitido ativo
  * por até um mês. Revogar is_admin derruba o acesso na request seguinte.
  *
+ * GUARD PINADO: lê `auth('api')->user()`, nunca `auth()->user()` (guard
+ * default). O grupo de rotas /api/admin já exige 'api.auth:api', mas o
+ * gate não pode depender disso continuar verdade — se uma rota futura
+ * nascer com outro autenticador (ex.: 'auth:sanctum' por engano), o guard
+ * default resolveria para QUALQUER usuário autenticado por QUALQUER meio, e
+ * um token Sanctum de um admin alcançaria dados admin sem nunca ter passado
+ * por api.auth:api. Pinar o guard aqui faz o middleware ser sua própria
+ * defesa, independente da composição da rota — é a mesma garantia que
+ * AdminRouteProtectionTest cobra da cadeia de middleware.
+ *
  * O 403 é RETORNADO como JsonResponse, nunca via abort()/exception: o
  * catch-all de bootstrap/app.php roda antes do handling padrão do framework
  * e converteria a exceção em 500 SERVER_ERROR (mesmo racional do
@@ -31,7 +41,7 @@ class EnsureUserIsAdmin
     public function handle(Request $request, Closure $next): Response
     {
         /** @var \App\Models\User|null $user */
-        $user = auth()->user();
+        $user = auth('api')->user();
 
         if (! $user || ! $user->is_admin) {
             AppLogger::event('auth', 'warning', 'admin.access_denied', [
