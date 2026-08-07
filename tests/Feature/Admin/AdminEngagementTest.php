@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Link;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -75,10 +76,50 @@ class AdminEngagementTest extends TestCase
         $stale->forceFill(['last_login_at' => now()->subDays(20)])->saveQuietly();
         User::factory()->create(); // nunca logou
 
+        // Conta demo com login bem mais antigo que qualquer usuário real —
+        // não pode vazar para o disclaimer login_tracking_since.
+        $demoAccount = User::factory()->create(['id' => User::DEMO_ACCOUNT_IDS[0]]);
+        $demoAccount->forceFill(['last_login_at' => now()->subDays(365)])->saveQuietly();
+
         $json = $this->getJson('/api/admin/engagement?range=30d', $this->auth())->json('data');
 
         $this->assertSame(1, $json['wau']);
         $this->assertSame(2, $json['mau']);
         $this->assertNotNull($json['login_tracking_since']);
+        // O mínimo deve ser o do usuário real mais antigo ($stale), nunca o
+        // do demo (365 dias atrás) — pin do fix de exclusão de demo.
+        $this->assertTrue(
+            CarbonImmutable::parse($json['login_tracking_since'])->equalTo($stale->last_login_at)
+        );
+    }
+
+    public function test_week1_return_pct_uses_first_link_within_seven_days(): void
+    {
+        // Move o admin para fora da janela de cohort (30d) para isolar o
+        // cálculo aos dois usuários de teste abaixo.
+        $this->admin->forceFill(['created_at' => now()->subDays(90)])->saveQuietly();
+
+        $returnedCreatedAt = now()->subDays(10);
+        $returned = User::factory()->create();
+        $returned->forceFill(['created_at' => $returnedCreatedAt])->saveQuietly();
+        Link::factory()->create([
+            'user_id' => $returned->id,
+            'is_demo' => false,
+            'created_at' => $returnedCreatedAt->copy()->addDays(2),
+        ]);
+
+        $notReturnedCreatedAt = now()->subDays(10);
+        $notReturned = User::factory()->create();
+        $notReturned->forceFill(['created_at' => $notReturnedCreatedAt])->saveQuietly();
+        Link::factory()->create([
+            'user_id' => $notReturned->id,
+            'is_demo' => false,
+            'created_at' => $notReturnedCreatedAt->copy()->addDays(20),
+        ]);
+
+        $json = $this->getJson('/api/admin/engagement?range=30d', $this->auth())->json('data');
+
+        // cohort = 2 (admin fora da janela); 1 retornou em até 7 dias → 50.0
+        $this->assertEquals(50.0, $json['week1_return_pct']);
     }
 }

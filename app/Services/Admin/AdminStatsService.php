@@ -273,7 +273,9 @@ class AdminStatsService implements AdminStatsServiceInterface
             'wau' => (clone $nonDemoUsers)->where('last_login_at', '>=', CarbonImmutable::now()->subDays(7))->count(),
             'mau' => (clone $nonDemoUsers)->where('last_login_at', '>=', CarbonImmutable::now()->subDays(30))->count(),
             // Disclaimer do frontend: WAU/MAU só contam desde este instante.
-            'login_tracking_since' => User::whereNotNull('last_login_at')->min('last_login_at'),
+            // Exclui contas demo (mesmo predicado do resto do método) —
+            // senão um login de QA antecipa a data exibida ao dono do produto.
+            'login_tracking_since' => (clone $nonDemoUsers)->whereNotNull('last_login_at')->min('last_login_at'),
         ];
     }
 
