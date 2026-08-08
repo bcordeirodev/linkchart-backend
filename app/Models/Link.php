@@ -205,13 +205,28 @@ class Link extends Model
      * ({@see User::DEMO_ACCOUNT_IDS}). Colunas qualificadas com `links.`
      * para o scope sobreviver a JOINs (clicks, users).
      *
+     * IMPORTANTE — links anônimos CONTAM como reais. `links.user_id` é
+     * NULLABLE (o encurtador público cria links sem dono) e, em SQL,
+     * `NULL NOT IN (...)` avalia para NULL, o que DESCARTA a linha. Sem o
+     * ramo `whereNull` abaixo, todo link anônimo sumia das métricas globais
+     * (no banco de dev: 31 de 195 links sobreviviam). O agrupamento explícito
+     * mantém a precedência correta em relação ao `where` anterior.
+     *
+     * Consequência para consumidores: qualquer agregação que faça
+     * `groupBy('links.user_id')` precisa adicionar `whereNotNull('links.user_id')`
+     * por conta própria — senão os anônimos viram um bucket fantasma de
+     * "usuário null" (ver AdminStatsService::getEngagement).
+     *
      * Uso: `Link::nonDemo()->...`. Todo o módulo admin passa por aqui.
      */
     public function scopeNonDemo(Builder $query): Builder
     {
         return $query
             ->where('links.is_demo', false)
-            ->whereNotIn('links.user_id', User::DEMO_ACCOUNT_IDS);
+            ->where(fn ($q) => $q
+                ->whereNull('links.user_id')
+                ->orWhereNotIn('links.user_id', User::DEMO_ACCOUNT_IDS)
+            );
     }
 
     /**

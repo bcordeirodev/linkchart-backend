@@ -225,7 +225,13 @@ class AdminStatsService implements AdminStatsServiceInterface
         // Links não-demo por usuário — base da ativação e da distribuição.
         // Volume baixo (users é tabela pequena): agregar em PHP é mais simples
         // e cross-driver que CASE em SQL.
+        //
+        // whereNotNull obrigatório: nonDemo() inclui links anônimos (sem dono,
+        // do encurtador público) porque eles CONTAM nos totais globais — mas
+        // aqui o agrupamento é por usuário, e o grupo `user_id = null` viraria
+        // um bucket fantasma inflando ativação e distribuição.
         $linksPerUser = Link::nonDemo()
+            ->whereNotNull('links.user_id')
             ->selectRaw('links.user_id, COUNT(*) as total')
             ->groupBy('links.user_id')
             ->pluck('total', 'user_id')
@@ -240,6 +246,8 @@ class AdminStatsService implements AdminStatsServiceInterface
             ->where('created_at', '>=', CarbonImmutable::now()->subDays($days))
             ->get(['id', 'created_at']);
 
+        // O whereIn abaixo já mantém a query user-scoped (NULL IN (...) nunca
+        // casa), então links anônimos ficam de fora da cohort por construção.
         $firstLinkAt = Link::nonDemo()
             ->whereIn('links.user_id', $cohort->pluck('id'))
             ->selectRaw('links.user_id, MIN(links.created_at) as first_link_at')
@@ -265,6 +273,12 @@ class AdminStatsService implements AdminStatsServiceInterface
             $distribution[$bucket]++;
         }
 
+        // min() é query builder puro: devolve a string crua do banco
+        // ('Y-m-d H:i:s' em UTC) sem passar pelo cast datetime do model, e o
+        // cliente parseia isso como hora LOCAL. Normalizado para ISO-8601 com
+        // offset, igual ao resto dos timestamps da API (ver getUsers).
+        $oldestLogin = (clone $nonDemoUsers)->whereNotNull('last_login_at')->min('last_login_at');
+
         return [
             'activation_pct' => $totalUsers === 0 ? null : round($activated * 100 / $totalUsers, 1),
             'week1_return_pct' => $cohort->isEmpty() ? null : round($returned * 100 / $cohort->count(), 1),
@@ -277,7 +291,7 @@ class AdminStatsService implements AdminStatsServiceInterface
             // Disclaimer do frontend: WAU/MAU só contam desde este instante.
             // Exclui contas demo (mesmo predicado do resto do método) —
             // senão um login de QA antecipa a data exibida ao dono do produto.
-            'login_tracking_since' => (clone $nonDemoUsers)->whereNotNull('last_login_at')->min('last_login_at'),
+            'login_tracking_since' => $oldestLogin ? CarbonImmutable::parse($oldestLogin)->toISOString() : null,
         ];
     }
 

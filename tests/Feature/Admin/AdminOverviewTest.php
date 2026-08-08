@@ -71,6 +71,30 @@ class AdminOverviewTest extends TestCase
         $this->assertSame(1, $json['totals']['clicks']);
     }
 
+    /**
+     * Links do encurtador público não têm dono (`user_id = null`) e são
+     * tráfego real — precisam aparecer nos totais globais. Regressão do
+     * `NULL NOT IN (...)` que descartava esses links inteiros.
+     */
+    public function test_overview_counts_anonymous_links_and_their_clicks(): void
+    {
+        $anonymous = Link::factory()->create([
+            'user_id' => null,
+            'is_demo' => false,
+            'is_active' => true,
+        ]);
+        Click::factory()->create(['link_id' => $anonymous->id, 'created_at' => now()->subDay()]);
+
+        $json = $this->getJson('/api/admin/overview?range=7d', $this->auth())
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame(1, $json['totals']['links']);
+        $this->assertSame(1, $json['totals']['clicks']);
+        // Só o admin: o link anônimo não inventa um usuário.
+        $this->assertSame(1, $json['totals']['users']);
+    }
+
     public function test_overview_series_are_zero_filled(): void
     {
         $json = $this->getJson('/api/admin/overview?range=7d', $this->auth())

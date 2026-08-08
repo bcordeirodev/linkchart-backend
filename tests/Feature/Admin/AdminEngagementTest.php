@@ -68,6 +68,30 @@ class AdminEngagementTest extends TestCase
         $this->assertSame(1, $buckets['6+']);
     }
 
+    /**
+     * Links anônimos contam nos totais globais (ver AdminOverviewTest), mas
+     * NÃO podem virar um bucket fantasma "usuário null" aqui — engagement é
+     * por usuário. Contrapartida do fix do scopeNonDemo.
+     */
+    public function test_anonymous_links_do_not_create_a_user_bucket(): void
+    {
+        $active = User::factory()->create();
+        Link::factory()->create(['user_id' => $active->id, 'is_demo' => false]);
+        Link::factory()->count(3)->create(['user_id' => null, 'is_demo' => false]);
+
+        $json = $this->getJson('/api/admin/engagement?range=30d', $this->auth())
+            ->assertOk()->json('data');
+        $buckets = collect($json['links_distribution'])->pluck('users', 'bucket');
+
+        // 2 usuários (admin + active), 1 com link → 50.0; sem os anônimos
+        // inflando o numerador.
+        $this->assertEquals(50.0, $json['activation_pct']);
+        $this->assertSame(1, $buckets['0']);   // admin
+        $this->assertSame(1, $buckets['1']);   // active
+        $this->assertSame(0, $buckets['2-5']); // os 3 anônimos NÃO viram bucket
+        $this->assertSame(0, $buckets['6+']);
+    }
+
     public function test_wau_mau_from_last_login_at(): void
     {
         $recent = User::factory()->create();
@@ -86,6 +110,13 @@ class AdminEngagementTest extends TestCase
         $this->assertSame(1, $json['wau']);
         $this->assertSame(2, $json['mau']);
         $this->assertNotNull($json['login_tracking_since']);
+        // ISO-8601 com offset explícito: min() do query builder devolveria a
+        // string crua 'Y-m-d H:i:s' (sem fuso), que o cliente parseia como
+        // hora LOCAL e desloca o disclaimer em 3h.
+        $this->assertMatchesRegularExpression(
+            '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/',
+            $json['login_tracking_since']
+        );
         // O mínimo deve ser o do usuário real mais antigo ($stale), nunca o
         // do demo (365 dias atrás) — pin do fix de exclusão de demo.
         $this->assertTrue(

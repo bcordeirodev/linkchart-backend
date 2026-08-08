@@ -5,6 +5,7 @@ namespace Tests\Feature\Admin;
 use App\Models\Link;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -94,5 +95,41 @@ class AdminUsersListTest extends TestCase
         $this->assertCount(10, $json['items']);
         $this->assertSame(2, $json['meta']['current_page']);
         $this->assertSame(31, $json['meta']['total']); // 30 + admin
+    }
+
+    /**
+     * O canal `audit` grava SEM redação de PII (é a fonte de verdade das
+     * investigações). Logar o termo buscado ali persistiria email de terceiro
+     * em plaintext por 10 dias — por isso o controller loga só `has_query`.
+     * Este teste pina a regra: se alguém trocar o booleano pelo `q`, quebra.
+     */
+    public function test_audit_log_records_has_query_without_the_search_term(): void
+    {
+        $needle = 'vazou@example.com';
+
+        // Spy no canal audit_file (AppLogger::write escreve direto nele para
+        // fugir da redação do stack) — mesmo padrão de LinkHealthCheckJobTest.
+        $auditSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
+        Log::shouldReceive('channel')->with('audit_file')->andReturn($auditSpy);
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('debug')->andReturnNull();
+        Log::shouldReceive('info')->andReturnNull();
+        Log::shouldReceive('warning')->andReturnNull();
+        Log::shouldReceive('error')->andReturnNull();
+
+        $this->getJson('/api/admin/users?q='.urlencode($needle), $this->auth())->assertOk();
+
+        $auditSpy->shouldHaveReceived('info')->with(
+            'admin.users_viewed',
+            \Mockery::on(function (array $ctx) use ($needle) {
+                // O flag existe e é verdadeiro...
+                if (($ctx['has_query'] ?? null) !== true) {
+                    return false;
+                }
+
+                // ...e o termo não aparece em NENHUM lugar do contexto.
+                return ! str_contains(json_encode($ctx), $needle);
+            })
+        );
     }
 }

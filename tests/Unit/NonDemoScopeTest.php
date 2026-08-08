@@ -27,6 +27,22 @@ class NonDemoScopeTest extends TestCase
         $this->assertSame(1, Link::nonDemo()->count());
     }
 
+    /**
+     * `links.user_id` é NULLABLE (encurtador público). Como `NULL NOT IN (...)`
+     * avalia para NULL em SQL, a versão antiga do scope descartava TODO link
+     * anônimo das métricas globais. Anônimo é tráfego real: tem que contar.
+     */
+    public function test_non_demo_counts_anonymous_links(): void
+    {
+        $real = User::factory()->create();
+
+        Link::factory()->create(['user_id' => $real->id, 'is_demo' => false]); // conta
+        Link::factory()->create(['user_id' => null, 'is_demo' => false]);      // conta: anônimo
+        Link::factory()->create(['user_id' => null, 'is_demo' => true]);       // fora: is_demo
+
+        $this->assertSame(2, Link::nonDemo()->count());
+    }
+
     public function test_non_demo_survives_a_join(): void
     {
         $real = User::factory()->create();
