@@ -7,6 +7,8 @@ use App\Models\Link;
 use App\Models\User;
 use App\Services\Analytics\Support\SqlDateExpr;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 
 /**
  * Implementação dos agregados globais do painel admin.
@@ -282,6 +284,42 @@ class AdminStatsService implements AdminStatsServiceInterface
     /** {@inheritDoc} */
     public function getHealth(): array
     {
-        return [];
+        // Fila via driver configurado (Redis em prod). try/catch: o painel
+        // degrada para null se o Redis não responder — nunca 500.
+        try {
+            $queueDepth = Queue::size();
+        } catch (\Throwable) {
+            $queueDepth = null;
+        }
+
+        $links = [
+            'active' => Link::nonDemo()->where('links.is_active', true)->count(),
+            'inactive' => Link::nonDemo()->where('links.is_active', false)->count(),
+            // 'error' é o valor gravado pelo LinkHealthCheckJob em falha.
+            'broken' => Link::nonDemo()->where('links.health_status', 'error')->count(),
+        ];
+
+        $tierRows = Link::nonDemo()
+            ->join('clicks', 'clicks.link_id', '=', 'links.id')
+            ->where('clicks.created_at', '>=', CarbonImmutable::now()->subDays(7))
+            ->whereNotNull('clicks.quality_tier')
+            ->selectRaw('clicks.quality_tier as tier, COUNT(*) as clicks')
+            ->groupBy('clicks.quality_tier')
+            ->orderByDesc('clicks')
+            ->get();
+
+        $tierTotal = max(1, $tierRows->sum('clicks'));
+
+        return [
+            'queue_depth' => $queueDepth,
+            'failed_jobs_24h' => DB::table('failed_jobs')->where('failed_at', '>=', now()->subDay())->count(),
+            'failed_jobs_7d' => DB::table('failed_jobs')->where('failed_at', '>=', now()->subDays(7))->count(),
+            'links' => $links,
+            'quality_tiers_7d' => $tierRows->map(fn ($r) => [
+                'tier' => $r->tier,
+                'clicks' => (int) $r->clicks,
+                'pct' => round($r->clicks * 100 / $tierTotal, 1),
+            ])->all(),
+        ];
     }
 }
