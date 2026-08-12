@@ -51,3 +51,8 @@ server.log
 .cursorrules
 .env.local
 .worktrees
+
+# --- Hardening: nunca versionar arquivos de ambiente com segredos (só .env.example) ---
+.env
+.env.*
+!.env.example
