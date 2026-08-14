@@ -35,7 +35,7 @@ concurrency:
 
 env:
   IMAGE: ghcr.io/bcordeirodev/linkchart-backend
-  DEPLOY_HOST: 134.209.33.182
+  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
   PROJECT_PATH: /var/www/linkchartapi
 
 jobs:

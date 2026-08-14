@@ -122,7 +122,7 @@ Auto-instrumentation is enabled by `ext-opentelemetry` 1.2.1 (installed in `Dock
 ### 1 — Containers running on the server
 
 ```bash
-ssh root@134.209.33.182 \
+ssh root@<DEPLOY_HOST> \
   'docker ps --format "{{.Names}}" | grep -E "alloy|exporter"'
 ```
 
@@ -137,7 +137,7 @@ linkchart-redis-exporter
 ### 2 — Exporters reachable from inside the Alloy container
 
 ```bash
-ssh root@134.209.33.182 \
+ssh root@<DEPLOY_HOST> \
   'docker exec linkchart-alloy wget -qO- http://postgres_exporter:9187/metrics | head -1; \
    docker exec linkchart-alloy wget -qO- http://redis_exporter:9121/metrics | head -1'
 ```
@@ -196,7 +196,7 @@ telemetry without stopping Alloy, set `OTEL_ENABLED=false` in the app's
 environment instead.
 
 ```bash
-ssh root@134.209.33.182 \
+ssh root@<DEPLOY_HOST> \
   'cd /var/www/linkchartapi && \
    docker compose -p linkchartapi -f docker-compose.infra.yml stop alloy postgres_exporter redis_exporter'
 ```

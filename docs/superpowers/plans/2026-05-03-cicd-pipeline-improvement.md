@@ -12,7 +12,7 @@
 
 ## Context
 
-**Production server:** `root@134.209.33.182`
+**Production server:** `root@<DEPLOY_HOST>`
 - Backend path: `/var/www/linkchartapi` — container `linkchartapi`, port 8000
 - Frontend path: `/var/www/linkchart-frontend-next` — container `linkcharts-frontend-next-prod`, port 3000
 - Docker network: `linkcharts-network` (external, shared between frontend and backend)
@@ -405,7 +405,7 @@ on:
         type: boolean
 
 env:
-  DEPLOY_HOST: 134.209.33.182
+  DEPLOY_HOST: <DEPLOY_HOST>
   PROJECT_PATH: /var/www/linkchartapi
 
 jobs:
@@ -716,7 +716,7 @@ The `Sync source files to server` rsync step should complete in ~30s. The `Run d
 If the deploy step fails, SSH into the server and check:
 
 ```bash
-ssh root@134.209.33.182
+ssh root@<DEPLOY_HOST>
 cd /var/www/linkchartapi
 docker compose -f docker-compose.prod.yml ps
 docker logs linkchartapi --tail 30
@@ -733,7 +733,7 @@ curl -s https://api.linkcharts.com.br/health
 Expected: `{"status":"ok"}` (or similar)
 
 ```bash
-ssh root@134.209.33.182 "docker exec linkchartapi php /var/www/artisan migrate:status | grep is_demo"
+ssh root@<DEPLOY_HOST> "docker exec linkchartapi php /var/www/artisan migrate:status | grep is_demo"
 ```
 
 Expected: `2026_04_30_000001_add_is_demo_to_links_table ... Ran`
@@ -761,7 +761,7 @@ NEXT_PUBLIC_APP_URL=https://linkcharts.com.br API_URL=http://localhost:8000 npm 
 After the pipeline completes:
 
 ```bash
-ssh root@134.209.33.182 "docker inspect --format='{{.State.Health.Status}}' linkcharts-frontend-next-prod"
+ssh root@<DEPLOY_HOST> "docker inspect --format='{{.State.Health.Status}}' linkcharts-frontend-next-prod"
 ```
 
 Expected: `healthy`

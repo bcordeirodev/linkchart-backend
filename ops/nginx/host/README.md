@@ -1,6 +1,6 @@
 # Nginx do host (droplet) — configuração versionada
 
-Estes arquivos vivem em `/etc/nginx/` no droplet de produção (`134.209.33.182`) e
+Estes arquivos vivem em `/etc/nginx/` no droplet de produção (`<DEPLOY_HOST>`) e
 **não são aplicados por nenhum deploy**. O `scripts/deploy.sh` só reescreve o
 `conf.d/upstreams.conf`; todo o resto é editado à mão no servidor.
 
@@ -44,13 +44,13 @@ bridges do Docker) e o `ClientIpResolver` delega em `$request->ip()`. Ver
 # 1. edite o arquivo AQUI e commite (para o histórico existir)
 # 2. copie para o droplet
 scp -i ~/.ssh/id_ed25519 ops/nginx/host/conf.d/cloudflare-realip.conf \
-    root@134.209.33.182:/etc/nginx/conf.d/
+    root@<DEPLOY_HOST>:/etc/nginx/conf.d/
 
 # 3. VALIDE antes de recarregar — sem isto, um erro de sintaxe derruba o site
-ssh -i ~/.ssh/id_ed25519 root@134.209.33.182 "nginx -t"
+ssh -i ~/.ssh/id_ed25519 root@<DEPLOY_HOST> "nginx -t"
 
 # 4. só então recarregue (graceful, sem downtime)
-ssh -i ~/.ssh/id_ed25519 root@134.209.33.182 "nginx -s reload"
+ssh -i ~/.ssh/id_ed25519 root@<DEPLOY_HOST> "nginx -s reload"
 
 # 5. confirme que subiu
 curl -s -o /dev/null -w "%{http_code}\n" https://api.linkcharts.com.br/health
@@ -91,7 +91,7 @@ Cloudflare (nuvem cinza), a renovação passa a falhar em silêncio.
 
 ```bash
 # reverter (reabre a origem para qualquer um)
-ssh -i ~/.ssh/id_ed25519 root@134.209.33.182 "ufw allow 80/tcp && ufw allow 443/tcp"
+ssh -i ~/.ssh/id_ed25519 root@<DEPLOY_HOST> "ufw allow 80/tcp && ufw allow 443/tcp"
 
 # reaplicar as faixas (adicione ANTES de remover as permissivas)
 for r in <faixas>; do ufw allow proto tcp from "$r" to any port 80,443 comment cloudflare; done
