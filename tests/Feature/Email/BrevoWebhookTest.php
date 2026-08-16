@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Email;
 
+use App\Models\EmailEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -136,5 +137,77 @@ class BrevoWebhookTest extends TestCase
     public function test_route_is_public(): void
     {
         $this->postEvent(['event' => 'delivered', 'email' => 'ana@example.com'])->assertOk();
+    }
+
+    /** Evento de abertura vira linha em email_events com o dono resolvido pelo endereço. */
+    public function test_records_opened_event_with_resolved_user(): void
+    {
+        $user = User::factory()->create(['email' => 'ana@example.com']);
+
+        $this->postEvent([
+            'event' => 'unique_opened',
+            'email' => 'ana@example.com',
+            'tags' => ['weekly_digest'],
+            'message-id' => '<abc@smtp-relay.mailin.fr>',
+            'date' => '2026-08-16 09:12:33',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('email_events', [
+            'user_id' => $user->id,
+            'email' => 'ana@example.com',
+            'event' => 'unique_opened',
+            'tag' => 'weekly_digest',
+            'message_id' => '<abc@smtp-relay.mailin.fr>',
+        ]);
+    }
+
+    /** Clique guarda a URL; endereço sem conta grava com user_id nulo. */
+    public function test_records_click_event_with_url_and_null_user(): void
+    {
+        $this->postEvent([
+            'event' => 'click',
+            'email' => 'sem-conta@example.com',
+            'tag' => 'milestone',
+            'link' => 'https://linkcharts.com.br/links/analytics/42?utm_source=milestone-email',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('email_events', [
+            'user_id' => null,
+            'event' => 'click',
+            'tag' => 'milestone',
+            'url' => 'https://linkcharts.com.br/links/analytics/42?utm_source=milestone-email',
+        ]);
+    }
+
+    /** Falha permanente é gravada E continua desligando os e-mails de retenção. */
+    public function test_hard_bounce_is_recorded_and_still_opts_out(): void
+    {
+        $user = User::factory()->create(['email' => 'ana@example.com']);
+
+        $this->postEvent(['event' => 'hard_bounce', 'email' => 'ana@example.com'])->assertOk();
+
+        $this->assertFalse($user->fresh()->weekly_digest_enabled);
+        $this->assertDatabaseHas('email_events', ['event' => 'hard_bounce', 'user_id' => $user->id]);
+    }
+
+    /** Evento desconhecido: 200 sem linha (o contrato de sempre-200 não muda). */
+    public function test_unknown_event_is_not_recorded(): void
+    {
+        $this->postEvent(['event' => 'proxy_open_fancy', 'email' => 'ana@example.com'])->assertOk();
+
+        $this->assertDatabaseCount('email_events', 0);
+    }
+
+    /** Data ilegível não derruba o webhook — occurred_at cai para o recebimento. */
+    public function test_unparseable_date_falls_back_to_now(): void
+    {
+        $this->postEvent([
+            'event' => 'delivered',
+            'email' => 'ana@example.com',
+            'date' => 'not-a-date',
+        ])->assertOk();
+
+        $event = EmailEvent::sole();
+        $this->assertTrue($event->occurred_at->diffInSeconds(now()) < 5);
     }
 }
