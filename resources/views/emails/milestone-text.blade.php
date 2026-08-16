@@ -1,6 +1,6 @@
 Parabéns, {{ $user_name }}!
 
-Um dos seus links passou de 100 cliques.
+{{ $milestone_line }}.
 
 Link do marco: {{ $link_label }}
 Total: {{ $clicks_label }}
@@ -11,5 +11,5 @@ que mais acessaram indicam onde divulgar da próxima vez.
 Ver estatísticas: {{ $stats_url }}
 
 --
-Você recebe este aviso porque tem links ativos no Link Charts — é enviado uma única vez por link.
+Você recebe este aviso porque tem links ativos no Link Charts — cada marco é comemorado uma única vez por link.
 Para não receber mais: {{ $unsubscribe_url }}

@@ -13,17 +13,18 @@ use Mockery;
 use Tests\TestCase;
 
 /**
- * Comportamento do envio individual do marco de 100 cliques: conteúdo do
- * e-mail, claim at-most-once, skips (link sumido / abaixo do limiar / dono
- * inelegível) e falha do provedor ⇒ job failed sem retry — os mesmos contratos
- * do {@see \Tests\Unit\Jobs\SendWeeklyDigestEmailJobTest}.
+ * Comportamento do envio individual de um degrau da escada de marcos: conteúdo
+ * do e-mail, copy por degrau, claim at-most-once por degrau, skips (link sumido
+ * / abaixo do limiar / dono inelegível / degrau já comemorado) e falha do
+ * provedor ⇒ job failed sem retry — os mesmos contratos do
+ * {@see \Tests\Unit\Jobs\SendWeeklyDigestEmailJobTest}.
  */
 class SendMilestoneEmailJobTest extends TestCase
 {
     use RefreshDatabase;
 
     /**
-     * Atalho: link não-demo do usuário, com N cliques e sem notificação prévia.
+     * Atalho: link não-demo do usuário, com N cliques e sem degrau comemorado.
      *
      * @param  array<string, mixed>  $attributes  Sobrescritas do link.
      */
@@ -33,7 +34,7 @@ class SendMilestoneEmailJobTest extends TestCase
             'user_id' => $user->id,
             'is_demo' => false,
             'clicks' => $clicks,
-            'milestone_100_notified_at' => null,
+            'milestone_last_threshold' => 0,
         ], $attributes));
     }
 
@@ -66,9 +67,9 @@ class SendMilestoneEmailJobTest extends TestCase
             })
             ->andReturn(['success' => true, 'message' => 'ok']);
 
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
 
-        $this->assertNotNull($link->fresh()->milestone_100_notified_at);
+        $this->assertSame(100, $link->fresh()->milestone_last_threshold);
     }
 
     /** Sem título, o e-mail identifica o link pelo slug. */
@@ -83,10 +84,10 @@ class SendMilestoneEmailJobTest extends TestCase
             ->withArgs(fn (string $to, string $subject, string $html) => str_contains($html, 'promo-verao'))
             ->andReturn(['success' => true, 'message' => 'ok']);
 
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
     }
 
-    /** O claim atômico impede reenvio num segundo run (retry / dispatch duplicado). */
+    /** O claim atômico impede reenvio do MESMO degrau num segundo run (retry / dispatch duplicado). */
     public function test_sends_at_most_once_across_runs(): void
     {
         $user = User::factory()->create();
@@ -97,10 +98,72 @@ class SendMilestoneEmailJobTest extends TestCase
             ->once()
             ->andReturn(['success' => true, 'message' => 'ok']);
 
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
 
-        $this->assertNotNull($link->fresh()->milestone_100_notified_at);
+        $this->assertSame(100, $link->fresh()->milestone_last_threshold);
+    }
+
+    /** Degrau maior que o já comemorado gera novo e-mail; igual ou menor, não. */
+    public function test_higher_threshold_can_be_claimed_after_lower_one(): void
+    {
+        $user = User::factory()->create();
+        $link = $this->link($user, 60, ['milestone_last_threshold' => 25]);
+
+        $emailService = Mockery::mock(EmailService::class);
+        $emailService->shouldReceive('sendTransactionalEmail')
+            ->once()
+            ->andReturn(['success' => true, 'message' => 'ok']);
+
+        (new SendMilestoneEmailJob($link->id, 50))->handle($emailService);
+
+        $this->assertSame(50, $link->fresh()->milestone_last_threshold);
+    }
+
+    /** Degrau já comemorado (ou menor) sai quieto sem tocar o provedor. */
+    public function test_skips_when_threshold_already_claimed(): void
+    {
+        $user = User::factory()->create();
+        $link = $this->link($user, 200, ['milestone_last_threshold' => 100]);
+
+        $emailService = Mockery::mock(EmailService::class);
+        $emailService->shouldNotReceive('sendTransactionalEmail');
+
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
+
+        $this->assertSame(100, $link->fresh()->milestone_last_threshold);
+    }
+
+    /** Degrau 10 tem copy de estreia — "10 primeiros cliques". */
+    public function test_first_milestone_uses_debut_copy(): void
+    {
+        $user = User::factory()->create();
+        $link = $this->link($user, 12);
+
+        $emailService = Mockery::mock(EmailService::class);
+        $emailService->shouldReceive('sendTransactionalEmail')
+            ->once()
+            ->withArgs(fn (string $to, string $subject, string $html) => str_contains($subject, '10 primeiros cliques')
+                && str_contains($html, '10 primeiros cliques'))
+            ->andReturn(['success' => true, 'message' => 'ok']);
+
+        (new SendMilestoneEmailJob($link->id, 10))->handle($emailService);
+    }
+
+    /** Degraus seguintes celebram "passou de N cliques" com o N do degrau. */
+    public function test_later_milestones_mention_the_threshold(): void
+    {
+        $user = User::factory()->create();
+        $link = $this->link($user, 260);
+
+        $emailService = Mockery::mock(EmailService::class);
+        $emailService->shouldReceive('sendTransactionalEmail')
+            ->once()
+            ->withArgs(fn (string $to, string $subject, string $html) => str_contains($subject, 'passou de 250 cliques')
+                && str_contains($html, 'passou de 250 cliques'))
+            ->andReturn(['success' => true, 'message' => 'ok']);
+
+        (new SendMilestoneEmailJob($link->id, 250))->handle($emailService);
     }
 
     /** Link apagado entre dispatch e execução — no-op limpo. */
@@ -109,23 +172,23 @@ class SendMilestoneEmailJobTest extends TestCase
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldNotReceive('sendTransactionalEmail');
 
-        (new SendMilestoneEmailJob(999999))->handle($emailService);
+        (new SendMilestoneEmailJob(999999, 100))->handle($emailService);
 
-        $this->assertSame(0, Link::whereNotNull('milestone_100_notified_at')->count());
+        $this->assertSame(0, Link::where('milestone_last_threshold', '>', 0)->count());
     }
 
-    /** Cliques abaixo do limiar na hora da execução: nada sai e o claim fica livre. */
+    /** Cliques abaixo do degrau na hora da execução: nada sai e o claim fica livre. */
     public function test_skips_without_claim_when_link_is_below_threshold(): void
     {
         $user = User::factory()->create();
-        $link = $this->link($user, 42);
+        $link = $this->link($user, 8);
 
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldNotReceive('sendTransactionalEmail');
 
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 10))->handle($emailService);
 
-        $this->assertNull($link->fresh()->milestone_100_notified_at);
+        $this->assertSame(0, $link->fresh()->milestone_last_threshold);
     }
 
     /** Opt-out entre o disparo e a execução é respeitado, sem queimar o claim. */
@@ -137,9 +200,9 @@ class SendMilestoneEmailJobTest extends TestCase
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldNotReceive('sendTransactionalEmail');
 
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
 
-        $this->assertNull($link->fresh()->milestone_100_notified_at);
+        $this->assertSame(0, $link->fresh()->milestone_last_threshold);
     }
 
     /** Link anônimo (sem dono) não tem destinatário. */
@@ -149,15 +212,15 @@ class SendMilestoneEmailJobTest extends TestCase
             'user_id' => null,
             'is_demo' => false,
             'clicks' => 150,
-            'milestone_100_notified_at' => null,
+            'milestone_last_threshold' => 0,
         ]);
 
         $emailService = Mockery::mock(EmailService::class);
         $emailService->shouldNotReceive('sendTransactionalEmail');
 
-        (new SendMilestoneEmailJob($link->id))->handle($emailService);
+        (new SendMilestoneEmailJob($link->id, 100))->handle($emailService);
 
-        $this->assertNull($link->fresh()->milestone_100_notified_at);
+        $this->assertSame(0, $link->fresh()->milestone_last_threshold);
     }
 
     /**
@@ -181,13 +244,13 @@ class SendMilestoneEmailJobTest extends TestCase
             $failedEvent = $event;
         });
 
-        SendMilestoneEmailJob::dispatch($link->id);
+        SendMilestoneEmailJob::dispatch($link->id, 100);
 
         $this->assertNotNull($failedEvent, 'O job deveria se marcar como falho quando o provedor recusa o envio.');
         $this->assertSame(SendMilestoneEmailJob::class, $failedEvent->job->resolveName());
         $this->assertStringContainsString('quota estourada', $failedEvent->exception->getMessage());
 
         // Claim feito antes do envio permanece — at-most-once deliberado.
-        $this->assertNotNull($link->fresh()->milestone_100_notified_at);
+        $this->assertSame(100, $link->fresh()->milestone_last_threshold);
     }
 }
