@@ -66,7 +66,7 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body (omitted from the payload when empty — the API rejects empty strings).
      * @param  string|null  $toName  Optional recipient display name.
-     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips).
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips). Also sent as a Brevo tag so webhook events can be attributed per campaign.
      * @return array{success: bool, message: string, to?: string, method: string, status_code?: int, message_id?: string|null, error?: string}
      */
     public function sendEmailViaBrevoAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
@@ -86,6 +86,9 @@ class EmailService
                 'to' => [['email' => $toEmail, 'name' => $toName ?? $toEmail]],
                 'subject' => $subject,
                 'htmlContent' => $htmlContent,
+                // O tipo semântico ($type) vira tag Brevo: é ela que volta nos eventos do
+                // webhook e permite montar o funil enviado→aberto→clicado por campanha.
+                'tags' => [$type],
             ];
 
             if ($textContent !== null && $textContent !== '') {
