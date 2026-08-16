@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Marco de 100 cliques — Link Charts</title>
+    <title>Marco de cliques — Link Charts</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:32px 16px;">
@@ -14,7 +14,7 @@
                         <td style="padding:32px 32px 8px 32px;">
                             <h1 style="margin:0;font-size:22px;line-height:1.3;color:#111827;">Parabéns, {{ $user_name }}! 🎉</h1>
                             <p style="margin:8px 0 0 0;font-size:13px;line-height:1.5;color:#6b7280;">
-                                Um dos seus links passou de 100 cliques
+                                {{ $milestone_line }}
                             </p>
                         </td>
                     </tr>
@@ -55,7 +55,7 @@
                     <tr>
                         <td style="padding:0 32px 32px 32px;border-top:1px solid #e5e7eb;">
                             <p style="margin:24px 0 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
-                                Você recebe este aviso porque tem links ativos no Link Charts — é enviado uma única vez por link.
+                                Você recebe este aviso porque tem links ativos no Link Charts — cada marco é comemorado uma única vez por link.
                                 <a href="{{ $unsubscribe_url }}" style="color:#6b7280;text-decoration:underline;">Não quero mais receber</a>
                             </p>
                         </td>

@@ -9,6 +9,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->job(new \App\Jobs\LinkHealthCheckJob)->hourly()->withoutOverlapping();
         $schedule->command('clicks:anonymize-ips')->dailyAt('04:10')->withoutOverlapping();
+        $schedule->command('email-events:prune')->dailyAt('04:20')->withoutOverlapping();
 
         // Digest semanal de cliques: toda segunda 09:00 de São Paulo, com a
         // semana anterior fechada. Roda no worker (instância única) — o
@@ -18,9 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping();
 
-        // Marco de 100 cliques: varredura diária às 10:00 de São Paulo. Mesmo
-        // racional do digest (worker de instância única), só que por link — o
-        // claim vive em links.milestone_100_notified_at.
+        // Escada de marcos de cliques (10→1000): varredura diária às 10:00 de
+        // São Paulo. Mesmo racional do digest (worker de instância única), só
+        // que por link — o claim vive em links.milestone_last_threshold.
         $schedule->job(new \App\Jobs\DispatchMilestoneEmailsJob)
             ->dailyAt('10:00')
             ->timezone('America/Sao_Paulo')

@@ -131,6 +131,25 @@ class EmailServiceBrevoTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    /** O tipo semântico viaja como tag Brevo — é o que atribui abertura/clique por campanha. */
+    public function test_sends_semantic_type_as_brevo_tag(): void
+    {
+        Http::fake([
+            'api.brevo.com/v3/smtp/email' => Http::response(['messageId' => '<abc@smtp-relay.mailin.fr>'], 201),
+        ]);
+
+        $this->service->sendTransactionalEmail(
+            'ana@example.com',
+            'Assunto',
+            '<p>Olá</p>',
+            null,
+            'Ana',
+            'milestone',
+        );
+
+        Http::assertSent(fn (Request $request) => $request['tags'] === ['milestone']);
+    }
+
     /** O type do e-mail viaja até o log email.sent (observabilidade por tipo). */
     public function test_email_type_reaches_the_sent_log(): void
     {

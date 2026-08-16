@@ -11,13 +11,13 @@ use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
- * Elegibilidade do marco de 100 cliques: quem recebe (link não-demo com 100+
- * cliques, ainda não notificado, de dono elegível) e quem NÃO recebe (abaixo do
- * limiar, demo, já notificado, dono opt-out / conta demo / não verificado, e
- * link anônimo sem dono).
+ * Escada de marcos: qual degrau é comemorado (o MAIOR já cruzado e ainda não
+ * comemorado), quem recebe (link não-demo de dono elegível) e quem NÃO recebe
+ * (abaixo do primeiro degrau, entre degraus, demo, degrau já comemorado, dono
+ * opt-out / conta demo / não verificado, e link anônimo sem dono).
  *
- * O job por LINK é enfileirado — um usuário com dois links no marco recebe dois
- * e-mails, um por conquista.
+ * O job por LINK continua sendo o enfileirado, mas com teto de UM e-mail de
+ * marco por usuário por varredura — o link preterido fica para a próxima.
  */
 class DispatchMilestoneEmailsJobTest extends TestCase
 {
@@ -32,7 +32,7 @@ class DispatchMilestoneEmailsJobTest extends TestCase
     }
 
     /**
-     * Atalho: link do usuário com N cliques, não-demo e ainda não notificado.
+     * Atalho: link do usuário com N cliques, não-demo e sem degrau comemorado.
      *
      * @param  array<string, mixed>  $attributes  Sobrescritas do link.
      */
@@ -42,11 +42,11 @@ class DispatchMilestoneEmailsJobTest extends TestCase
             'user_id' => $user->id,
             'is_demo' => false,
             'clicks' => $clicks,
-            'milestone_100_notified_at' => null,
+            'milestone_last_threshold' => 0,
         ], $attributes));
     }
 
-    /** Link no marco, dono elegível: enfileira um job carregando o id do link. */
+    /** Link no marco, dono elegível: enfileira um job com o link e o degrau. */
     public function test_dispatches_for_link_that_reached_the_milestone(): void
     {
         $user = User::factory()->create();
@@ -57,19 +57,90 @@ class DispatchMilestoneEmailsJobTest extends TestCase
         Queue::assertPushed(SendMilestoneEmailJob::class, 1);
         Queue::assertPushed(
             SendMilestoneEmailJob::class,
-            fn (SendMilestoneEmailJob $job) => $job->linkId === $link->id,
+            fn (SendMilestoneEmailJob $job) => $job->linkId === $link->id && $job->threshold === 100,
         );
     }
 
-    /** 99 cliques ainda não é marco — o limiar é fechado em 100. */
+    /** 9 cliques ainda não é marco — o primeiro degrau da escada é 10. */
     public function test_skips_link_below_threshold(): void
     {
         $user = User::factory()->create();
-        $this->linkWithClicks($user, 99);
+        $this->linkWithClicks($user, 9);
 
         (new DispatchMilestoneEmailsJob)->handle();
 
         Queue::assertNotPushed(SendMilestoneEmailJob::class);
+    }
+
+    /** O degrau comemorado é o MAIOR cruzado — salto de 0 a 60 rende UM e-mail, o de 50. */
+    public function test_link_that_jumped_levels_gets_only_the_highest(): void
+    {
+        $user = User::factory()->create();
+        $link = $this->linkWithClicks($user, 60);
+
+        (new DispatchMilestoneEmailsJob)->handle();
+
+        Queue::assertPushed(SendMilestoneEmailJob::class, 1);
+        Queue::assertPushed(
+            SendMilestoneEmailJob::class,
+            fn (SendMilestoneEmailJob $job) => $job->linkId === $link->id && $job->threshold === 50,
+        );
+    }
+
+    /** 12 cliques com degrau 10 já comemorado: nenhum degrau novo cruzado. */
+    public function test_skips_link_between_levels(): void
+    {
+        $user = User::factory()->create();
+        $this->linkWithClicks($user, 12, ['milestone_last_threshold' => 10]);
+
+        (new DispatchMilestoneEmailsJob)->handle();
+
+        Queue::assertNotPushed(SendMilestoneEmailJob::class);
+    }
+
+    /** Teto diário: dois links no degrau no mesmo dia ⇒ só o de maior degrau sai. */
+    public function test_caps_at_one_email_per_user_per_run(): void
+    {
+        $user = User::factory()->create();
+        $this->linkWithClicks($user, 15);
+        $bigger = $this->linkWithClicks($user, 70);
+
+        (new DispatchMilestoneEmailsJob)->handle();
+
+        Queue::assertPushed(SendMilestoneEmailJob::class, 1);
+        Queue::assertPushed(
+            SendMilestoneEmailJob::class,
+            fn (SendMilestoneEmailJob $job) => $job->linkId === $bigger->id && $job->threshold === 50,
+        );
+    }
+
+    /** Empate de degrau desempata por cliques; o preterido fica para a próxima varredura. */
+    public function test_tie_on_threshold_prefers_more_clicks(): void
+    {
+        $user = User::factory()->create();
+        $this->linkWithClicks($user, 26);
+        $winner = $this->linkWithClicks($user, 40);
+
+        (new DispatchMilestoneEmailsJob)->handle();
+
+        Queue::assertPushed(SendMilestoneEmailJob::class, 1);
+        Queue::assertPushed(
+            SendMilestoneEmailJob::class,
+            fn (SendMilestoneEmailJob $job) => $job->linkId === $winner->id && $job->threshold === 25,
+        );
+    }
+
+    /** Usuários diferentes não competem entre si pelo teto. */
+    public function test_cap_is_per_user_not_global(): void
+    {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $this->linkWithClicks($userA, 30);
+        $this->linkWithClicks($userB, 12);
+
+        (new DispatchMilestoneEmailsJob)->handle();
+
+        Queue::assertPushed(SendMilestoneEmailJob::class, 2);
     }
 
     /** Link demo nunca gera marco ([[NUNCA contar cliques demo]]). */
@@ -83,11 +154,11 @@ class DispatchMilestoneEmailsJobTest extends TestCase
         Queue::assertNotPushed(SendMilestoneEmailJob::class);
     }
 
-    /** Já notificado: o marco é comemorado uma única vez por link. */
+    /** Degrau já comemorado: cada marco sai uma única vez por link. */
     public function test_skips_already_notified_link(): void
     {
         $user = User::factory()->create();
-        $this->linkWithClicks($user, 300, ['milestone_100_notified_at' => now()->subDay()]);
+        $this->linkWithClicks($user, 300, ['milestone_last_threshold' => 250]);
 
         (new DispatchMilestoneEmailsJob)->handle();
 
@@ -134,23 +205,11 @@ class DispatchMilestoneEmailsJobTest extends TestCase
             'user_id' => null,
             'is_demo' => false,
             'clicks' => 150,
-            'milestone_100_notified_at' => null,
+            'milestone_last_threshold' => 0,
         ]);
 
         (new DispatchMilestoneEmailsJob)->handle();
 
         Queue::assertNotPushed(SendMilestoneEmailJob::class);
-    }
-
-    /** Dois links no marco do mesmo dono: um job por link (uma conquista cada). */
-    public function test_dispatches_one_job_per_link(): void
-    {
-        $user = User::factory()->create();
-        $this->linkWithClicks($user, 100);
-        $this->linkWithClicks($user, 4200);
-
-        (new DispatchMilestoneEmailsJob)->handle();
-
-        Queue::assertPushed(SendMilestoneEmailJob::class, 2);
     }
 }

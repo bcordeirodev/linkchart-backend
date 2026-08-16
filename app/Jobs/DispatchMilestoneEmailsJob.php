@@ -13,29 +13,34 @@ use Illuminate\Queue\InteractsWithQueue;
 use Throwable;
 
 /**
- * Varredura diária do marco de 100 cliques: seleciona os links que cruzaram o
- * limiar e enfileira um {@see SendMilestoneEmailJob} por LINK.
+ * Varredura diária da escada de marcos de cliques (10/25/50/100/250/500/1000):
+ * seleciona os links que cruzaram um degrau novo e enfileira um
+ * {@see SendMilestoneEmailJob} carregando o par (link, degrau).
  *
  * Agendado todo dia 10:00 America/Sao_Paulo (bootstrap/app.php), rodando no
  * container worker — instância única, então blue/green nunca duplica o
- * disparo. É por link, não por usuário: cada conquista rende seu próprio
- * e-mail, e o claim vive na coluna do link.
+ * disparo. O job enfileirado continua sendo por LINK (o claim vive na coluna
+ * `links.milestone_last_threshold`), mas a varredura aplica um TETO de um
+ * e-mail de marco por usuário por rodada: com vários links no degrau, sai o de
+ * maior degrau (empate → mais cliques) e os preteridos ficam para a próxima
+ * varredura — a escada é sete vezes mais frequente que o marco único de antes,
+ * e sem o teto uma conta ativa receberia uma rajada num dia só.
  *
- * Elegível = link NÃO-demo com `clicks >= 100`, ainda sem
- * `milestone_100_notified_at`, cujo dono existe e é elegível a e-mails de
- * retenção ({@see User::scopeEligibleForRetentionEmails()}). Link anônimo
- * (user_id nulo) não tem destinatário e fica fora.
+ * Elegível = link NÃO-demo com `clicks >= 10` cujo maior degrau cruzado é maior
+ * que o já comemorado, e cujo dono existe e é elegível a e-mails de retenção
+ * ({@see User::scopeEligibleForRetentionEmails()}). Link anônimo (user_id nulo)
+ * não tem destinatário e fica fora.
  *
- * Um re-run do scheduler é seguro em dois níveis: o filtro de
- * milestone_100_notified_at aqui evita re-enfileirar, e o claim atômico do job
- * por link garante at-most-once mesmo se dois dispatches escaparem.
+ * Um re-run do scheduler é seguro em dois níveis: o filtro por degrau aqui
+ * evita re-enfileirar, e o claim atômico por degrau no job garante at-most-once
+ * mesmo se dois dispatches escaparem.
  */
 class DispatchMilestoneEmailsJob implements ShouldQueue
 {
     use Dispatchable, HasLogContext, InteractsWithQueue, Queueable;
 
-    /** Limiar do marco comemorado por este job. */
-    public const THRESHOLD = 100;
+    /** Escada de marcos comemorados, em ordem crescente. */
+    public const THRESHOLDS = [10, 25, 50, 100, 250, 500, 1000];
 
     public int $tries = 2;
 
@@ -44,7 +49,24 @@ class DispatchMilestoneEmailsJob implements ShouldQueue
     public int $timeout = 120;
 
     /**
-     * Seleciona os links no marco e enfileira um job de envio para cada um.
+     * Maior degrau da escada já cruzado por esse total de cliques (0 = nenhum).
+     */
+    public static function highestCrossedThreshold(int $clicks): int
+    {
+        $crossed = 0;
+
+        foreach (self::THRESHOLDS as $threshold) {
+            if ($clicks >= $threshold) {
+                $crossed = $threshold;
+            }
+        }
+
+        return $crossed;
+    }
+
+    /**
+     * Seleciona os links que cruzaram um degrau novo e enfileira um job de
+     * envio por usuário (o de maior degrau).
      */
     public function handle(): void
     {
@@ -53,22 +75,49 @@ class DispatchMilestoneEmailsJob implements ShouldQueue
         AppLogger::jobStarted(static::class, []);
 
         try {
-            $linkIds = Link::query()
+            $candidates = Link::query()
                 ->where('is_demo', false)
-                ->where('clicks', '>=', self::THRESHOLD)
-                ->whereNull('milestone_100_notified_at')
+                ->where('clicks', '>=', self::THRESHOLDS[0])
+                // Filtro grosso: degrau novo implica last < clicks; o refino
+                // fica no PHP.
+                ->whereColumn('milestone_last_threshold', '<', 'clicks')
                 // whereHas já exige o dono existente (semântica de EXISTS na
                 // FK), então link anônimo com user_id nulo cai fora sozinho.
                 ->whereHas('user', fn ($query) => $query->eligibleForRetentionEmails())
                 ->orderBy('id')
-                ->pluck('id');
+                ->get(['id', 'user_id', 'clicks', 'milestone_last_threshold']);
 
-            foreach ($linkIds as $linkId) {
-                SendMilestoneEmailJob::dispatch($linkId);
+            // Teto de 1 e-mail de marco por usuário por varredura: fica o maior
+            // degrau (empate → mais cliques). O preterido não é reivindicado e
+            // sai amanhã.
+            $bestByUser = [];
+
+            foreach ($candidates as $link) {
+                $threshold = self::highestCrossedThreshold((int) $link->clicks);
+
+                if ($threshold <= (int) $link->milestone_last_threshold) {
+                    continue; // ex.: 12 cliques com o degrau 10 já comemorado
+                }
+
+                $current = $bestByUser[$link->user_id] ?? null;
+
+                if ($current === null
+                    || $threshold > $current['threshold']
+                    || ($threshold === $current['threshold'] && (int) $link->clicks > $current['clicks'])) {
+                    $bestByUser[$link->user_id] = [
+                        'link_id' => (int) $link->id,
+                        'threshold' => $threshold,
+                        'clicks' => (int) $link->clicks,
+                    ];
+                }
+            }
+
+            foreach ($bestByUser as $best) {
+                SendMilestoneEmailJob::dispatch($best['link_id'], $best['threshold']);
             }
 
             AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
-                'recipients' => $linkIds->count(),
+                'recipients' => count($bestByUser),
             ]);
         } catch (Throwable $e) {
             AppLogger::jobFailed(static::class, $e, $this->attempts());
