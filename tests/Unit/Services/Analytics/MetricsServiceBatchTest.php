@@ -100,4 +100,45 @@ class MetricsServiceBatchTest extends TestCase
         $this->assertSame([], $service->getLinkSparklineBatch([], 7));
         $this->assertSame([], $service->getLinkTrendBatch([], 7));
     }
+
+    /**
+     * getLinkQualityBatch classifica cada link pelo percentual de cliques
+     * orgânicos na janela: >= 90% organic, >= 50% suspicious, < 50%
+     * likely_fraud; link sem clique pontuado na janela → tier/pct nulos.
+     * Cliques com quality_tier NULL (anteriores à Fase 3) não entram na conta.
+     */
+    public function test_quality_batch_classifies_links_by_organic_share(): void
+    {
+        $organic = $this->makeLinkWithClicks([]);
+        foreach (range(1, 9) as $i) {
+            Click::factory()->create(['link_id' => $organic->id, 'created_at' => now(), 'quality_tier' => 'organic']);
+        }
+        Click::factory()->create(['link_id' => $organic->id, 'created_at' => now(), 'quality_tier' => 'suspicious']);
+
+        $fraud = $this->makeLinkWithClicks([]);
+        Click::factory()->create(['link_id' => $fraud->id, 'created_at' => now(), 'quality_tier' => 'organic']);
+        foreach (range(1, 3) as $i) {
+            Click::factory()->create(['link_id' => $fraud->id, 'created_at' => now(), 'quality_tier' => 'likely_fraud']);
+        }
+
+        $unscored = $this->makeLinkWithClicks([now()]); // clique sem tier (Fase 3 ainda não rodou)
+        $noClicks = $this->makeLinkWithClicks([]);
+
+        $service = new MetricsService;
+        $batch = $service->getLinkQualityBatch(
+            [$organic->id, $fraud->id, $unscored->id, $noClicks->id],
+            30
+        );
+
+        $this->assertSame('organic', $batch[$organic->id]['tier']);
+        $this->assertSame(90.0, $batch[$organic->id]['organic_pct']);
+
+        $this->assertSame('likely_fraud', $batch[$fraud->id]['tier']);
+        $this->assertSame(25.0, $batch[$fraud->id]['organic_pct']);
+
+        $this->assertNull($batch[$unscored->id]['tier']);
+        $this->assertNull($batch[$unscored->id]['organic_pct']);
+        $this->assertNull($batch[$noClicks->id]['tier']);
+        $this->assertNull($batch[$noClicks->id]['organic_pct']);
+    }
 }
