@@ -177,15 +177,14 @@ final class Otel
      * Stamps the wall-clock time a job last succeeded, as a gauge.
      *
      * Why a gauge and not the `job.count` counter: the queue workers run with
-     * `--max-time=3600`, so every process is replaced hourly. Each new process
-     * restarts the OTel stream's start timestamp, which Alloy's
-     * `deltatocumulative` reads as a counter reset — so the cumulative total goes
-     * back to 1 on every respawn. Jobs that fire several times inside one hour
-     * still accumulate; a job on an hourly (or slower) cadence lands in a fresh
-     * process every single run and can never climb above 1, which makes
-     * `increase(job_count_total[24h])` read 0 forever and reports its scheduler
-     * as dead. `LinkHealthCheckJob` ran 24×/day for weeks while being reported
-     * as stopped.
+     * `--max-time=3600`, so every process is replaced hourly, and each process
+     * is its own OTel stream (service.instance.id embeds the PID — see
+     * OpenTelemetryServiceProvider::instanceId()). A job on an hourly (or
+     * slower) cadence therefore lands in a fresh stream every single run: the
+     * stream is born already at 1, `increase()` needs a second sample on the
+     * SAME series to measure growth, and so it reads 0 forever and reports the
+     * scheduler as dead. `LinkHealthCheckJob` ran 24×/day for weeks while being
+     * reported as stopped.
      *
      * A gauge carries no accumulation, so a restarted process cannot corrupt it:
      * the last write wins. Liveness then reads as staleness, which is the

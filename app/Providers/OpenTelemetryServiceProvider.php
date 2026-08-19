@@ -47,6 +47,32 @@ use OpenTelemetry\SemConv\ResourceAttributes;
 class OpenTelemetryServiceProvider extends ServiceProvider
 {
     /**
+     * Per-PROCESS OTel stream identity: container hostname + PID.
+     *
+     * Each PHP-FPM worker and each queue:work process exports its own
+     * independent DELTA chain (flushed at request/job end). Alloy's
+     * deltatocumulative processor keys its accumulator by stream identity, so
+     * every process MUST have a distinct service.instance.id: with a shared
+     * (per-container) id, the interleaved start timestamps from N workers read
+     * as counter resets, the cumulative output becomes a non-monotonic sawtooth,
+     * and PromQL rate()/increase() re-adds the value on every apparent reset —
+     * redirect_count_total ran up to 13.6x above the nginx access log while
+     * low-traffic series undercounted (observed 2026-08-09 → 2026-08-19).
+     *
+     * History: this was a stable per-container id because Grafana Cloud used to
+     * drop service.instance.id on OTLP ingest, collapsing per-process streams
+     * into one broken Mimir series. The label is preserved in Mimir today
+     * (verified 2026-08-19: series carry service_instance_id), so per-process
+     * identity is safe end-to-end. Sparse-job liveness does NOT depend on this
+     * counter surviving respawns — that is what the job.last_success.timestamp
+     * gauge is for (see Otel::recordJobSuccessTimestamp).
+     */
+    public static function instanceId(): string
+    {
+        return (gethostname() ?: 'unknown').'-'.getmypid();
+    }
+
+    /**
      * Register the OpenTelemetry SDK when telemetry is enabled.
      *
      * When config('otel.enabled') is false (the default), this method returns
@@ -66,16 +92,9 @@ class OpenTelemetryServiceProvider extends ServiceProvider
             ResourceAttributes::SERVICE_VERSION => config('otel.service_version'),
             // sem-conv v1.38+ renamed DEPLOYMENT_ENVIRONMENT to DEPLOYMENT_ENVIRONMENT_NAME.
             ResourceAttributes::DEPLOYMENT_ENVIRONMENT_NAME => config('otel.environment'),
-            // Stable per-CONTAINER instance id (container hostname), overriding the
-            // SDK's ServiceInstance detector, which generates a random UUID PER
-            // PROCESS. With per-process ids, every php-fpm worker and every
-            // queue:work respawn (--max-time=3600) becomes a distinct stream in
-            // Alloy's deltatocumulative; Grafana Cloud then drops the id, so all
-            // streams collapse into ONE Mimir series that never accumulates —
-            // sparse counters (hourly LinkHealthCheckJob) get stuck at 1 and
-            // increase() reads 0 forever. One id per container = one stream whose
-            // deltas sum correctly across all processes in it.
-            'service.instance.id' => gethostname() ?: 'unknown',
+            // Per-PROCESS instance id (hostname + PID) — see instanceId() for
+            // why sharing one id across FPM/queue workers corrupts every counter.
+            'service.instance.id' => self::instanceId(),
         ])));
 
         $clock = Clock::getDefault();
