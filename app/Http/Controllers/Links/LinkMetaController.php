@@ -98,7 +98,10 @@ class LinkMetaController extends Controller
      * Auth: required
      * Owner check: yes — filters Link by user_id before processing.
      *
-     * Response shape (LOCKED): { data: { [linkId]: { sparkline, trend, preview, health } } }
+     * Response shape (LOCKED): { data: { [linkId]: { sparkline, trend, quality, preview, health } } }
+     *   quality: { tier: "organic"|"suspicious"|"likely_fraud"|null, organic_pct: float|null }
+     *            (30-day window; null tier = no scored clicks — added 2026-08-18
+     *            for the links-list quality dot, additive to the locked shape)
      *   preview: { favicon_url, og_title, og_image_url } | null
      *   health:  { status, last_checked_at, http_code }
      *
@@ -126,6 +129,7 @@ class LinkMetaController extends Controller
         $ownedIds = $links->keys()->map(fn ($id) => (int) $id)->all();
         $sparklines = $this->metricsService->getLinkSparklineBatch($ownedIds, $days);
         $trends = $this->metricsService->getLinkTrendBatch($ownedIds, 7);
+        $qualities = $this->metricsService->getLinkQualityBatch($ownedIds, 30);
 
         $result = [];
         $previewDispatches = 0;
@@ -141,6 +145,7 @@ class LinkMetaController extends Controller
             $result[$id] = [
                 'sparkline' => $sparklines[(int) $id],
                 'trend' => $trends[(int) $id],
+                'quality' => $qualities[(int) $id],
                 'preview' => $preview ? [
                     'favicon_url' => $preview->favicon_url,
                     'og_title' => $preview->og_title,

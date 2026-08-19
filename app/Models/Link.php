@@ -289,7 +289,12 @@ class Link extends Model
      *
      * Cache invalidation strategy: on save, only when one of the relevance fields
      * changed:
-     *     ['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit', 'password_hash']
+     *     ['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit', 'password_hash', 'short_domain']
+     *
+     * `short_domain` joined the list on 2026-08-17 (coordinated with the
+     * subdomain-release fix): releasing a subdomain now migrates its links
+     * back to the default domain, and the cached model must stop serving the
+     * dead hostname to anything that renders the short URL from it.
      *
      * This avoids spurious cache churn from unrelated saves (e.g. the
      * denormalised `clicks` column being incremented by LinkTrackingService
@@ -306,7 +311,7 @@ class Link extends Model
     protected static function booted(): void
     {
         static::saved(function (self $link): void {
-            if (! $link->wasRecentlyCreated && ! $link->wasChanged(['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit', 'password_hash'])) {
+            if (! $link->wasRecentlyCreated && ! $link->wasChanged(['slug', 'is_active', 'expires_at', 'starts_in', 'original_url', 'click_limit', 'password_hash', 'short_domain'])) {
                 return;
             }
 

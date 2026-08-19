@@ -53,6 +53,7 @@ class LinkMetaControllerTest extends TestCase
                         'sparkline',
                         'trend' => ['current', 'previous', 'percent_change', 'last_click_at'],
                         'health' => ['status', 'last_checked_at', 'http_code'],
+                        'quality' => ['tier', 'organic_pct'],
                     ],
                 ],
             ]);

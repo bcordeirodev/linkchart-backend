@@ -214,4 +214,90 @@ class MetricsService
 
         return $result;
     }
+
+    /**
+     * Returns the traffic-quality aggregate for many links in ONE grouped query.
+     *
+     * Classifies each link by the share of ORGANIC clicks among its scored
+     * clicks (quality_tier NOT NULL — Phase 3 of the tracking enrichment)
+     * inside the window:
+     *
+     *   - organic_pct >= 90  → tier "organic"
+     *   - organic_pct >= 50  → tier "suspicious"
+     *   - organic_pct <  50  → tier "likely_fraud"
+     *   - no scored clicks   → tier null, organic_pct null (UI hides the dot)
+     *
+     * Pre-Phase-3 clicks (quality_tier NULL) are excluded from the ratio so
+     * old unscored traffic can never dilute the signal. Cache-aware per id
+     * under "meta:quality:{id}:{days}d", same TTL as the other batch metrics.
+     * Consumed by POST /api/links/batch-meta (links list quality dot).
+     *
+     * @param  array<int, int>  $linkIds  Link primary keys (duplicates ignored).
+     * @param  int  $days  Lookback window in days (default 30).
+     * @return array<int, array{tier: string|null, organic_pct: float|null}> Map of link id => quality.
+     */
+    public function getLinkQualityBatch(array $linkIds, int $days = 30): array
+    {
+        $linkIds = array_values(array_unique(array_map('intval', $linkIds)));
+
+        if ($linkIds === []) {
+            return [];
+        }
+
+        $result = [];
+        $missing = [];
+
+        foreach ($linkIds as $linkId) {
+            $cached = Cache::get("meta:quality:{$linkId}:{$days}d");
+
+            if ($cached !== null) {
+                $result[$linkId] = $cached;
+            } else {
+                $missing[] = $linkId;
+            }
+        }
+
+        if ($missing === []) {
+            return $result;
+        }
+
+        $from = now()->subDays($days);
+
+        $rows = DB::table('clicks')
+            ->whereIn('link_id', $missing)
+            ->where('created_at', '>=', $from)
+            ->whereNotNull('quality_tier')
+            ->selectRaw(
+                'link_id, '
+                ."SUM(CASE WHEN quality_tier = 'organic' THEN 1 ELSE 0 END) as organic_clicks, "
+                .'COUNT(*) as scored_clicks'
+            )
+            ->groupBy('link_id')
+            ->get()
+            ->keyBy('link_id');
+
+        foreach ($missing as $linkId) {
+            $row = $rows->get($linkId);
+            $scored = (int) ($row->scored_clicks ?? 0);
+
+            if ($scored === 0) {
+                $quality = ['tier' => null, 'organic_pct' => null];
+            } else {
+                $organicPct = round(((int) $row->organic_clicks / $scored) * 100, 1);
+                $quality = [
+                    'tier' => match (true) {
+                        $organicPct >= 90 => 'organic',
+                        $organicPct >= 50 => 'suspicious',
+                        default => 'likely_fraud',
+                    },
+                    'organic_pct' => $organicPct,
+                ];
+            }
+
+            Cache::put("meta:quality:{$linkId}:{$days}d", $quality, self::CACHE_TTL);
+            $result[$linkId] = $quality;
+        }
+
+        return $result;
+    }
 }
