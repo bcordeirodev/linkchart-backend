@@ -64,6 +64,18 @@ server {
     }
 
     # =========================================
+    # Scanner sem extensao (2026-08-07)
+    #
+    # Probes de painel/debug de framework que NAO casam com o filtro de
+    # extensao acima: caiam na rota catch-all do Laravel e viraram ~3.5k
+    # 404 em 04/08 (disfarcados de Googlebot, rajadas no mesmo segundo).
+    # Slugs nunca usam estes nomes — sao endpoints de admin/debug.
+    # =========================================
+    location ~* ^/(actuator|_ignition|telescope|server-status|server-info|__debug__|elmah\.axd|solr/|druid/|jmx-console|manager/html|_profiler|graphql) {
+        return 404;
+    }
+
+    # =========================================
     # Proxy para Backend API (porta 8000)
     #
     # IMPORTANTE: Remove o prefixo /r/ automaticamente

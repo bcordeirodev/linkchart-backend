@@ -37,7 +37,38 @@ server {
     # (/{slug} dos links curtos) continuam no backend. O backend mantem um 302
     # de fallback na raiz caso este bloco ainda nao esteja aplicado no droplet.
     # PENDENTE DE APLICAR MANUALMENTE no droplet (deploy nao toca sites-enabled).
+
+    # =========================================
+    # Filtro de ruido de scanner (2026-08-07)
+    #
+    # Mesmo filtro do vhost de redirect: este vhost tambem proxya /{slug}
+    # direto para o Laravel, entao os probes chegavam ao PHP-FPM por aqui
+    # (ex.: GET /index.php visto no log do backend em 07/08). Slugs nunca
+    # tem extensao de arquivo. Os blocos "=" e "^~" acima tem precedencia
+    # sobre estes regex, entao /_next/, /auth/, /favicon.ico e / seguem
+    # intactos.
+    # =========================================
+    location ~* \.(php|phtml|asp|aspx|jsp|cgi|sql|bak|env|ini|sh|json|xml|yml|yaml)$ {
+        return 404;
+    }
+    location ~* ^/(wp-|wordpress|cgi-bin/|vendor/|\.git) {
+        return 404;
+    }
+
+    # =========================================
+    # Scanner sem extensao (2026-08-07)
+    #
+    # Probes de painel/debug de framework que NAO casam com o filtro de
+    # extensao acima: caiam na rota catch-all do Laravel e viraram ~3.5k
+    # 404 em 04/08 (disfarcados de Googlebot, rajadas no mesmo segundo).
+    # Slugs nunca usam estes nomes — sao endpoints de admin/debug.
+    # =========================================
+    location ~* ^/(actuator|_ignition|telescope|server-status|server-info|__debug__|elmah\.axd|solr/|druid/|jmx-console|manager/html|_profiler|graphql) {
+        return 404;
+    }
+
     location = / {
+        limit_except GET HEAD { deny all; }
         proxy_pass         http://frontend_app;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
