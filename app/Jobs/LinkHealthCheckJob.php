@@ -20,36 +20,57 @@ use Illuminate\Support\Facades\DB;
  * ```php
  * $schedule->job(new \App\Jobs\LinkHealthCheckJob)->hourly()->withoutOverlapping();
  * ```
- * No application code dispatches this job directly.
+ * No application code dispatches this job directly (it re-dispatches itself,
+ * see below).
+ *
+ * Execution model (since 2026-08-31, two modes on the same class):
+ *   - **Dispatcher** (`$linkIds === null`, the scheduled entry point): selects
+ *     the active link ids and re-dispatches this same class once per chunk of
+ *     {@see self::BATCH_SIZE} ids. Finishes in milliseconds.
+ *   - **Batch** (`$linkIds` preenchido): probes only its slice of links.
+ *
+ * Por que não uma varredura única: o job monolítico cresceu junto com a base
+ * (~683 links ativos ≈ 290s de varredura) e passou a estourar o `$timeout` de
+ * 300s. O `TimeoutExceededException` mata o worker com SIGKILL, que pula os
+ * shutdown handlers do PHP — a falha não chegava ao canal `jobs` nem às
+ * métricas (72 varreduras perdidas em silêncio entre 17 e 31/08). Em lotes,
+ * cada job termina em segundos, uma falha custa {@see self::BATCH_SIZE} links
+ * (não a varredura inteira) e é logada de verdade. Os dois modos logam com o
+ * MESMO nome de classe, então o gauge `job_last_success_timestamp_seconds` e
+ * os alertas do Grafana continuam válidos sem ajuste.
  *
  * Side effects:
- *   - HTTP / external calls: issues an HTTP `HEAD` request (via Guzzle) to
- *     each active link's `original_url`. Processes links in chunks of 50 to
- *     limit peak memory usage. TLS verification is enabled (Guzzle default);
- *     links with broken or self-signed certificates will be flagged as
- *     `health_status = 'error'`.
- *   - DB writes: updates `links.health_status` ('ok' | 'error') and
- *     `links.health_checked_at` for every active link via a direct
+ *   - HTTP / external calls (batch mode only): issues an HTTP `HEAD` request
+ *     (via Guzzle) to each link's `original_url`, falling back to `GET` when
+ *     the destination rejects `HEAD`. TLS verification is enabled (Guzzle
+ *     default); links with broken or self-signed certificates will be flagged
+ *     as `health_status = 'error'`.
+ *   - DB writes (batch mode only): updates `links.health_status`
+ *     ('ok' | 'error' | 'unknown') and `links.health_checked_at` via a direct
  *     `DB::table('links')->update([...])` call (no model events, so the Link
  *     cache is NOT invalidated — health fields are read separately from slug
  *     cache hits).
  *   - Cache: none written by this job.
- *   - Queue: no further jobs are dispatched.
+ *   - Queue (dispatcher mode only): dispatches one batch instance of this
+ *     class per {@see self::BATCH_SIZE} active links.
  *   - Log channels: `jobs` — lifecycle events (`job.started` / `job.succeeded` /
- *     `job.failed`) plus per-run totals (`checked` / `errors`) via `AppLogger`.
- *     Per-link HTTP errors are still caught silently and only recorded as
- *     `health_status = 'error'` (no log line per unhealthy link).
+ *     `job.failed`); the dispatcher logs `links` / `batches`, each batch logs
+ *     `checked` / `errors` / `unknown`. Per-link HTTP errors are still caught
+ *     silently and only recorded as `health_status` (no log line per
+ *     unhealthy link).
  *
  * Retry policy:
- *   - `$tries = 1` — no retries; a failed run is acceptable since the scheduler
- *     will try again in the next hourly tick.
+ *   - `$tries = 1` — no retries; a failed batch is acceptable since the
+ *     scheduler will sweep again in the next hourly tick.
  *   - `$backoff`: not set; uses framework default (irrelevant given `$tries = 1`).
- *   - On final failure: no `failed()` callback. The job is moved to failed-jobs
- *     silently; health columns for that batch are not updated.
+ *   - On final failure: no `failed()` callback. The job is moved to failed-jobs;
+ *     health columns for that batch are not updated.
  *
  * Idempotency: YES.
- *   Re-running the job at any time simply re-checks each URL and overwrites the
- *   health columns. No new rows are created; existing data is always replaced.
+ *   Re-running either mode at any time simply re-checks each URL and overwrites
+ *   the health columns. No new rows are created; existing data is always
+ *   replaced. Links deactivated between dispatch and batch execution are
+ *   filtered out again by the batch query.
  *
  * @see \App\Models\Link
  */
@@ -61,19 +82,30 @@ class LinkHealthCheckJob implements ShouldQueue
 
     public int $timeout = 300;
 
+    /**
+     * Links por lote. Pior caso realista de um lote inteiro de destinos em
+     * timeout: 20 × (10s de timeout + 0,5s de espaçamento) ≈ 210s — folga
+     * confortável dentro do `$timeout` de 300s, que o lote monolítico não tinha.
+     */
+    private const BATCH_SIZE = 20;
+
+    /**
+     * @param  array<int, int>|null  $linkIds  Ids do lote a sondar; `null` ativa o
+     *                                         modo dispatcher (entrada do scheduler).
+     */
+    public function __construct(public ?array $linkIds = null) {}
+
     public function handle(): void
     {
         $start = microtime(true);
         AppLogger::jobStarted(static::class);
 
         try {
-            [$checked, $errors, $unknown] = $this->checkActiveLinks();
+            $context = $this->linkIds === null
+                ? $this->dispatchBatches()
+                : $this->checkBatch();
 
-            AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
-                'checked' => $checked,
-                'errors' => $errors,
-                'unknown' => $unknown,
-            ]);
+            AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, $context);
         } catch (\Throwable $e) {
             AppLogger::jobFailed(static::class, $e, $this->attempts());
             throw $e;
@@ -113,11 +145,29 @@ class LinkHealthCheckJob implements ShouldQueue
     }
 
     /**
-     * Sonda todos os links ativos e persiste as colunas de saúde.
+     * Modo dispatcher: fatia os links ativos e enfileira um lote por fatia.
      *
-     * @return array{0:int,1:int,2:int} Tupla [checados, marcados 'error', marcados 'unknown'].
+     * @return array{links: int, batches: int} Contexto para o log de sucesso.
      */
-    private function checkActiveLinks(): array
+    private function dispatchBatches(): array
+    {
+        $ids = Link::where('is_active', true)->pluck('id');
+
+        $batches = 0;
+        foreach ($ids->chunk(self::BATCH_SIZE) as $chunk) {
+            static::dispatch($chunk->values()->all());
+            $batches++;
+        }
+
+        return ['links' => $ids->count(), 'batches' => $batches];
+    }
+
+    /**
+     * Modo lote: sonda os links da fatia e persiste as colunas de saúde.
+     *
+     * @return array{checked: int, errors: int, unknown: int} Contexto para o log de sucesso.
+     */
+    private function checkBatch(): array
     {
         $http = $this->httpClient();
 
@@ -126,31 +176,31 @@ class LinkHealthCheckJob implements ShouldQueue
         $unknown = 0;
         $lastRequestAt = [];
 
-        Link::where('is_active', true)
-            ->select(['id', 'original_url'])
-            ->chunk(50, function ($links) use ($http, &$checked, &$errors, &$unknown, &$lastRequestAt) {
-                foreach ($links as $link) {
-                    $this->throttlePerHost($link->original_url, $lastRequestAt);
+        $links = Link::whereIn('id', $this->linkIds ?? [])
+            ->where('is_active', true)
+            ->get(['id', 'original_url']);
 
-                    $status = $this->probe($http, $link->original_url);
+        foreach ($links as $link) {
+            $this->throttlePerHost($link->original_url, $lastRequestAt);
 
-                    $checked++;
-                    if ($status === 'error') {
-                        $errors++;
-                    } elseif ($status === 'unknown') {
-                        $unknown++;
-                    }
+            $status = $this->probe($http, $link->original_url);
 
-                    DB::table('links')
-                        ->where('id', $link->id)
-                        ->update([
-                            'health_status' => $status,
-                            'health_checked_at' => now(),
-                        ]);
-                }
-            });
+            $checked++;
+            if ($status === 'error') {
+                $errors++;
+            } elseif ($status === 'unknown') {
+                $unknown++;
+            }
 
-        return [$checked, $errors, $unknown];
+            DB::table('links')
+                ->where('id', $link->id)
+                ->update([
+                    'health_status' => $status,
+                    'health_checked_at' => now(),
+                ]);
+        }
+
+        return ['checked' => $checked, 'errors' => $errors, 'unknown' => $unknown];
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\LinkHealthCheckJob;
+use App\Models\Link;
 use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
@@ -10,6 +11,7 @@ use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Tests\Concerns\CreatesTestLinks;
 use Tests\TestCase;
 
@@ -26,6 +28,12 @@ use Tests\TestCase;
  *
  * URLs point at 127.0.0.1 on a closed port so the Guzzle check fails
  * instantly (connection refused) without ever leaving the machine.
+ *
+ * Desde 2026-08-31 o job tem dois modos: sem argumento ele é o dispatcher
+ * (fatia os links ativos e re-enfileira a si mesmo por lote); com uma lista de
+ * ids ele sonda o lote. Os testes de classificação exercitam o modo lote
+ * diretamente (`new LinkHealthCheckJob([$id])`) para não depender do driver de
+ * fila; o modo dispatcher é coberto com `Queue::fake()`.
  */
 class LinkHealthCheckJobTest extends TestCase
 {
@@ -42,7 +50,7 @@ class LinkHealthCheckJobTest extends TestCase
     {
         $link = $this->makeLink(['original_url' => self::UNREACHABLE_URL]);
 
-        (new LinkHealthCheckJob)->handle();
+        (new LinkHealthCheckJob([$link->id]))->handle();
 
         $row = DB::table('links')->where('id', $link->id)->first(['health_status', 'health_checked_at']);
         $this->assertSame('unknown', $row->health_status);
@@ -51,7 +59,7 @@ class LinkHealthCheckJobTest extends TestCase
 
     public function test_logs_lifecycle_with_checked_error_and_unknown_totals(): void
     {
-        $this->makeLink(['original_url' => self::UNREACHABLE_URL]);
+        $link = $this->makeLink(['original_url' => self::UNREACHABLE_URL]);
 
         // Capture the lifecycle calls on the 'jobs' channel via a spy.
         $jobsSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
@@ -60,7 +68,7 @@ class LinkHealthCheckJobTest extends TestCase
         Log::shouldReceive('info')->andReturnNull();
         Log::shouldReceive('error')->andReturnNull();
 
-        (new LinkHealthCheckJob)->handle();
+        (new LinkHealthCheckJob([$link->id]))->handle();
 
         $jobsSpy->shouldHaveReceived('info')
             ->with('job.started', \Mockery::on(fn ($ctx) => ($ctx['job'] ?? null) === LinkHealthCheckJob::class));
@@ -71,13 +79,49 @@ class LinkHealthCheckJobTest extends TestCase
                 && ($ctx['unknown'] ?? null) === 1));
     }
 
-    public function test_skips_inactive_links(): void
+    public function test_dispatcher_skips_inactive_links(): void
     {
+        Queue::fake();
         $link = $this->makeLink(['original_url' => self::UNREACHABLE_URL, 'is_active' => false]);
 
         (new LinkHealthCheckJob)->handle();
 
+        // Só interessa que nenhum lote de health check foi enfileirado — a criação
+        // do usuário do factory dispara jobs próprios (welcome/demo) na fake queue.
+        Queue::assertNotPushed(LinkHealthCheckJob::class);
         $this->assertNull(DB::table('links')->where('id', $link->id)->value('health_checked_at'));
+    }
+
+    /**
+     * O modo lote re-filtra por `is_active`: um link desativado entre o dispatch
+     * e a execução do lote não pode ser sondado nem ganhar carimbo de saúde.
+     */
+    public function test_batch_skips_links_deactivated_after_dispatch(): void
+    {
+        $link = $this->makeLink(['original_url' => self::UNREACHABLE_URL, 'is_active' => false]);
+
+        (new LinkHealthCheckJob([$link->id]))->handle();
+
+        $this->assertNull(DB::table('links')->where('id', $link->id)->value('health_checked_at'));
+    }
+
+    /**
+     * O scheduler entra pelo modo dispatcher, que fatia os links ativos em lotes
+     * de 20 — a varredura monolítica estourava o timeout de 300s com ~683 links
+     * e morria por SIGKILL sem deixar rastro nos logs.
+     */
+    public function test_dispatcher_chunks_active_links_into_batches(): void
+    {
+        Queue::fake();
+        for ($i = 0; $i < 21; $i++) {
+            $this->makeLink(['original_url' => self::UNREACHABLE_URL, 'slug' => sprintf('hc%02d', $i)]);
+        }
+
+        (new LinkHealthCheckJob)->handle();
+
+        Queue::assertPushed(LinkHealthCheckJob::class, 2);
+        Queue::assertPushed(LinkHealthCheckJob::class, fn (LinkHealthCheckJob $job) => count($job->linkIds ?? []) === 20);
+        Queue::assertPushed(LinkHealthCheckJob::class, fn (LinkHealthCheckJob $job) => count($job->linkIds ?? []) === 1);
     }
 
     /**
@@ -131,7 +175,9 @@ class LinkHealthCheckJobTest extends TestCase
      */
     private function runJobWithResponses(array $responses): void
     {
-        (new FakeHttpLinkHealthCheckJob($responses))->handle();
+        $ids = Link::where('is_active', true)->pluck('id')->all();
+
+        (new FakeHttpLinkHealthCheckJob($responses, $ids))->handle();
     }
 }
 
@@ -145,8 +191,12 @@ class FakeHttpLinkHealthCheckJob extends LinkHealthCheckJob
 {
     /**
      * @param  array<int, Response>  $responses  Respostas na ordem em que serão servidas.
+     * @param  array<int, int>|null  $linkIds  Ids do lote a sondar (modo lote do job).
      */
-    public function __construct(private array $responses) {}
+    public function __construct(private array $responses, ?array $linkIds = null)
+    {
+        parent::__construct($linkIds);
+    }
 
     protected function httpClient(): Client
     {
