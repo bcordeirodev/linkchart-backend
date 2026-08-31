@@ -96,12 +96,43 @@ interface LinkServiceInterface
      *
      * Rate-limited at the route level (`public-shorten`, 10/min per IP).
      *
+     * Claim-your-link: quando (e só quando) o link nasce anônimo, a
+     * implementação emite um token de reivindicação — persiste o SHA-256 em
+     * `links.claim_token_hash` e devolve o valor em claro na propriedade
+     * transiente {@see Link::$plainClaimToken}, serializada uma única vez pelo
+     * {@see \App\Http\Resources\PublicLinkResource}. Link criado por usuário
+     * autenticado não recebe token (já tem dono).
+     *
      * @param  CreatePublicLinkDTO  $linkDTO  Validated creation payload.
      * @return Link The created and hydrated link model.
      *
      * @throws \InvalidArgumentException On invalid URL, missing required data, or slug conflict.
      */
     public function createPublicLink(CreatePublicLinkDTO $linkDTO): Link;
+
+    /**
+     * Reivindicar um link anônimo para o usuário autenticado (claim-your-link).
+     *
+     * A implementação resolve tudo num único UPDATE condicional
+     * (`WHERE slug = ? AND user_id IS NULL AND claim_token_hash = sha256(token)`),
+     * o que torna a operação atômica: duas chamadas concorrentes com o mesmo
+     * token produzem um `claimed` e um `already_claimed`, nunca dois donos.
+     *
+     * O status distingue os dois modos de falha para o chamador HTTP:
+     *   - `already_claimed` → 409 `ALREADY_CLAIMED` (o link já tem dono; o
+     *     frontend descarta a pendência do localStorage);
+     *   - `invalid` → 422 `INVALID_CLAIM_TOKEN`, deliberadamente indistinguível
+     *     entre token errado, slug inexistente e link anônimo antigo sem token,
+     *     para não servir de oráculo de enumeração de slugs.
+     *
+     * Rate-limited at the route level (`claim-link`, 10/min per user).
+     *
+     * @param  string  $slug  Slug do link a reivindicar.
+     * @param  string  $claimToken  Token em claro recebido no shorten de convidado.
+     * @param  int  $userId  Usuário autenticado que passa a ser o dono.
+     * @return array{status: 'claimed'|'already_claimed'|'invalid', link: Link|null} Em `claimed`, `link` traz o modelo já com o novo dono; nos demais status é null.
+     */
+    public function claimLink(string $slug, string $claimToken, int $userId): array;
 
     /**
      * Generate a random unique slug of the given length.

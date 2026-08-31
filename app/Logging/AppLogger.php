@@ -102,6 +102,8 @@ final class AppLogger
 
     public const LINK_CREATED = 'link.created';
 
+    public const LINK_CLAIMED = 'link.claimed';
+
     public const LINK_UPDATED = 'link.updated';
 
     public const LINK_DELETED = 'link.deleted';
@@ -517,6 +519,31 @@ final class AppLogger
             'link_id' => $link->id,
             'is_public' => $isPublic,
             'is_guest' => empty($link->user_id),
+        ]);
+    }
+
+    /**
+     * Um link anônimo acabou de ser reivindicado pelo seu criador.
+     *
+     * Canal `app`, nível info. É a ÚNICA fonte de verdade da métrica de sucesso
+     * da feature claim-your-link: a coluna `claim_token_hash` só diz se o link
+     * ainda é reivindicável, não registra a transição anônimo → dono. Contar
+     * `link.claimed` no período responde "quantos convidados viraram conta
+     * levando os cliques que já tinham".
+     *
+     * Não recebe o token (nem em claro nem hasheado): a prova já foi consumida
+     * e log não é lugar de segredo.
+     *
+     * @param  int  $linkId  id do link que trocou de dono.
+     * @param  int  $userId  id do usuário que passou a ser o dono.
+     * @param  string  $slug  slug reivindicado, para correlacionar com `link.created`.
+     */
+    public static function linkClaimed(int $linkId, int $userId, string $slug): void
+    {
+        self::write('app', 'info', self::LINK_CLAIMED, [
+            'link_id' => $linkId,
+            'user_id' => $userId,
+            'slug' => $slug,
         ]);
     }
 

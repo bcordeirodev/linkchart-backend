@@ -37,6 +37,18 @@ class PublicLinkResource extends JsonResource
             'is_public' => $this->user_id === null,
             'has_analytics' => $this->clicks > 0,
             'domain' => parse_url($this->original_url, PHP_URL_HOST),
+
+            // Claim-your-link: token em claro da prova de criação, entregue UMA
+            // única vez, só na resposta 201 do shorten de convidado. Vem da
+            // propriedade transiente Link::$plainClaimToken (o banco guarda
+            // apenas o SHA-256, e `claim_token_hash` está em Link::$hidden).
+            // A chave é OMITIDA quando não há token — shorten autenticado e
+            // qualquer releitura do link (showBySlug) não trazem o campo, em vez
+            // de trazerem `null` e sugerir que um token existiria.
+            'claim_token' => $this->when(
+                $this->plainClaimToken !== null,
+                fn () => $this->plainClaimToken
+            ),
         ];
     }
 }

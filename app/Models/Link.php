@@ -54,6 +54,7 @@ use Illuminate\Support\Facades\Cache;
  * @property \Illuminate\Support\Carbon|null $health_checked_at Timestamp of the most recent health check; null until first check.
  * @property string|null $short_domain Full hostname, e.g. "acme.linkcharts.com.br"; null uses the default redirect URL.
  * @property string|null $password_hash Bcrypt hash of the link password; null = no password. NOT fillable (set explicitly by LinkService) and hidden from serialization — clients only see the derived `has_password` boolean.
+ * @property string|null $claim_token_hash SHA-256 do token de reivindicação (claim-your-link) do link anônimo; null = link antigo sem prova de criação OU já reivindicado. NOT fillable (definido explicitamente por LinkService::createPublicLink) e hidden — o hash nunca é serializado; o token em claro só existe na resposta 201 do shorten de convidado.
  * @property int $milestone_last_threshold Maior degrau da escada de marcos já comemorado (ver DispatchMilestoneEmailsJob::THRESHOLDS); 0 = nenhum. Claim at-most-once por degrau do SendMilestoneEmailJob.
  * @property \Illuminate\Support\Carbon|null $milestone_100_notified_at LEGADO do marco único de 100 cliques (substituído por milestone_last_threshold; backfillado na migration da escada). Mantido só até o contract num release futuro — nenhum código lê ou escreve.
  * @property \Illuminate\Support\Carbon|null $winback_email_sent_at LEGADO do winback por LINK órfão (o segmento nunca disparou em prod: link de usuário real quase sempre tem clique, e o zerado é anônimo). Substituído pelo winback por USUÁRIO ausente, cujo claim vive em `users.winback_email_sent_at`. Mantido só até o contract num release futuro — nenhum código lê ou escreve.
@@ -72,6 +73,22 @@ class Link extends Model
     use HasFactory, Notifiable;
 
     public const CACHE_TTL_SECONDS = 600;
+
+    /**
+     * Token de reivindicação em claro — transiente, NUNCA persistido.
+     *
+     * Preenchido só por {@see \App\Services\Links\LinkService::createPublicLink()}
+     * quando o link nasce anônimo, para que
+     * {@see \App\Http\Resources\PublicLinkResource} o devolva uma única vez na
+     * resposta 201 do `POST /api/public/shorten`. O banco guarda apenas o
+     * SHA-256 na coluna `claim_token_hash`.
+     *
+     * É uma propriedade PHP declarada de propósito, não um atributo Eloquent:
+     * atributos dinâmicos entram no bag de `$attributes` e iriam para o próximo
+     * `save()` (coluna inexistente ⇒ erro de SQL). Uma propriedade declarada
+     * curto-circuita o `__set` do Model e some junto com a instância.
+     */
+    public ?string $plainClaimToken = null;
 
     /**
      * Mass-assignable attributes.
@@ -116,10 +133,16 @@ class Link extends Model
      * the derived `has_password` boolean (see LinkResource), and the audit
      * trail snapshots links via toArray(), which honours this list.
      *
+     * `claim_token_hash` follows the same rule: leaking it would let anyone who
+     * can read a link payload reverse the guard on `POST /api/links/claim` (the
+     * hash IS the secret the endpoint compares against). The plain token is
+     * returned exactly once, from {@see $plainClaimToken}, never from here.
+     *
      * @var array<int, string>
      */
     protected $hidden = [
         'password_hash',
+        'claim_token_hash',
     ];
 
     protected $casts = [

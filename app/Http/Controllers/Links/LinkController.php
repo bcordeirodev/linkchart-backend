@@ -25,6 +25,7 @@ use Illuminate\Http\Request;
  *   GET    /api/links                   → index
  *   POST   /api/links                   → store
  *   POST   /api/links/bulk-action        → bulkAction (registered before {id})
+ *   POST   /api/links/claim             → claim      (registered before {id}, throttle:claim-link)
  *   GET    /api/links/{id}              → show
  *   PUT    /api/links/{id}              → update
  *   DELETE /api/links/{id}              → destroy
@@ -246,6 +247,90 @@ class LinkController extends BaseController
             ], 422);
         } catch (\Exception $e) {
             return $this->serverError('Erro ao criar link.', $e);
+        }
+    }
+
+    /**
+     * POST /api/links/claim
+     *
+     * Reivindica um link criado anonimamente no encurtador público, provando a
+     * autoria com o token devolvido uma única vez na resposta 201 do
+     * `POST /api/public/shorten`. É o momento de conversão que faltava:
+     * ~87% dos cliques de prod vinham de links sem dono, sem nenhum caminho de
+     * anônimo → conta. O link passa a pertencer ao usuário autenticado com todo
+     * o histórico de cliques junto (as linhas de `clicks` apontam para
+     * `link_id`, não para o dono — nada é migrado).
+     *
+     * A troca de dono acontece num único UPDATE condicional dentro de
+     * {@see \App\Services\Links\LinkService::claimLink()}, então duas chamadas
+     * simultâneas com o mesmo token nunca produzem dois donos: uma responde 200
+     * e a outra 409.
+     *
+     * Registrada ANTES dos wildcards `links/{id}` em routes/api.php — "claim"
+     * não é numérico, logo a constraint [0-9]+ já impediria a colisão, mas a
+     * ordem explícita documenta a invariante para rotas futuras.
+     *
+     * Middleware: api.auth:api, verified, throttle:claim-link (10/min por usuário)
+     * Auth: required — reivindicar exige uma conta para receber o link.
+     * Owner check: não se aplica — o link ainda não tem dono; a posse do token
+     *              É a autorização.
+     *
+     * Body: { slug: string, claim_token: string }
+     * Response shape:
+     *   200 → NormalizeApiResponse envelope: { message, data: LinkResource }
+     *   409 → { error: { code: "ALREADY_CLAIMED", message } } quando o link já
+     *         tem dono (reivindicado antes, ou nascido de um shorten logado).
+     *   422 → { error: { code: "INVALID_CLAIM_TOKEN", message } } para token
+     *         errado, slug inexistente OU link anônimo antigo sem token. Os
+     *         três casos compartilham o código de propósito: distingui-los
+     *         transformaria o endpoint num oráculo de enumeração de slugs.
+     *
+     * @param  Request  $request  Corpo JSON descrito acima.
+     *
+     * @throws \Illuminate\Validation\ValidationException Quando slug ou claim_token faltam.
+     */
+    public function claim(Request $request): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'slug' => 'required|string|max:255',
+                'claim_token' => 'required|string|max:255',
+            ]);
+
+            $userId = auth()->guard('api')->id();
+
+            $result = $this->linkService->claimLink(
+                $validated['slug'],
+                $validated['claim_token'],
+                $userId
+            );
+
+            if ($result['status'] === 'already_claimed') {
+                return response()->json([
+                    'error' => [
+                        'code' => 'ALREADY_CLAIMED',
+                        'message' => 'Este link já foi reivindicado.',
+                    ],
+                ], 409);
+            }
+
+            if ($result['status'] !== 'claimed') {
+                return response()->json([
+                    'error' => [
+                        'code' => 'INVALID_CLAIM_TOKEN',
+                        'message' => 'Não foi possível reivindicar este link.',
+                    ],
+                ], 422);
+            }
+
+            return response()->json([
+                'message' => 'Link reivindicado com sucesso.',
+                'data' => new LinkResource($result['link']),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\Exception $e) {
+            return $this->serverError('Erro ao reivindicar link.', $e);
         }
     }
 

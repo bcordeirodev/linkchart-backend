@@ -116,6 +116,16 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        // 10 reivindicações/min por usuário em POST /api/links/claim
+        // (claim-your-link). Defesa em profundidade: o token tem 40 chars
+        // aleatórios, então brute force já é inviável por entropia — o limite
+        // existe para conter varredura de slugs por um usuário autenticado.
+        // O teto acomoda o auto-claim do login, que dispara uma chamada por
+        // pendência guardada no localStorage do convidado.
+        RateLimiter::for('claim-link', function (Request $request) {
+            return Limit::perMinute(10)->by('claim-link:'.($request->user('api')?->id ?: $request->ip()));
+        });
+
         // 5 reivindicações/hora por usuário — previne squatting de subdomínios.
         RateLimiter::for('subdomain-claim', function (Request $request) {
             return Limit::perHour(5)->by($request->user()?->id);

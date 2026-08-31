@@ -7,6 +7,7 @@ use App\DTOs\CreatePublicLinkDTO;
 use App\Models\Link;
 use App\Services\Links\LinkService;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
 
@@ -27,9 +28,17 @@ use Tests\TestCase;
  * scripted deterministically against the DB; Laravel maps unique violations
  * of every driver to UniqueConstraintViolationException, which is what the
  * mock throws.
+ *
+ * RefreshDatabase, apesar de o repositório ser mockado: desde o
+ * claim-your-link, `createPublicLink()` faz uma segunda escrita no link
+ * anônimo recém-criado para gravar `claim_token_hash` (fora do
+ * mass-assignment, no padrão de `password_hash`). Essa escrita é real e
+ * precisa do schema — o mock só substitui o INSERT inicial.
  */
 class LinkServiceSlugCollisionTest extends TestCase
 {
+    use RefreshDatabase;
+
     /**
      * Builds the driver-agnostic exception Laravel raises for a violated
      * unique index on links.slug.

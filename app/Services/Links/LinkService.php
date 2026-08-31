@@ -13,6 +13,8 @@ use App\Models\UserSubdomain;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -332,6 +334,13 @@ class LinkService implements LinkServiceInterface
 
         $link = $this->createWithSlugCollisionRetry($data, $slugWasGenerated);
 
+        // Claim-your-link: só o link que nasce ANÔNIMO ganha token. Um shorten
+        // feito com JWT válido já sai com dono — token ali seria uma segunda
+        // via de posse sem nenhum uso.
+        if (empty($data['user_id'])) {
+            $this->issueClaimToken($link);
+        }
+
         \App\Logging\AppLogger::linkCreated($link, true);
 
         // Apply the user's default (oldest active) subdomain if they have one.
@@ -347,6 +356,109 @@ class LinkService implements LinkServiceInterface
         }
 
         return $link;
+    }
+
+    /**
+     * Emite o token de reivindicação de um link recém-criado anônimo.
+     *
+     * Gera 40 chars aleatórios (`Str::random`, CSPRNG — ~238 bits de entropia,
+     * brute force inviável mesmo sem o rate limit), persiste APENAS o SHA-256 na
+     * coluna `claim_token_hash` e devolve o token em claro pela propriedade
+     * transiente {@see Link::$plainClaimToken}, de onde o
+     * {@see \App\Http\Resources\PublicLinkResource} o serializa uma única vez.
+     *
+     * Segue o padrão de `password_hash`: a coluna está FORA do `$fillable` de
+     * propósito (nenhum payload de cliente pode plantar um hash de claim), então
+     * a atribuição é explícita seguida de `save()`. Esse `save()` extra não
+     * suja o cache do slug — `claim_token_hash` não está na lista de relevância
+     * de {@see Link::booted()} e, de todo modo, o link acabou de ser inserido.
+     *
+     * Sem expiração e sem rotação por decisão de escopo (YAGNI): o token vale
+     * até o link ser reivindicado, quando o UPDATE do claim zera o hash e o
+     * queima permanentemente.
+     *
+     * @param  Link  $link  Link recém-criado, ainda sem dono.
+     */
+    private function issueClaimToken(Link $link): void
+    {
+        $token = Str::random(40);
+
+        $link->claim_token_hash = hash('sha256', $token);
+        $link->save();
+
+        $link->plainClaimToken = $token;
+    }
+
+    /**
+     * Reivindica um link anônimo para um usuário, mediante o token de criação.
+     *
+     * Núcleo do claim-your-link. A troca de dono é um ÚNICO UPDATE condicional,
+     * no padrão de claim at-most-once da casa (o mesmo dos `*_sent_at` de
+     * retenção): as três condições que autorizam o claim viajam no `WHERE`, de
+     * modo que o banco resolve a corrida sozinho — duas requisições simultâneas
+     * com o mesmo token produzem exatamente um UPDATE de 1 linha e um de 0.
+     * Nada de SELECT-then-UPDATE, que teria janela para duplo claim.
+     *
+     * Zerar `claim_token_hash` no mesmo UPDATE queima o token: o link deixa de
+     * ser reivindicável para sempre, mesmo que alguém tenha guardado o valor.
+     *
+     * O histórico de cliques vem junto de graça — `clicks.link_id` aponta para
+     * o link, não para o dono, então nada precisa ser migrado.
+     *
+     * DESAMBIGUAÇÃO DE FALHA (0 linhas afetadas): consultamos o estado do link
+     * DEPOIS do UPDATE, nunca antes. `already_claimed` quando a linha existe e
+     * já tem `user_id` — a informação é inócua (quem tem o token sabe que criou
+     * o link) e o frontend precisa dela para descartar a pendência do
+     * localStorage. Todo o resto (slug inexistente, token errado, link anônimo
+     * antigo sem hash) colapsa em `invalid`, com o MESMO código de erro, para
+     * não virar oráculo de enumeração de slugs.
+     *
+     * CACHE — decisão deliberada: invalidamos `link:slug:{slug}` explicitamente.
+     * O UPDATE via `DB::table` não dispara eventos de model, logo o
+     * {@see Link::booted()} não roda e o payload de
+     * {@see Link::findActiveBySlugCached()} continuaria carregando o `user_id`
+     * antigo (null) por até 10 min. Isso é inofensivo PARA O REDIRECT — o hot
+     * path `/r/{slug}` só lê slug/is_active/expires_at/starts_in/click_limit/
+     * password_hash/original_url/short_domain, nenhum deles tocado aqui. Mesmo
+     * assim o `Cache::forget` fica: custa um DEL que acontece no máximo uma vez
+     * na vida de cada link, e elimina a armadilha de um consumidor futuro do
+     * modelo cacheado confiar num `user_id` mentiroso.
+     *
+     * @param  string  $slug  Slug do link a reivindicar.
+     * @param  string  $claimToken  Token em claro devolvido no shorten de convidado.
+     * @param  int  $userId  Usuário autenticado que passa a ser o dono.
+     * @return array{status: 'claimed'|'already_claimed'|'invalid', link: Link|null} `link` só é preenchido em `claimed`.
+     */
+    public function claimLink(string $slug, string $claimToken, int $userId): array
+    {
+        $affected = DB::table('links')
+            ->where('slug', $slug)
+            ->whereNull('user_id')
+            ->where('claim_token_hash', hash('sha256', $claimToken))
+            ->update([
+                'user_id' => $userId,
+                'claim_token_hash' => null,
+                'updated_at' => now(),
+            ]);
+
+        if ($affected > 0) {
+            Cache::forget(Link::slugCacheKey($slug));
+
+            $link = Link::where('slug', $slug)->first();
+
+            \App\Logging\AppLogger::linkClaimed($link->id, $userId, $slug);
+
+            return ['status' => 'claimed', 'link' => $link];
+        }
+
+        // 0 linhas: descobrir POR QUE, sem revelar mais do que o necessário.
+        $existing = Link::where('slug', $slug)->first(['id', 'user_id']);
+
+        if ($existing !== null && $existing->user_id !== null) {
+            return ['status' => 'already_claimed', 'link' => null];
+        }
+
+        return ['status' => 'invalid', 'link' => null];
     }
 
     /**
