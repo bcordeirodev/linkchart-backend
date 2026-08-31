@@ -27,16 +27,25 @@ return Application::configure(basePath: dirname(__DIR__))
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping();
 
-        // Winback dos links que fizeram duas semanas sem clique. 10:20 para
-        // não colidir com a varredura de marcos — a janela do job é de 24h
-        // exatas, então o horário fixo é o que garante cobertura sem lacuna.
+        // Winback de quem sumiu há duas semanas enquanto os links seguiram
+        // rendendo cliques. 10:20 para não colidir com a varredura de marcos —
+        // o job olha uma janela de 14 dias fechada no instante do run, então o
+        // horário fixo é o que mantém a cadência diária previsível.
         $schedule->job(new \App\Jobs\DispatchWinbackEmailsJob)
             ->dailyAt('10:20')
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping();
 
-        // Dicas do terceiro dia de conta. 10:40 fecha o trio de varreduras de
-        // retenção da manhã, cada uma com sua janela de 24h.
+        // Nudge de ativação do dia 1–2 (cadastrou e não criou nenhum link).
+        // 10:30 é deliberado: precisa chegar ANTES das dicas do terceiro dia,
+        // que já pressupõem um link criado.
+        $schedule->job(new \App\Jobs\DispatchActivationNudgesJob)
+            ->dailyAt('10:30')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping();
+
+        // Dicas do terceiro dia de conta. 10:40 fecha o quarteto de varreduras
+        // de retenção da manhã, cada uma com sua janela de 24h.
         $schedule->job(new \App\Jobs\DispatchOnboardingTipsJob)
             ->dailyAt('10:40')
             ->timezone('America/Sao_Paulo')

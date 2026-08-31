@@ -42,7 +42,7 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body.
      * @param  string|null  $toName  Optional recipient display name.
-     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips).
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips, activation_nudge).
      * @return array{success: bool, message: string, to?: string, method?: string, status_code?: int, error?: string}
      */
     public function sendTransactionalEmail(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array
@@ -66,7 +66,7 @@ class EmailService
      * @param  string  $htmlContent  HTML body.
      * @param  string|null  $textContent  Optional plain-text fallback body (omitted from the payload when empty — the API rejects empty strings).
      * @param  string|null  $toName  Optional recipient display name.
-     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips). Also sent as a Brevo tag so webhook events can be attributed per campaign.
+     * @param  string  $type  Semantic email type for logs (welcome, verification, password_reset, weekly_digest, milestone, winback, onboarding_tips, activation_nudge). Also sent as a Brevo tag so webhook events can be attributed per campaign.
      * @return array{success: bool, message: string, to?: string, method: string, status_code?: int, message_id?: string|null, error?: string}
      */
     public function sendEmailViaBrevoAPI(string $toEmail, string $subject, string $htmlContent, ?string $textContent = null, ?string $toName = null, string $type = 'unknown'): array

@@ -45,6 +45,8 @@ use Tymon\JWTAuth\Contracts\JWTSubject;
  * @property bool $weekly_digest_enabled Opt-in do digest semanal de cliques (default true); desligado pelo link assinado de unsubscribe.
  * @property \Illuminate\Support\Carbon|null $weekly_digest_sent_at At-most-once claim of SendWeeklyDigestEmailJob — timestamp of the last digest send (see that class's docblock).
  * @property \Illuminate\Support\Carbon|null $onboarding_tips_sent_at At-most-once claim of SendOnboardingTipsEmailJob — timestamp of the third-day tips email (see that class's docblock); null until it goes out.
+ * @property \Illuminate\Support\Carbon|null $winback_email_sent_at Claim do SendWinbackEmailJob — carimbo do último winback enviado a ESTE usuário. Não é at-most-once eterno: o e-mail pode repetir depois do cooldown de 60 dias (ver docblock daquele job); null enquanto nunca foi enviado.
+ * @property \Illuminate\Support\Carbon|null $activation_nudge_sent_at At-most-once claim do SendActivationNudgeEmailJob — carimbo do nudge de ativação do dia 1–2 (ver docblock daquele job); null até ele sair.
  * @property bool $is_admin Gate do painel /admin (default false). Fora do $fillable de propósito — promoção só via escrita explícita (tinker). Checado do banco a cada request pelo middleware EnsureUserIsAdmin.
  * @property \Illuminate\Support\Carbon|null $last_login_at Último login (email/senha ou Auth0 exchange); null até o primeiro login pós-deploy. Base de WAU/MAU do admin.
  * @property \Illuminate\Support\Carbon $created_at
@@ -99,7 +101,8 @@ class User extends Authenticatable implements JWTSubject
 
     /**
      * Restringe a query aos usuários que podem receber e-mails de retenção
-     * (digest semanal, marco de cliques, winback, dicas de onboarding).
+     * (digest semanal, marco de cliques, winback, dicas de onboarding, nudge de
+     * ativação).
      *
      * Elegível = verificado + inscrito (weekly_digest_enabled, que por decisão
      * de produto vale para TODOS os e-mails de retenção, não só o digest) +
@@ -178,6 +181,10 @@ class User extends Authenticatable implements JWTSubject
         'weekly_digest_sent_at',
         // Same reasoning: at-most-once claim of SendOnboardingTipsEmailJob.
         'onboarding_tips_sent_at',
+        // Same reasoning: claims dos e-mails de retenção re-segmentados
+        // (winback por usuário ausente e nudge de ativação do dia 1–2).
+        'winback_email_sent_at',
+        'activation_nudge_sent_at',
         // Internal anchor for JWT invalidation (pwd_ts claim) — bookkeeping,
         // not API surface; keep it out of serialized user responses.
         'password_changed_at',
@@ -197,6 +204,8 @@ class User extends Authenticatable implements JWTSubject
             'weekly_digest_enabled' => 'boolean',
             'weekly_digest_sent_at' => 'datetime',
             'onboarding_tips_sent_at' => 'datetime',
+            'winback_email_sent_at' => 'datetime',
+            'activation_nudge_sent_at' => 'datetime',
             'password_changed_at' => 'datetime',
             'email_verified' => 'boolean',
             'password' => 'hashed',

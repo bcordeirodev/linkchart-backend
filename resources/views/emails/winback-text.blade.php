@@ -1,24 +1,21 @@
 Olá, {{ $user_name }}!
 
-{{ count($link_labels) === 1 ? 'Um link seu completou duas semanas sem cliques:' : 'Alguns links seus completaram duas semanas sem cliques:' }}
-@foreach ($link_labels as $label)
-- {{ $label }}
-@endforeach
+Seus links continuaram trabalhando enquanto você esteve fora:
+{{ $total }} cliques nos últimos {{ $window_days }} dias.
+@if ($top_link_label !== null)
 
-Link sem cliques quase sempre é link que ninguém viu. Três lugares que costumam
-destravar isso em minutos:
+Link que mais rendeu: {{ $top_link_label }} ({{ $top_link_clicks_label }} no período)
+@endif
 
-1. Status do WhatsApp. Publique o link no seu status com uma frase curta dizendo
-   o que a pessoa ganha ao clicar.
-
-2. Link na bio do Instagram. Troque o link da bio pelo seu e chame para clicar
-   nos stories do mesmo dia.
-
-3. Grupos e comunidades do seu nicho. Compartilhe onde o assunto já é discutido —
-   dois ou três grupos certos rendem mais que uma postagem genérica.
-
-Ver meus links: {{ $links_url }}
+Cada um desses cliques deixou rastro: de onde a pessoa veio, em que horário e
+por qual rede. É esse mapa que diz onde vale divulgar da próxima vez.
+{{-- URLs vão sem escape: `{{ }}` converteria o `&` dos parâmetros UTM em
+     `&amp;`, e num corpo text/plain isso não é decodificado por ninguém — o
+     segundo parâmetro chegaria ao GA como `amp;utm_medium`. Não há superfície
+     de injeção aqui: são URLs que este job monta. --}}
+Ver estatísticas: {!! $stats_url !!}
+Ver todos os links: {!! $links_url !!}
 
 --
-Você recebe este aviso porque tem links ativos no Link Charts — é enviado uma única vez por link.
-Para não receber mais: {{ $unsubscribe_url }}
+Você recebe este aviso porque tem links ativos no Link Charts — ele é enviado no máximo uma vez a cada {{ $cooldown_days }} dias.
+Para não receber mais: {!! $unsubscribe_url !!}

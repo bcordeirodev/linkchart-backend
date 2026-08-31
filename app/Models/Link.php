@@ -56,7 +56,7 @@ use Illuminate\Support\Facades\Cache;
  * @property string|null $password_hash Bcrypt hash of the link password; null = no password. NOT fillable (set explicitly by LinkService) and hidden from serialization — clients only see the derived `has_password` boolean.
  * @property int $milestone_last_threshold Maior degrau da escada de marcos já comemorado (ver DispatchMilestoneEmailsJob::THRESHOLDS); 0 = nenhum. Claim at-most-once por degrau do SendMilestoneEmailJob.
  * @property \Illuminate\Support\Carbon|null $milestone_100_notified_at LEGADO do marco único de 100 cliques (substituído por milestone_last_threshold; backfillado na migration da escada). Mantido só até o contract num release futuro — nenhum código lê ou escreve.
- * @property \Illuminate\Support\Carbon|null $winback_email_sent_at At-most-once claim of SendWinbackEmailJob — carimbado quando o link entra num e-mail de winback (ver docblock daquele job); null enquanto o link nunca foi cobrado.
+ * @property \Illuminate\Support\Carbon|null $winback_email_sent_at LEGADO do winback por LINK órfão (o segmento nunca disparou em prod: link de usuário real quase sempre tem clique, e o zerado é anônimo). Substituído pelo winback por USUÁRIO ausente, cujo claim vive em `users.winback_email_sent_at`. Mantido só até o contract num release futuro — nenhum código lê ou escreve.
  * @property \Illuminate\Support\Carbon $created_at
  * @property \Illuminate\Support\Carbon $updated_at
  * @property-read \App\Models\User|null        $user    Owning user; null for anonymous links.

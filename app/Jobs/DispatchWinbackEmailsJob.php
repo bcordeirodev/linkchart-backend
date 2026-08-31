@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Logging\AppLogger;
 use App\Logging\Context\HasLogContext;
-use App\Models\Link;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,33 +13,50 @@ use Illuminate\Queue\InteractsWithQueue;
 use Throwable;
 
 /**
- * Varredura diária do winback: seleciona os links que completaram duas semanas
- * sem NENHUM clique e enfileira um {@see SendWinbackEmailJob} por USUÁRIO.
+ * Varredura diária do winback: seleciona os usuários AUSENTES há duas semanas
+ * cujos links continuaram rendendo cliques e enfileira um
+ * {@see SendWinbackEmailJob} por usuário.
  *
  * Agendado todo dia 10:20 America/Sao_Paulo (bootstrap/app.php), rodando no
- * container worker — instância única, então blue/green nunca duplica o
- * disparo. Diferente do marco, aqui o agrupamento é por dono: quem criou três
- * links órfãos na mesma semana recebe UM e-mail listando os três, não três
- * e-mails.
+ * container worker — instância única, então blue/green nunca duplica o disparo.
  *
- * Janela: `[agora - 15 dias, agora - 14 dias)`, com as fronteiras calculadas em
- * America/Sao_Paulo e convertidas para UTC antes da query. Meia-aberta e
- * exatamente de 24h para casar com a cadência diária do scheduler: cada link
- * atravessa a janela em um único run, sem lacuna nem sobreposição.
+ * ⚠️ Re-segmentação de 2026-08-16. O alvo ANTIGO era o link órfão (14 dias, 0
+ * cliques): esse pool é estruturalmente vazio em produção — link de usuário
+ * real quase sempre tem clique, e os zerados são anônimos, sem destinatário. O
+ * e-mail nunca disparou. O alvo novo é a assimetria oposta e mensurável: gente
+ * que sumiu enquanto o produto seguiu trabalhando por ela. `links.winback_email_sent_at`
+ * ficou órfã; o claim agora é `users.winback_email_sent_at`.
  *
- * Elegível = link NÃO-demo, `clicks = 0`, criado na janela, ainda sem
- * `winback_email_sent_at`, de dono existente e elegível a e-mails de retenção
- * ({@see \App\Models\User::scopeEligibleForRetentionEmails()}).
+ * Elegível = usuário elegível a e-mails de retenção
+ * ({@see User::scopeEligibleForRetentionEmails()}) que satisfaça TODOS:
+ *
+ *  1. Ausente há {@see self::ABSENCE_DAYS} dias:
+ *     `COALESCE(last_login_at, created_at) < agora − 14d`. O coalesce cobre a
+ *     base antiga — `last_login_at` só acumula desde 07/08/2026 e nulo
+ *     significa "nunca logou desde o tracking", caso em que o cadastro é o
+ *     melhor proxy de última presença.
+ *  2. Sem link novo na janela: criar link é presença, mesmo sem login gravado.
+ *  3. Links rendendo: >= {@see self::MIN_CLICKS} cliques em links não-demo nos
+ *     últimos {@see self::CLICKS_WINDOW_DAYS} dias (mesmo piso do digest —
+ *     abaixo disso não há história para contar).
+ *  4. Fora do cooldown de {@see self::COOLDOWN_DAYS} dias: ausência é
+ *     recorrente e o e-mail pode repetir, mas nunca vira goteira.
  */
 class DispatchWinbackEmailsJob implements ShouldQueue
 {
     use Dispatchable, HasLogContext, InteractsWithQueue, Queueable;
 
-    /** Idade mínima (dias) do link para entrar no winback — lado fechado da janela. */
-    public const WINDOW_END_DAYS = 14;
+    /** Dias sem sinal de presença (login OU link novo) para o usuário entrar no winback. */
+    public const ABSENCE_DAYS = 14;
 
-    /** Idade máxima (dias) do link — lado aberto da janela. */
-    public const WINDOW_START_DAYS = 15;
+    /** Janela de apuração dos cliques que o e-mail vai relatar. */
+    public const CLICKS_WINDOW_DAYS = 14;
+
+    /** Piso de cliques na janela — abaixo disso não há número que justifique o e-mail. */
+    public const MIN_CLICKS = 5;
+
+    /** Intervalo mínimo entre dois winbacks para o mesmo usuário. */
+    public const COOLDOWN_DAYS = 60;
 
     public int $tries = 2;
 
@@ -48,8 +65,8 @@ class DispatchWinbackEmailsJob implements ShouldQueue
     public int $timeout = 120;
 
     /**
-     * Seleciona os links órfãos da janela, agrupa por dono e enfileira um job
-     * de envio por usuário com a lista de ids.
+     * Seleciona os usuários ausentes com links rendendo e enfileira um job de
+     * envio por usuário.
      */
     public function handle(): void
     {
@@ -59,33 +76,51 @@ class DispatchWinbackEmailsJob implements ShouldQueue
 
         try {
             $now = CarbonImmutable::now('America/Sao_Paulo');
-            $startUtc = $now->subDays(self::WINDOW_START_DAYS)->utc();
-            $endUtc = $now->subDays(self::WINDOW_END_DAYS)->utc();
+            $absentBefore = $now->subDays(self::ABSENCE_DAYS)->utc();
+            $clicksSince = $now->subDays(self::CLICKS_WINDOW_DAYS)->utc();
+            $cooldownBefore = $now->subDays(self::COOLDOWN_DAYS)->utc();
 
-            $linksByUser = Link::query()
-                ->where('is_demo', false)
-                ->where('clicks', 0)
-                ->whereNull('winback_email_sent_at')
-                ->where('created_at', '>=', $startUtc)
-                ->where('created_at', '<', $endUtc)
-                // whereHas já exige o dono existente (semântica de EXISTS na
-                // FK), então link anônimo com user_id nulo cai fora sozinho.
-                ->whereHas('user', fn ($query) => $query->eligibleForRetentionEmails())
+            $userIds = User::query()
+                ->eligibleForRetentionEmails()
+                // Guard 1 — ausência. Colunas qualificadas porque `created_at`
+                // existe em quase toda tabela do schema; o COALESCE só faz
+                // sentido lido como "última presença conhecida".
+                ->whereRaw('COALESCE(users.last_login_at, users.created_at) < ?', [$absentBefore])
+                // Guard 4 — cooldown. Mesmo formato do claim condicional que o
+                // job de envio reavalia antes de mandar.
+                ->where(function ($query) use ($cooldownBefore) {
+                    $query->whereNull('winback_email_sent_at')
+                        ->orWhere('winback_email_sent_at', '<', $cooldownBefore);
+                })
+                // Guard 2 — link novo é presença.
+                ->whereDoesntHave('links', function ($query) use ($absentBefore) {
+                    $query->where('is_demo', false)
+                        ->where('created_at', '>=', $absentBefore);
+                })
+                // Guard 3 — links rendendo. A subquery agrega por dono JOINando
+                // links (regra global: clique só conta com o link ao lado, para
+                // excluir demo) e o piso vai no HAVING.
+                ->whereIn('id', function ($query) use ($clicksSince) {
+                    $query->from('clicks')
+                        ->join('links', 'links.id', '=', 'clicks.link_id')
+                        ->select('links.user_id')
+                        ->where('links.is_demo', false)
+                        ->whereNotNull('links.user_id')
+                        ->where('clicks.created_at', '>=', $clicksSince)
+                        ->groupBy('links.user_id')
+                        ->havingRaw('COUNT(*) >= ?', [self::MIN_CLICKS]);
+                })
                 ->orderBy('id')
-                ->get(['id', 'user_id'])
-                ->groupBy('user_id');
+                ->pluck('id');
 
-            foreach ($linksByUser as $userId => $links) {
-                SendWinbackEmailJob::dispatch(
-                    (int) $userId,
-                    $links->pluck('id')->map(fn ($id) => (int) $id)->all(),
-                );
+            foreach ($userIds as $userId) {
+                SendWinbackEmailJob::dispatch((int) $userId);
             }
 
             AppLogger::jobSucceeded(static::class, (microtime(true) - $start) * 1000, [
-                'recipients' => $linksByUser->count(),
-                'window_start' => $startUtc->toIso8601String(),
-                'window_end' => $endUtc->toIso8601String(),
+                'recipients' => $userIds->count(),
+                'absent_before' => $absentBefore->toIso8601String(),
+                'clicks_since' => $clicksSince->toIso8601String(),
             ]);
         } catch (Throwable $e) {
             AppLogger::jobFailed(static::class, $e, $this->attempts());
