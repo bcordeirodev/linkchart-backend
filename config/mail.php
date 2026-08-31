@@ -41,7 +41,11 @@ return [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),
             'url' => env('MAIL_URL'),
-            'host' => env('MAIL_HOST', 'smtp.sendgrid.net'),
+            // Sem fallback de host externo: o SendGrid foi descomissionado em
+            // 2026-08-05 (Brevo é o único transporte) e o default antigo fazia
+            // um MAIL_HOST ausente estourar em timeout contra um host morto em
+            // vez de falhar rápido e apontar a configuração faltante.
+            'host' => env('MAIL_HOST', '127.0.0.1'),
             'port' => env('MAIL_PORT', 587),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),

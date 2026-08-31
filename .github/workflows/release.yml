@@ -141,7 +141,6 @@ jobs:
             "chmod +x ${{ env.PROJECT_PATH }}/scripts/deploy.sh && \
              IMAGE_TAG='${{ needs.build.outputs.image_tag }}' \
              MIGRATION_MODE='${{ inputs.migration_mode || 'online' }}' \
-             SENDGRID_API_KEY='${{ secrets.SENDGRID_API_KEY }}' \
              GOOGLE_SAFE_BROWSING_KEY='${{ secrets.GOOGLE_SAFE_BROWSING_KEY }}' \
              OTEL_EXPORTER_OTLP_HEADERS='${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}' \
              PG_MONITORING_PASSWORD='${{ secrets.PG_MONITORING_PASSWORD }}' \
