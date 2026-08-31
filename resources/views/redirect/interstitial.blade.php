@@ -37,7 +37,7 @@
     <link rel="canonical" href="{!! $metaUrl !!}">
 
     <!-- Metadados adicionais -->
-    <meta property="og:site_name" content="LinkChart">
+    <meta property="og:site_name" content="Link Charts">
     <meta property="og:locale" content="pt_BR">
 
     <title>{!! $title !!}</title>
@@ -151,7 +151,7 @@
         </p>
         <a href="{!! $metaUrl !!}" class="btn">Ir Agora</a>
         <div class="footer">
-            🔗 Powered by LinkChart
+            🔗 Powered by Link Charts
         </div>
     </div>
 

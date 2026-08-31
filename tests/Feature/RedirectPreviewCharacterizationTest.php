@@ -98,14 +98,14 @@ class RedirectPreviewCharacterizationTest extends TestCase
 
         // Canonical + site metadata.
         $this->assertStringContainsString('<link rel="canonical" href="https://example.com/landing">', $content);
-        $this->assertStringContainsString('<meta property="og:site_name" content="LinkChart">', $content);
+        $this->assertStringContainsString('<meta property="og:site_name" content="Link Charts">', $content);
         $this->assertStringContainsString('<meta property="og:locale" content="pt_BR">', $content);
 
         // Page chrome.
         $this->assertStringContainsString('<title>My Product</title>', $content);
         $this->assertStringContainsString('<h1>My Product</h1>', $content);
         $this->assertStringContainsString('<a href="https://example.com/landing" class="btn">Ir Agora</a>', $content);
-        $this->assertStringContainsString('🔗 Powered by LinkChart', $content);
+        $this->assertStringContainsString('🔗 Powered by Link Charts', $content);
         // json_encode with JSON_HEX_* also escapes forward slashes (default behaviour).
         $jsUrl = json_encode('https://example.com/landing', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
         $this->assertStringContainsString('window.location.href = '.$jsUrl.';', $content);

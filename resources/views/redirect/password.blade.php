@@ -23,7 +23,7 @@
     <meta property="og:type" content="website">
     <meta property="og:title" content="Link protegido">
     <meta property="og:description" content="Este link é protegido por senha.">
-    <meta property="og:site_name" content="LinkChart">
+    <meta property="og:site_name" content="Link Charts">
     <meta property="og:locale" content="pt_BR">
 
     <!-- Twitter -->
@@ -129,7 +129,7 @@
             <button type="submit" class="btn">Acessar link</button>
         </form>
         <div class="footer">
-            🔗 Powered by LinkChart
+            🔗 Powered by Link Charts
         </div>
     </div>
 </body>
