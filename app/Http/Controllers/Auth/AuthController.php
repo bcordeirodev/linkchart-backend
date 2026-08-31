@@ -801,6 +801,11 @@ class AuthController extends Controller
                 ->get("https://{$domain}/userinfo");
 
             if (! $userInfoResponse->successful()) {
+                AppLogger::authExchangeRejected('userinfo_failed', [
+                    'ip' => $request->ip(),
+                    'status' => $userInfoResponse->status(),
+                ]);
+
                 return response()->json([
                     'error' => [
                         'code' => 'auth0_token_invalid',
@@ -820,6 +825,12 @@ class AuthController extends Controller
             $emailVerified = filter_var($info['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
 
             if (! $sub || ! $email) {
+                AppLogger::authExchangeRejected('userinfo_incomplete', [
+                    'ip' => $request->ip(),
+                    'auth0_sub' => $sub,
+                    'has_email' => (bool) $email,
+                ]);
+
                 return response()->json([
                     'error' => [
                         'code' => 'auth0_userinfo_incomplete',
@@ -829,6 +840,14 @@ class AuthController extends Controller
             }
 
             if (! $emailVerified) {
+                // Maior causa de login barrado em produção (auditoria 2026-08-31:
+                // ~1 em cada 5 sessões), e até aqui invisível no backend.
+                AppLogger::authExchangeRejected('email_not_verified', [
+                    'ip' => $request->ip(),
+                    'email' => $email,
+                    'auth0_sub' => $sub,
+                ]);
+
                 return response()->json([
                     'error' => [
                         'code' => 'auth0_email_unverified',
@@ -853,6 +872,13 @@ class AuthController extends Controller
                 if ($user) {
                     // Already linked to a different Auth0 identity → conflict.
                     if (filled($user->auth0_sub) && $user->auth0_sub !== $sub) {
+                        AppLogger::authExchangeRejected('email_conflict', [
+                            'ip' => $request->ip(),
+                            'email' => $email,
+                            'auth0_sub' => $sub,
+                            'user_id' => $user->id,
+                        ]);
+
                         return response()->json([
                             'error' => [
                                 'code' => 'auth0_email_conflict',

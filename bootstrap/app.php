@@ -98,8 +98,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // switching to append() would silently re-enable input trimming and
         // empty-string-to-null conversion, a real behavior change that must
         // not ride along with a CORS cleanup.
+        //
+        // LogHttpErrors entra na MESMA lista global (e não nos grupos web/api)
+        // porque rota inexistente cai no Route::fallback(), que roda fora dos
+        // grupos: registrado por grupo, o canal `http` continuaria cego para
+        // 404 de rota desconhecida. Ele inspeciona a resposta na volta do
+        // pipeline, então a rota já está resolvida quando o log é escrito.
         $middleware->use([
             \Illuminate\Http\Middleware\HandleCors::class,
+            \App\Http\Middleware\LogHttpErrors::class,
         ]);
 
         // Append OtelTrace after AssignRequestId so request_id is already set
@@ -209,6 +216,10 @@ return Application::configure(basePath: dirname(__DIR__))
                     $e,
                     optional($request->user())->id ?? null
                 );
+
+                // Marca a resposta como já logada (com stack) para o
+                // LogHttpErrors não escrever uma segunda linha do mesmo 500.
+                $request->attributes->set(\App\Http\Middleware\LogHttpErrors::ATTR_LOGGED, true);
             } catch (\Throwable $logError) {
                 error_log('Laravel Exception: '.$e->getMessage().' at '.$e->getFile().':'.$e->getLine());
             }

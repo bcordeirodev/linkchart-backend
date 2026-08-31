@@ -80,6 +80,8 @@ final class AppLogger
 
     public const AUTH_JWT_ERROR = 'auth.jwt_error';
 
+    public const AUTH_EXCHANGE_REJECTED = 'auth.exchange_rejected';
+
     public const AUTH_ERROR = 'auth.error';
 
     public const HTTP_SLOW_REQUEST = 'http.slow_request';
@@ -384,6 +386,30 @@ final class AppLogger
     }
 
     /**
+     * Recusa do token exchange do Auth0 (POST /api/auth/auth0-exchange).
+     *
+     * Todo caminho de rejeição do endpoint passa por aqui. Sem esse registro a
+     * falha só existia no RUM do frontend: a auditoria de 2026-08-31 mediu 1 em
+     * cada 5 sessões de login barradas por `email_not_verified` sem uma única
+     * linha no backend — em 14 dias de log só havia evento de sucesso.
+     *
+     * Nível warning (não error) de propósito: é recusa esperada de credencial,
+     * não defeito do servidor. Fica em `auth.log` e não polui `errors.log`.
+     *
+     * O canal auth grava e-mail e IP sem máscara (ChannelTap ':skip-redaction'),
+     * que é justamente o que permite responder "quem não conseguiu entrar".
+     *
+     * @param  string  $reason  Motivo estável e agregável — 'userinfo_failed',
+     *                          'userinfo_incomplete', 'email_not_verified',
+     *                          'email_conflict'.
+     * @param  array<string,mixed>  $context  Identificadores do caso (email, auth0_sub, ip, status).
+     */
+    public static function authExchangeRejected(string $reason, array $context = []): void
+    {
+        self::write('auth', 'warning', self::AUTH_EXCHANGE_REJECTED, ['reason' => $reason] + $context);
+    }
+
+    /**
      * Escape hatch for auth-domain errors that don't have a dedicated method.
      *
      * @param  array<string,mixed>  $extra
@@ -398,6 +424,55 @@ final class AppLogger
     // HTTP (channel: http)
     // ============================================================
 
+    /**
+     * Resposta 4xx servida pelo Laravel (canal http, nível warning).
+     *
+     * Escrito pelo middleware {@see \App\Http\Middleware\LogHttpErrors} para
+     * TODA resposta de erro do cliente — tanto as que nascem de exceção
+     * (404/422/429 renderizados em bootstrap/app.php) quanto as que o
+     * controller devolve na mão (401/403/409 do fluxo de auth). Sem ele o
+     * canal `http` só recebia 5xx e ficou 3 meses e meio sem uma linha.
+     *
+     * @param  string  $route  Nome da rota ou template de URI — nunca o path cru,
+     *                         para o log agregar por endpoint.
+     * @param  int  $status  Código HTTP da resposta (400–499).
+     * @param  array<string,mixed>  $context  method, path, user_id, error_code.
+     */
+    public static function httpClientError(string $route, int $status, array $context = []): void
+    {
+        self::write('http', 'warning', self::HTTP_CLIENT_ERROR, [
+            'route' => $route,
+            'status' => $status,
+        ] + $context);
+    }
+
+    /**
+     * Resposta 5xx SEM exceção associada (canal http, nível error).
+     *
+     * É o caso do controller que devolve 500 na mão depois de engolir a
+     * exceção no próprio catch — o renderer de exceção do bootstrap nunca vê
+     * essas respostas. Quando existe exceção, quem loga é {@see httpServerError},
+     * que carrega o stack; o middleware não duplica (ver LogHttpErrors::ATTR_LOGGED).
+     *
+     * @param  string  $route  Nome da rota ou template de URI.
+     * @param  int  $status  Código HTTP da resposta (500–599).
+     * @param  array<string,mixed>  $context  method, path, user_id, error_code.
+     */
+    public static function httpServerErrorResponse(string $route, int $status, array $context = []): void
+    {
+        self::write('http', 'error', self::HTTP_SERVER_ERROR, [
+            'route' => $route,
+            'status' => $status,
+        ] + $context);
+    }
+
+    /**
+     * Resposta 5xx produzida por exceção não tratada (canal http, nível error).
+     *
+     * @param  string  $route  Path ou rota que falhou.
+     * @param  \Throwable  $e  Exceção não tratada que produziu o 500.
+     * @param  int|null  $userId  Usuário autenticado, quando houver.
+     */
     public static function httpServerError(string $route, Throwable $e, ?int $userId): void
     {
         self::write('http', 'error', self::HTTP_SERVER_ERROR,

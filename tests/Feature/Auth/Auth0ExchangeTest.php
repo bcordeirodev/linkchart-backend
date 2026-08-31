@@ -5,6 +5,8 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -146,6 +148,73 @@ class Auth0ExchangeTest extends TestCase
 
         $response->assertStatus(401)
             ->assertJsonPath('error.code', 'auth0_token_invalid');
+    }
+
+    /**
+     * Toda recusa do exchange precisa deixar rastro em `auth.log`.
+     *
+     * Auditoria de 2026-08-31: em 14 dias de log de produção só existiam
+     * eventos de SUCESSO — o backend não registrava nenhuma das rejeições, e a
+     * maior falha de login do produto (`email_not_verified`, ~1 em cada 5
+     * sessões) só era visível pelo RUM do frontend.
+     *
+     * @param  array<string,mixed>  $userinfo  Resposta simulada do /userinfo do Auth0.
+     * @param  int  $userinfoStatus  Status HTTP simulado do /userinfo.
+     * @param  string  $expectedReason  Valor esperado em `reason` na linha de log.
+     */
+    #[DataProvider('rejectionScenarios')]
+    public function test_logs_every_rejection_reason_on_the_auth_channel(
+        array $userinfo,
+        int $userinfoStatus,
+        string $expectedReason,
+    ): void {
+        // Conta que provoca o conflito de e-mail; inofensiva nos demais casos.
+        User::factory()->create([
+            'email' => 'taken@example.com',
+            'auth0_sub' => 'google-oauth2|other-sub',
+        ]);
+
+        Http::fake([
+            $this->userinfoUrl => Http::response($userinfo, $userinfoStatus),
+        ]);
+
+        $authSpy = \Mockery::spy(\Psr\Log\LoggerInterface::class);
+        Log::shouldReceive('channel')->with('auth_file')->andReturn($authSpy);
+        Log::shouldReceive('channel')->andReturnSelf();
+        Log::shouldReceive('debug')->andReturnNull();
+        Log::shouldReceive('info')->andReturnNull();
+        Log::shouldReceive('warning')->andReturnNull();
+        Log::shouldReceive('error')->andReturnNull();
+
+        $this->postJson('/api/auth/auth0-exchange', ['access_token' => 'token']);
+
+        $authSpy->shouldHaveReceived('warning')->with(
+            'auth.exchange_rejected',
+            \Mockery::on(fn ($ctx) => ($ctx['reason'] ?? null) === $expectedReason),
+        );
+    }
+
+    /**
+     * Cenários de recusa do exchange: userinfo do Auth0 → motivo esperado.
+     *
+     * @return array<string, array{array<string,mixed>, int, string}>
+     */
+    public static function rejectionScenarios(): array
+    {
+        return [
+            'token inválido' => [['error' => 'invalid_token'], 401, 'userinfo_failed'],
+            'userinfo sem email' => [['sub' => 'google-oauth2|1', 'email_verified' => true], 200, 'userinfo_incomplete'],
+            'email não verificado' => [
+                ['sub' => 'google-oauth2|2', 'email' => 'a@example.com', 'email_verified' => false],
+                200,
+                'email_not_verified',
+            ],
+            'email de outra identidade' => [
+                ['sub' => 'google-oauth2|3', 'email' => 'taken@example.com', 'email_verified' => true],
+                200,
+                'email_conflict',
+            ],
+        ];
     }
 
     /** Returns 422 when access_token is missing from the request body. */
